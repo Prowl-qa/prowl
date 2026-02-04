@@ -98,7 +98,7 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 ## Notes
 
 - `waitForUrl` uses "includes" matching.
-- `on-failure` screenshots include the final state even on pass.
+- When screenshots are taken (mode: `on-failure`), they capture the final browser state at the moment of capture.
 - `{{VAR}}` values are interpolated from `process.env` and `.env` in the config directory.
 - `{{VAR}}` values are redacted in `summary.md` and `result.json`.
 - `networkIgnorePatterns` ignores network errors when the URL includes any listed substring.
