@@ -1,0 +1,31 @@
+target:
+  url: "http://localhost:3000"
+
+browser:
+  headless: true
+  slowMo: 0
+  timeout: 30000
+
+artifacts:
+  screenshots: "on-failure"
+  networkHar: false
+  console: true
+
+assertions:
+  noConsoleErrors: true
+  noNetworkErrors: true
+  maxTotalTimeMs: 30000
+  networkIgnorePatterns: []
+
+guardrails:
+  maxSteps: 50
+  allowedDomains:
+    - "localhost"
+    - "127.0.0.1"
+    - "0.0.0.0"
+  forbiddenSelectors:
+    - "[data-danger]"
+    - ".delete-btn"
+
+auth:
+  storageStatePath: ".prowl/auth-state.json"
