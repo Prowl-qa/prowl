@@ -23,7 +23,8 @@ export const configSchema = z
       .object({
         noConsoleErrors: z.boolean().optional(),
         noNetworkErrors: z.boolean().optional(),
-        maxTotalTimeMs: z.number().optional()
+        maxTotalTimeMs: z.number().optional(),
+        networkIgnorePatterns: z.array(z.string()).optional()
       })
       .optional(),
     guardrails: z

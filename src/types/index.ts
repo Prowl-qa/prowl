@@ -16,6 +16,7 @@ export type Config = {
     noConsoleErrors: boolean;
     noNetworkErrors: boolean;
     maxTotalTimeMs: number;
+    networkIgnorePatterns: string[];
   };
   guardrails: {
     maxSteps: number;

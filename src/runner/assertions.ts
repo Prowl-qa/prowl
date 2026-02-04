@@ -12,6 +12,17 @@ export type NetworkEntry = {
   status: number;
 };
 
+function shouldIgnoreNetwork(url: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => url.includes(pattern));
+}
+
+function filterNetworkEntries(entries: NetworkEntry[], patterns: string[]): NetworkEntry[] {
+  if (patterns.length === 0) {
+    return entries;
+  }
+  return entries.filter((entry) => !shouldIgnoreNetwork(entry.url, patterns));
+}
+
 function mergeAssertions(config: Config, goalAssertions: Assertion[] = []): Assertion[] {
   let noConsoleErrors = config.assertions.noConsoleErrors;
   let noNetworkErrors = config.assertions.noNetworkErrors;
@@ -52,6 +63,10 @@ export async function evaluateAssertions(options: {
 }): Promise<AssertionResult[]> {
   const assertions = mergeAssertions(options.config, options.goalAssertions);
   const results: AssertionResult[] = [];
+  const networkEntries = filterNetworkEntries(
+    options.networkEntries,
+    options.config.assertions.networkIgnorePatterns
+  );
 
   for (const assertion of assertions) {
     try {
@@ -109,12 +124,12 @@ export async function evaluateAssertions(options: {
         continue;
       }
       if ("noNetworkErrors" in assertion) {
-        const pass = options.networkEntries.length === 0;
+        const pass = networkEntries.length === 0;
         results.push({
           type: "noNetworkErrors",
           value: true,
           status: pass ? "pass" : "fail",
-          error: pass ? undefined : `${options.networkEntries.length} network error(s)`
+          error: pass ? undefined : `${networkEntries.length} network error(s)`
         });
       }
     } catch (error) {

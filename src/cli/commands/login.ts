@@ -2,7 +2,7 @@ import path from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
 import { Command } from "commander";
-import { chromium } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 import { loadConfig } from "../../config/loader.js";
 
 function resolvePath(configDir: string, inputPath: string): string {
@@ -28,13 +28,15 @@ export function buildLoginCommand(): Command {
     .option("--url <target>", "Override target URL")
     .option("--config <path>", "Custom config path")
     .action(async (options) => {
+      let browser: Browser | null = null;
+      let context: BrowserContext | null = null;
       try {
         const { config, configDir } = loadConfig(options.config);
         const targetUrl = options.url ?? config.target.url;
         const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
 
-        const browser = await chromium.launch({ headless: false });
-        const context = await browser.newContext();
+        browser = await chromium.launch({ headless: false });
+        context = await browser.newContext();
         const page = await context.newPage();
         await page.goto(targetUrl);
 
@@ -42,14 +44,18 @@ export function buildLoginCommand(): Command {
         await waitForEnter("Press Enter to save auth state and close the browser... ");
 
         await context.storageState({ path: storageStatePath });
-        await context.close();
-        await browser.close();
-
         console.log(chalk.green(`Saved auth state to ${storageStatePath}`));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Login failed";
         console.error(chalk.red(`Error: ${message}`));
         process.exitCode = 1;
+      } finally {
+        if (context) {
+          await context.close();
+        }
+        if (browser) {
+          await browser.close();
+        }
       }
     });
 

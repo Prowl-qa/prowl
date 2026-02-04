@@ -22,7 +22,8 @@ const DEFAULT_CONFIG: Config = {
   assertions: {
     noConsoleErrors: true,
     noNetworkErrors: true,
-    maxTotalTimeMs: 30000
+    maxTotalTimeMs: 30000,
+    networkIgnorePatterns: []
   },
   guardrails: {
     maxSteps: 50,
@@ -71,7 +72,10 @@ function mergeConfig(partial: Partial<Config>): Config {
       noNetworkErrors:
         partial.assertions?.noNetworkErrors ?? DEFAULT_CONFIG.assertions.noNetworkErrors,
       maxTotalTimeMs:
-        partial.assertions?.maxTotalTimeMs ?? DEFAULT_CONFIG.assertions.maxTotalTimeMs
+        partial.assertions?.maxTotalTimeMs ?? DEFAULT_CONFIG.assertions.maxTotalTimeMs,
+      networkIgnorePatterns:
+        partial.assertions?.networkIgnorePatterns ??
+        DEFAULT_CONFIG.assertions.networkIgnorePatterns
     },
     guardrails: {
       maxSteps: partial.guardrails?.maxSteps ?? DEFAULT_CONFIG.guardrails.maxSteps,

@@ -66,7 +66,12 @@ function screenshotPath(screenshotsDir: string, fileName: string): string {
 }
 
 async function captureScreenshot(page: Page, filePath: string): Promise<void> {
-  await page.screenshot({ path: filePath, fullPage: true });
+  try {
+    await page.screenshot({ path: filePath, fullPage: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Screenshot failed";
+    throw new Error(`Failed to capture screenshot at ${filePath}: ${message}`);
+  }
 }
 
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {

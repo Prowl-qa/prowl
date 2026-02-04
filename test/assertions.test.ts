@@ -7,7 +7,12 @@ const baseConfig: Config = {
   target: { url: "http://example.com" },
   browser: { headless: true, slowMo: 0, timeout: 30000 },
   artifacts: { screenshots: "on-failure", networkHar: false, console: true },
-  assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000 },
+  assertions: {
+    noConsoleErrors: true,
+    noNetworkErrors: true,
+    maxTotalTimeMs: 30000,
+    networkIgnorePatterns: []
+  },
   guardrails: { maxSteps: 50, allowedDomains: ["example.com"], forbiddenSelectors: [] },
   auth: { storageStatePath: ".prowl/auth-state.json" }
 };
@@ -51,5 +56,30 @@ describe("evaluateAssertions", () => {
 
     const noConsole = results.find((result) => result.type === "noConsoleErrors");
     expect(noConsole).toBeUndefined();
+  });
+
+  it("ignores network errors matching patterns", async () => {
+    const page = createMockPage();
+    const config = {
+      ...baseConfig,
+      assertions: {
+        ...baseConfig.assertions,
+        networkIgnorePatterns: ["analytics"]
+      }
+    };
+
+    const results = await evaluateAssertions({
+      page: page as unknown as Page,
+      config,
+      goalAssertions: [{ noNetworkErrors: true }],
+      consoleEntries: [],
+      networkEntries: [
+        { url: "https://analytics.example.com/track", status: 500 },
+        { url: "https://api.example.com/boom", status: 500 }
+      ]
+    });
+
+    const noNetwork = results.find((result) => result.type === "noNetworkErrors");
+    expect(noNetwork?.status).toBe("fail");
   });
 });

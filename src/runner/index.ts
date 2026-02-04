@@ -100,103 +100,108 @@ export async function runGoal(
     runDir
   });
 
-  const consoleEntries: ConsoleEntry[] = [];
-  const networkEntries: NetworkEntry[] = [];
-
-  session.page.on("console", (message) => {
-    consoleEntries.push({
-      type: message.type(),
-      text: message.text(),
-      location: message.location().url
-    });
-  });
-
-  session.page.on("response", (response) => {
-    if (response.status() >= 400) {
-      networkEntries.push({ url: response.url(), status: response.status() });
-    }
-  });
-
-  const startedAt = new Date().toISOString();
-  const startTime = Date.now();
-
-  let stepResults: StepResult[] = [];
-  let stepScreenshots: string[] = [];
-  let stepFailed = false;
-
+  let result: RunResult;
   try {
-    const stepExecution = await executeSteps({
-      page: session.page,
-      steps: interpolatedGoal.steps,
-      targetUrl,
-      runDir,
-      screenshotsMode: config.artifacts.screenshots,
-      forbiddenSelectors: config.guardrails.forbiddenSelectors,
-      allowedDomains,
-      maxTotalTimeMs: config.assertions.maxTotalTimeMs,
-      redactedFillSteps
+    const consoleEntries: ConsoleEntry[] = [];
+    const networkEntries: NetworkEntry[] = [];
+
+    session.page.on("console", (message) => {
+      consoleEntries.push({
+        type: message.type(),
+        text: message.text(),
+        location: message.location().url
+      });
     });
 
-    stepResults = stepExecution.results;
-    stepScreenshots = stepExecution.screenshots;
-    stepFailed = stepExecution.failed;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Step execution failed";
-    stepResults = [
-      {
-        type: "steps",
-        status: "fail",
-        durationMs: 0,
-        error: message
+    session.page.on("response", (response) => {
+      if (response.status() >= 400) {
+        networkEntries.push({ url: response.url(), status: response.status() });
       }
-    ];
-    stepFailed = true;
+    });
+
+    const startedAt = new Date().toISOString();
+    const startTime = Date.now();
+
+    let stepResults: StepResult[] = [];
+    let stepScreenshots: string[] = [];
+    let stepFailed = false;
+
+    try {
+      const stepExecution = await executeSteps({
+        page: session.page,
+        steps: interpolatedGoal.steps,
+        targetUrl,
+        runDir,
+        screenshotsMode: config.artifacts.screenshots,
+        forbiddenSelectors: config.guardrails.forbiddenSelectors,
+        allowedDomains,
+        maxTotalTimeMs: config.assertions.maxTotalTimeMs,
+        redactedFillSteps
+      });
+
+      stepResults = stepExecution.results;
+      stepScreenshots = stepExecution.screenshots;
+      stepFailed = stepExecution.failed;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Step execution failed";
+      stepResults = [
+        {
+          type: "steps",
+          status: "fail",
+          durationMs: 0,
+          error: message
+        }
+      ];
+      stepFailed = true;
+    }
+
+    let finalScreenshot: string | undefined;
+    try {
+      finalScreenshot = await captureFinalScreenshot(session.page, runDir);
+    } catch {
+      finalScreenshot = undefined;
+    }
+
+    const assertionResults = await evaluateAssertions({
+      page: session.page,
+      config,
+      goalAssertions: interpolatedGoal.assertions,
+      consoleEntries,
+      networkEntries
+    });
+
+    const durationMs = Date.now() - startTime;
+    const assertionsFailed = assertionResults.some((assertion) => assertion.status === "fail");
+
+    const status: "pass" | "fail" = stepFailed || assertionsFailed ? "fail" : "pass";
+
+    const artifacts: RunResult["artifacts"] = {
+      screenshots: finalScreenshot
+        ? [...stepScreenshots, finalScreenshot]
+        : stepScreenshots,
+      trace: session.tracePath ? "trace.zip" : undefined,
+      networkHar: config.artifacts.networkHar ? "network.har" : undefined
+    };
+
+    if (config.artifacts.console) {
+      artifacts.console = writeConsoleLog(runDir, consoleEntries);
+    }
+
+    const runResult = buildRunResult({
+      status,
+      startedAt,
+      durationMs,
+      goal: options.goalName,
+      targetUrl,
+      steps: stepResults,
+      assertions: assertionResults,
+      artifacts
+    });
+
+    result = writeReports(runDir, runResult);
+  } finally {
+    await closeBrowser(session);
   }
 
-  let finalScreenshot: string | undefined;
-  try {
-    finalScreenshot = await captureFinalScreenshot(session.page, runDir);
-  } catch {
-    finalScreenshot = undefined;
-  }
-
-  const assertionResults = await evaluateAssertions({
-    page: session.page,
-    config,
-    goalAssertions: interpolatedGoal.assertions,
-    consoleEntries,
-    networkEntries
-  });
-
-  const durationMs = Date.now() - startTime;
-  const assertionsFailed = assertionResults.some((assertion) => assertion.status === "fail");
-
-  const status: "pass" | "fail" = stepFailed || assertionsFailed ? "fail" : "pass";
-
-  const artifacts: RunResult["artifacts"] = {
-    screenshots: finalScreenshot
-      ? [...stepScreenshots, finalScreenshot]
-      : stepScreenshots,
-    trace: session.tracePath ? "trace.zip" : undefined,
-    networkHar: config.artifacts.networkHar ? "network.har" : undefined
-  };
-
-  if (config.artifacts.console) {
-    artifacts.console = writeConsoleLog(runDir, consoleEntries);
-  }
-
-  const runResult = buildRunResult({
-    status,
-    startedAt,
-    durationMs,
-    goal: options.goalName,
-    targetUrl,
-    steps: stepResults,
-    assertions: assertionResults,
-    artifacts
-  });
-
-  await closeBrowser(session);
-
-  return { result: writeReports(runDir, runResult), runDir };
+  return { result, runDir };
 }

@@ -15,6 +15,7 @@ assertions:
   noConsoleErrors: true
   noNetworkErrors: true
   maxTotalTimeMs: 30000
+  networkIgnorePatterns: []
 
 guardrails:
   maxSteps: 50

@@ -32,6 +32,7 @@ describe("loadConfig", () => {
     expect(config.target.url).toBe("http://example.com");
     expect(config.browser.timeout).toBe(30000);
     expect(config.guardrails.allowedDomains).toContain("example.com");
+    expect(config.assertions.networkIgnorePatterns).toEqual([]);
 
     process.chdir(cwd);
     fs.rmSync(project, { recursive: true, force: true });

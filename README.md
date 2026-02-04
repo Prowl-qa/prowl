@@ -43,6 +43,7 @@ assertions:
   noConsoleErrors: true
   noNetworkErrors: true
   maxTotalTimeMs: 30000
+  networkIgnorePatterns: []
 
 guardrails:
   maxSteps: 50
@@ -100,6 +101,7 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 - `on-failure` screenshots include the final state even on pass.
 - `{{VAR}}` values are interpolated from `process.env` and `.env` in the config directory.
 - `{{VAR}}` values are redacted in `summary.md` and `result.json`.
+- `networkIgnorePatterns` ignores network errors when the URL includes any listed substring.
 
 ## CLI
 
