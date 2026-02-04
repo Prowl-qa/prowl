@@ -150,6 +150,10 @@ export function listGoals(configDir: string): string[] {
   if (!fs.existsSync(goalsDir)) {
     return [];
   }
+  const stats = fs.statSync(goalsDir);
+  if (!stats.isDirectory()) {
+    throw new Error(`Goals path is not a directory: ${goalsDir}`);
+  }
   const entries = fs.readdirSync(goalsDir, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".yml"))

@@ -31,4 +31,15 @@ describe("listGoals", () => {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("throws when goals path is not a directory", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    try {
+      const goalsPath = path.join(tempDir, "goals");
+      fs.writeFileSync(goalsPath, "not a directory");
+      expect(() => listGoals(tempDir)).toThrow(`Goals path is not a directory: ${goalsPath}`);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

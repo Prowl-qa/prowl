@@ -11,7 +11,8 @@ export function buildListCommand(): Command {
         const goals = listGoals(configDir);
 
         if (goals.length === 0) {
-          console.log(chalk.yellow("No goals found in .prowl/goals."));
+          const goalsPath = `${configDir}/goals`;
+          console.log(chalk.yellow(`No goals found in ${goalsPath}.`));
           return;
         }
 
