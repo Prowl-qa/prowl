@@ -111,4 +111,5 @@ prowlai run <goal-name> --headed
 prowlai run <goal-name> --trace
 prowlai login
 prowlai init
+prowlai list
 ```
