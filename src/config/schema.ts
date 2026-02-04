@@ -105,6 +105,7 @@ export const goalSchema = z
   .object({
     name: z.string().optional(),
     description: z.string().optional(),
+    vars: z.record(z.string(), z.string()).optional(),
     steps: z.array(stepSchema),
     assertions: z.array(assertionSchema).optional()
   })

@@ -31,6 +31,7 @@ export type Config = {
 export type Goal = {
   name?: string;
   description?: string;
+  vars?: Record<string, string>;
   steps: Step[];
   assertions?: Assertion[];
 };

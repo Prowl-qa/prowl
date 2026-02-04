@@ -66,13 +66,21 @@ Goals live at `.prowl/goals/*.yml`.
 ```yml
 # .prowl/goals/homepage.yml
 name: homepage
+vars:
+  PAGE_TITLE: "Welcome"
 steps:
   - navigate: "/"
   - waitForSelector:
-      selector: "h1"
+      selector: "text={{PAGE_TITLE}}"
 assertions:
   - selectorExists: "h1"
+  - urlIncludes: "/"
 ```
+
+### Goal Vars
+
+Use a `vars` block to define goal-specific values for `{{VAR}}` interpolation. Goal vars take
+precedence over `process.env` and `.env`.
 
 ### Step Types
 
@@ -99,7 +107,7 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 
 - `waitForUrl` uses "includes" matching.
 - When screenshots are taken (mode: `on-failure`), they capture the final browser state at the moment of capture.
-- `{{VAR}}` values are interpolated from `process.env` and `.env` in the config directory.
+- `{{VAR}}` values are interpolated from goal `vars`, then `process.env` and `.env` in the config directory.
 - `{{VAR}}` values are redacted in `summary.md` and `result.json`.
 - `networkIgnorePatterns` ignores network errors when the URL includes any listed substring.
 

@@ -16,7 +16,7 @@ describe("interpolateString", () => {
 
   it("throws on missing variables", () => {
     expect(() => interpolateString("hi {{MISSING}}", env)).toThrow(
-      "Missing environment variable: MISSING"
+      "Missing variable: MISSING"
     );
   });
 });
@@ -43,5 +43,29 @@ describe("interpolateGoal", () => {
       }
     });
     expect(redactedFillSteps.has(1)).toBe(true);
+  });
+
+  it("prefers goal vars over environment", () => {
+    const goal: Goal = {
+      vars: {
+        TEST_EMAIL: "override@example.com"
+      },
+      steps: [
+        {
+          fill: {
+            selector: "[data-testid='email']",
+            value: "{{TEST_EMAIL}}"
+          }
+        }
+      ]
+    };
+
+    const { goal: interpolated } = interpolateGoal(goal, env);
+    expect(interpolated.steps[0]).toEqual({
+      fill: {
+        selector: "[data-testid='email']",
+        value: "override@example.com"
+      }
+    });
   });
 });
