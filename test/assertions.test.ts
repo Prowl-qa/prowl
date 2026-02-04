@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+import { evaluateAssertions } from "../src/runner/assertions.js";
+import type { Page } from "playwright";
+import type { Config } from "../src/types/index.js";
+
+const baseConfig: Config = {
+  target: { url: "http://example.com" },
+  browser: { headless: true, slowMo: 0, timeout: 30000 },
+  artifacts: { screenshots: "on-failure", networkHar: false, console: true },
+  assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000 },
+  guardrails: { maxSteps: 50, allowedDomains: ["example.com"], forbiddenSelectors: [] },
+  auth: { storageStatePath: ".prowl/auth-state.json" }
+};
+
+function createMockPage() {
+  return {
+    url: () => "http://example.com/dashboard",
+    locator: (selector: string) => ({
+      count: async () => (selector === "h1" ? 1 : 0)
+    })
+  };
+}
+
+describe("evaluateAssertions", () => {
+  it("evaluates selector and url assertions", async () => {
+    const page = createMockPage();
+    const results = await evaluateAssertions({
+      page: page as unknown as Page,
+      config: baseConfig,
+      goalAssertions: [{ selectorExists: "h1" }, { urlIncludes: "/dashboard" }],
+      consoleEntries: [],
+      networkEntries: []
+    });
+
+    const selector = results.find((result) => result.type === "selectorExists");
+    const url = results.find((result) => result.type === "urlIncludes");
+
+    expect(selector?.status).toBe("pass");
+    expect(url?.status).toBe("pass");
+  });
+
+  it("honors goal disabling noConsoleErrors", async () => {
+    const page = createMockPage();
+    const results = await evaluateAssertions({
+      page: page as unknown as Page,
+      config: baseConfig,
+      goalAssertions: [{ noConsoleErrors: false }],
+      consoleEntries: [{ type: "error", text: "boom" }],
+      networkEntries: []
+    });
+
+    const noConsole = results.find((result) => result.type === "noConsoleErrors");
+    expect(noConsole).toBeUndefined();
+  });
+});

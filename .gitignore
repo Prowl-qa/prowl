@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.env
+.prowl/runs/
+.DS_Store
+coverage/

@@ -1,0 +1,7 @@
+name: homepage
+steps:
+  - navigate: "/"
+  - waitForSelector:
+      selector: "h1"
+assertions:
+  - selectorExists: "h1"

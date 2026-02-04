@@ -1,1 +1,112 @@
-# prowl
+# prowlai
+
+CLI-first QA testing tool for deterministic Playwright flows.
+
+## Install
+
+```bash
+npm install -g prowlai
+```
+
+Playwright browsers are not auto-installed. Run:
+
+```bash
+npx playwright install chromium
+```
+
+## Quick Start
+
+```bash
+prowlai init
+prowlai run homepage
+```
+
+## Config
+
+Config lives at `.prowl/config.yml`.
+
+```yml
+target:
+  url: "http://localhost:3000"
+
+browser:
+  headless: true
+  slowMo: 0
+  timeout: 30000
+
+artifacts:
+  screenshots: "on-failure"
+  networkHar: false
+  console: true
+
+assertions:
+  noConsoleErrors: true
+  noNetworkErrors: true
+  maxTotalTimeMs: 30000
+
+guardrails:
+  maxSteps: 50
+  allowedDomains:
+    - "localhost"
+    - "127.0.0.1"
+    - "0.0.0.0"
+  forbiddenSelectors:
+    - "[data-danger]"
+    - ".delete-btn"
+
+auth:
+  storageStatePath: ".prowl/auth-state.json"
+```
+
+## Goals
+
+Goals live at `.prowl/goals/*.yml`.
+
+```yml
+# .prowl/goals/homepage.yml
+name: homepage
+steps:
+  - navigate: "/"
+  - waitForSelector:
+      selector: "h1"
+assertions:
+  - selectorExists: "h1"
+```
+
+### Step Types
+
+- `navigate`: string (path or full URL)
+- `click`: `{ selector: string }`
+- `fill`: `{ selector: string, value: string }`
+- `press`: `{ selector: string, key: string }`
+- `waitForSelector`: `{ selector: string, timeout?: number }`
+- `waitForUrl`: `{ value: string, timeout?: number }` (includes match)
+- `waitForNetworkIdle`: `{ timeout?: number }`
+- `screenshot`: `{ name?: string }`
+
+Selectors accept Playwright selector engines, e.g. `role=button[name="Submit"]`.
+
+## Auth
+
+```bash
+prowlai login
+```
+
+This opens a headed Chromium window and saves storage state to `.prowl/auth-state.json`.
+
+## Notes
+
+- `waitForUrl` uses "includes" matching.
+- `on-failure` screenshots include the final state even on pass.
+- `{{VAR}}` values are interpolated from `process.env` and `.env` in the config directory.
+- `{{VAR}}` values are redacted in `summary.md` and `result.json`.
+
+## CLI
+
+```bash
+prowlai run <goal-name>
+prowlai run <goal-name> --headed
+prowlai run <goal-name> --trace
+prowlai login
+prowlai init
+```
