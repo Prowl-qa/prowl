@@ -144,3 +144,19 @@ export function loadGoal(goalName: string, configDir: string): Goal {
   const validated = goalSchema.parse(parsed);
   return validated as Goal;
 }
+
+export function listGoals(configDir: string): string[] {
+  const goalsDir = path.join(configDir, "goals");
+  if (!fs.existsSync(goalsDir)) {
+    return [];
+  }
+  const stats = fs.statSync(goalsDir);
+  if (!stats.isDirectory()) {
+    throw new Error(`Goals path is not a directory: ${goalsDir}`);
+  }
+  const entries = fs.readdirSync(goalsDir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".yml"))
+    .map((entry) => path.basename(entry.name, ".yml"))
+    .sort((a, b) => a.localeCompare(b));
+}
