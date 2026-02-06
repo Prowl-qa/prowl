@@ -1,15 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AssertionResult, RunResult, StepResult } from "../types/index.js";
-import { loadConfig, loadGoal, ensureAllowedDomain } from "../config/loader.js";
-import { interpolateGoal } from "../config/interpolate.js";
+import { loadConfig, loadHunt, ensureAllowedDomain } from "../config/loader.js";
+import { interpolateHunt } from "../config/interpolate.js";
 import { launchBrowser, closeBrowser } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { writeReports } from "../reporter/index.js";
 
 export type RunOptions = {
-  goalName: string;
+  huntName: string;
   urlOverride?: string;
   headed?: boolean;
   slowMo?: number;
@@ -37,7 +37,7 @@ function buildRunResult(options: {
   status: "pass" | "fail";
   startedAt: string;
   durationMs: number;
-  goal: string;
+  hunt: string;
   targetUrl: string;
   steps: StepResult[];
   assertions: AssertionResult[];
@@ -48,7 +48,7 @@ function buildRunResult(options: {
     exitCode: options.status === "pass" ? 0 : 1,
     startedAt: options.startedAt,
     durationMs: options.durationMs,
-    goal: options.goal,
+    hunt: options.hunt,
     targetUrl: options.targetUrl,
     steps: options.steps,
     assertions: options.assertions,
@@ -67,12 +67,12 @@ function writeConsoleLog(runDir: string, entries: ConsoleEntry[]): string {
   return fileName;
 }
 
-export async function runGoal(
+export async function runHunt(
   options: RunOptions
 ): Promise<{ result: RunResult; runDir: string }> {
   const { config, configDir } = loadConfig(options.configPath);
-  const goal = loadGoal(options.goalName, configDir);
-  const { goal: interpolatedGoal, redactedFillSteps } = interpolateGoal(goal, process.env);
+  const hunt = loadHunt(options.huntName, configDir);
+  const { hunt: interpolatedHunt, redactedFillSteps } = interpolateHunt(hunt, process.env);
 
   const targetUrl = options.urlOverride ?? config.target.url;
   const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
@@ -81,8 +81,8 @@ export async function runGoal(
   const slowMo = options.slowMo ?? config.browser.slowMo;
   const maxSteps = config.guardrails.maxSteps;
 
-  if (interpolatedGoal.steps.length > maxSteps) {
-    throw new Error(`Goal has ${interpolatedGoal.steps.length} steps. Max allowed is ${maxSteps}.`);
+  if (interpolatedHunt.steps.length > maxSteps) {
+    throw new Error(`Hunt has ${interpolatedHunt.steps.length} steps. Max allowed is ${maxSteps}.`);
   }
 
   const runDir = path.join(configDir, "runs", timestamp());
@@ -129,7 +129,7 @@ export async function runGoal(
     try {
       const stepExecution = await executeSteps({
         page: session.page,
-        steps: interpolatedGoal.steps,
+        steps: interpolatedHunt.steps,
         targetUrl,
         runDir,
         screenshotsMode: config.artifacts.screenshots,
@@ -165,7 +165,7 @@ export async function runGoal(
     const assertionResults = await evaluateAssertions({
       page: session.page,
       config,
-      goalAssertions: interpolatedGoal.assertions,
+      huntAssertions: interpolatedHunt.assertions,
       consoleEntries,
       networkEntries
     });
@@ -191,7 +191,7 @@ export async function runGoal(
       status,
       startedAt,
       durationMs,
-      goal: options.goalName,
+      hunt: options.huntName,
       targetUrl,
       steps: stepResults,
       assertions: assertionResults,

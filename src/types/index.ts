@@ -28,9 +28,10 @@ export type Config = {
   };
 };
 
-export type Goal = {
+export type Hunt = {
   name?: string;
   description?: string;
+  vars?: Record<string, string>;
   steps: Step[];
   assertions?: Assertion[];
 };
@@ -92,7 +93,7 @@ export type RunResult = {
   exitCode: 0 | 1;
   startedAt: string;
   durationMs: number;
-  goal: string;
+  hunt: string;
   targetUrl: string;
   steps: StepResult[];
   assertions: AssertionResult[];

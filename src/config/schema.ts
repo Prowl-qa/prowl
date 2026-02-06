@@ -101,10 +101,11 @@ export const assertionSchema = z.union([
   z.object({ noNetworkErrors: z.boolean() }).strict()
 ]);
 
-export const goalSchema = z
+export const huntSchema = z
   .object({
     name: z.string().optional(),
     description: z.string().optional(),
+    vars: z.record(z.string(), z.string()).optional(),
     steps: z.array(stepSchema),
     assertions: z.array(assertionSchema).optional()
   })

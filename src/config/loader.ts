@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
 import dotenv from "dotenv";
-import type { Config, Goal } from "../types/index.js";
-import { configSchema, goalSchema } from "./schema.js";
+import type { Config, Hunt } from "../types/index.js";
+import { configSchema, huntSchema } from "./schema.js";
 
 const DEFAULT_CONFIG: Config = {
   target: {
@@ -134,27 +134,27 @@ export function loadConfig(configPath?: string): {
   return { config, configPath: resolvedPath, configDir };
 }
 
-export function loadGoal(goalName: string, configDir: string): Goal {
-  const goalPath = path.join(configDir, "goals", `${goalName}.yml`);
-  if (!fs.existsSync(goalPath)) {
-    throw new Error(`Goal file not found: ${goalPath}`);
+export function loadHunt(huntName: string, configDir: string): Hunt {
+  const huntPath = path.join(configDir, "hunts", `${huntName}.yml`);
+  if (!fs.existsSync(huntPath)) {
+    throw new Error(`Hunt file not found: ${huntPath}`);
   }
-  const raw = fs.readFileSync(goalPath, "utf-8");
+  const raw = fs.readFileSync(huntPath, "utf-8");
   const parsed = yaml.parse(raw) ?? {};
-  const validated = goalSchema.parse(parsed);
-  return validated as Goal;
+  const validated = huntSchema.parse(parsed);
+  return validated as Hunt;
 }
 
-export function listGoals(configDir: string): string[] {
-  const goalsDir = path.join(configDir, "goals");
-  if (!fs.existsSync(goalsDir)) {
+export function listHunts(configDir: string): string[] {
+  const huntsDir = path.join(configDir, "hunts");
+  if (!fs.existsSync(huntsDir)) {
     return [];
   }
-  const stats = fs.statSync(goalsDir);
+  const stats = fs.statSync(huntsDir);
   if (!stats.isDirectory()) {
-    throw new Error(`Goals path is not a directory: ${goalsDir}`);
+    throw new Error(`Hunts path is not a directory: ${huntsDir}`);
   }
-  const entries = fs.readdirSync(goalsDir, { withFileTypes: true });
+  const entries = fs.readdirSync(huntsDir, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".yml"))
     .map((entry) => path.basename(entry.name, ".yml"))

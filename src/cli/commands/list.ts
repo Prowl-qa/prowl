@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { loadConfig, listGoals } from "../../config/loader.js";
+import { loadConfig, listHunts } from "../../config/loader.js";
 
 export function buildListCommand(): Command {
   const command = new Command("list")
@@ -8,16 +8,16 @@ export function buildListCommand(): Command {
     .action((options) => {
       try {
         const { configDir } = loadConfig(options.config);
-        const goals = listGoals(configDir);
+        const hunts = listHunts(configDir);
 
-        if (goals.length === 0) {
-          const goalsPath = `${configDir}/goals`;
-          console.log(chalk.yellow(`No goals found in ${goalsPath}.`));
+        if (hunts.length === 0) {
+          const huntsPath = `${configDir}/hunts`;
+          console.log(chalk.yellow(`No hunts found in ${huntsPath}.`));
           return;
         }
 
-        goals.forEach((goal) => {
-          console.log(goal);
+        hunts.forEach((hunt) => {
+          console.log(hunt);
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "List failed";

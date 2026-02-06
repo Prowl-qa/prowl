@@ -1,7 +1,9 @@
 name: homepage
+vars:
+  PAGE_TITLE: "Welcome"
 steps:
   - navigate: "/"
   - waitForSelector:
-      selector: "h1"
+      selector: "text={{PAGE_TITLE}}"
 assertions:
   - selectorExists: "h1"
