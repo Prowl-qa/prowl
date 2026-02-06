@@ -2,12 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { ensureAllowedDomain, loadConfig, loadGoal } from "../src/config/loader.js";
+import { ensureAllowedDomain, loadConfig, loadHunt } from "../src/config/loader.js";
 
 function setupTempProject(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-"));
   const prowlDir = path.join(tmpDir, ".prowl");
-  fs.mkdirSync(path.join(prowlDir, "goals"), { recursive: true });
+  fs.mkdirSync(path.join(prowlDir, "hunts"), { recursive: true });
 
   fs.writeFileSync(
     path.join(prowlDir, "config.yml"),
@@ -15,7 +15,7 @@ function setupTempProject(): string {
   );
 
   fs.writeFileSync(
-    path.join(prowlDir, "goals", "sample.yml"),
+    path.join(prowlDir, "hunts", "sample.yml"),
     "steps:\n  - navigate: '/'\n"
   );
 
@@ -39,15 +39,15 @@ describe("loadConfig", () => {
   });
 });
 
-describe("loadGoal", () => {
-  it("loads a goal file", () => {
+describe("loadHunt", () => {
+  it("loads a hunt file", () => {
     const project = setupTempProject();
     const cwd = process.cwd();
     process.chdir(project);
 
     const { configDir } = loadConfig();
-    const goal = loadGoal("sample", configDir);
-    expect(goal.steps.length).toBe(1);
+    const hunt = loadHunt("sample", configDir);
+    expect(hunt.steps.length).toBe(1);
 
     process.chdir(cwd);
     fs.rmSync(project, { recursive: true, force: true });

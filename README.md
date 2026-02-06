@@ -59,12 +59,12 @@ auth:
   storageStatePath: ".prowl/auth-state.json"
 ```
 
-## Goals
+## Hunts
 
-Goals live at `.prowl/goals/*.yml`.
+Hunts live at `.prowl/hunts/*.yml`.
 
 ```yml
-# .prowl/goals/homepage.yml
+# .prowl/hunts/homepage.yml
 name: homepage
 vars:
   PAGE_TITLE: "Welcome"
@@ -77,9 +77,9 @@ assertions:
   - urlIncludes: "/"
 ```
 
-### Goal Vars
+### Hunt Vars
 
-Use a `vars` block to define goal-specific values for `{{VAR}}` interpolation. Goal vars take
+Use a `vars` block to define hunt-specific values for `{{VAR}}` interpolation. Hunt vars take
 precedence over `process.env` and `.env`.
 
 ### Step Types
@@ -107,16 +107,16 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 
 - `waitForUrl` uses "includes" matching.
 - When screenshots are taken (mode: `on-failure`), they capture the final browser state at the moment of capture.
-- `{{VAR}}` values are interpolated from goal `vars`, then `process.env` and `.env` in the config directory.
+- `{{VAR}}` values are interpolated from hunt `vars`, then `process.env` and `.env` in the config directory.
 - `{{VAR}}` values are redacted in `summary.md` and `result.json`.
 - `networkIgnorePatterns` ignores network errors when the URL includes any listed substring.
 
 ## CLI
 
 ```bash
-prowlai run <goal-name>
-prowlai run <goal-name> --headed
-prowlai run <goal-name> --trace
+prowlai run <hunt-name>
+prowlai run <hunt-name> --headed
+prowlai run <hunt-name> --trace
 prowlai login
 prowlai init
 prowlai list

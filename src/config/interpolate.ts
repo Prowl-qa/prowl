@@ -1,7 +1,7 @@
-import type { Assertion, Goal, Step } from "../types/index.js";
+import type { Assertion, Hunt, Step } from "../types/index.js";
 
-export type InterpolatedGoal = {
-  goal: Goal;
+export type InterpolatedHunt = {
+  hunt: Hunt;
   redactedFillSteps: Set<number>;
 };
 
@@ -104,19 +104,19 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
   return assertion;
 }
 
-export function interpolateGoal(goal: Goal, env: NodeJS.ProcessEnv): InterpolatedGoal {
+export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
   const redactedFillSteps = new Set<number>();
   const vars = {
     ...Object.fromEntries(
       Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
     ),
-    ...(goal.vars ?? {})
+    ...(hunt.vars ?? {})
   };
-  const steps = goal.steps.map((step, index) => interpolateStep(step, vars, index, redactedFillSteps));
-  const assertions = goal.assertions?.map((assertion) => interpolateAssertion(assertion, vars));
+  const steps = hunt.steps.map((step, index) => interpolateStep(step, vars, index, redactedFillSteps));
+  const assertions = hunt.assertions?.map((assertion) => interpolateAssertion(assertion, vars));
   return {
-    goal: {
-      ...goal,
+    hunt: {
+      ...hunt,
       steps,
       assertions
     },

@@ -30,9 +30,9 @@ export function buildInitCommand(): Command {
       const packageRoot = getPackageRoot();
       const examplesDir = path.join(packageRoot, "examples");
       const exampleConfig = path.join(examplesDir, "config.yml");
-      const exampleGoal = path.join(examplesDir, "goals", "homepage.yml");
+      const exampleHunt = path.join(examplesDir, "hunts", "homepage.yml");
 
-      if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleGoal)) {
+      if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleHunt)) {
         console.error(chalk.red("Examples not found in package. Reinstall prowlai."));
         process.exitCode = 1;
         return;
@@ -43,7 +43,7 @@ export function buildInitCommand(): Command {
       }
 
       copyFile(exampleConfig, path.join(prowlDir, "config.yml"));
-      copyFile(exampleGoal, path.join(prowlDir, "goals", "homepage.yml"));
+      copyFile(exampleHunt, path.join(prowlDir, "hunts", "homepage.yml"));
 
       console.log(chalk.green("Initialized .prowl directory."));
     });

@@ -21,7 +21,7 @@ export function writeSummary(runDir: string, result: RunResult): string {
   lines.push("# ProwlAI Run Summary");
   lines.push("");
   lines.push(`Status: ${result.status.toUpperCase()}`);
-  lines.push(`Goal: ${result.goal}`);
+  lines.push(`Hunt: ${result.hunt}`);
   lines.push(`Target: ${result.targetUrl}`);
   lines.push(`Started: ${result.startedAt}`);
   lines.push(`Duration: ${result.durationMs}ms`);

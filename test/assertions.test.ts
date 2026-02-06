@@ -32,7 +32,7 @@ describe("evaluateAssertions", () => {
     const results = await evaluateAssertions({
       page: page as unknown as Page,
       config: baseConfig,
-      goalAssertions: [{ selectorExists: "h1" }, { urlIncludes: "/dashboard" }],
+      huntAssertions: [{ selectorExists: "h1" }, { urlIncludes: "/dashboard" }],
       consoleEntries: [],
       networkEntries: []
     });
@@ -44,12 +44,12 @@ describe("evaluateAssertions", () => {
     expect(url?.status).toBe("pass");
   });
 
-  it("honors goal disabling noConsoleErrors", async () => {
+  it("honors hunt disabling noConsoleErrors", async () => {
     const page = createMockPage();
     const results = await evaluateAssertions({
       page: page as unknown as Page,
       config: baseConfig,
-      goalAssertions: [{ noConsoleErrors: false }],
+      huntAssertions: [{ noConsoleErrors: false }],
       consoleEntries: [{ type: "error", text: "boom" }],
       networkEntries: []
     });
@@ -71,7 +71,7 @@ describe("evaluateAssertions", () => {
     const results = await evaluateAssertions({
       page: page as unknown as Page,
       config,
-      goalAssertions: [{ noNetworkErrors: true }],
+      huntAssertions: [{ noNetworkErrors: true }],
       consoleEntries: [],
       networkEntries: [
         { url: "https://analytics.example.com/track", status: 500 },

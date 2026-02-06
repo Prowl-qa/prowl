@@ -15,7 +15,7 @@ describe("reporter", () => {
         exitCode: 0,
         startedAt: new Date().toISOString(),
         durationMs: 1234,
-        goal: "sample",
+        hunt: "sample",
         targetUrl: "http://localhost",
         steps: [{ type: "navigate", status: "pass", durationMs: 10 }],
         assertions: [{ type: "urlIncludes", value: "/", status: "pass" }],

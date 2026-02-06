@@ -23,11 +23,11 @@ function filterNetworkEntries(entries: NetworkEntry[], patterns: string[]): Netw
   return entries.filter((entry) => !shouldIgnoreNetwork(entry.url, patterns));
 }
 
-function mergeAssertions(config: Config, goalAssertions: Assertion[] = []): Assertion[] {
+function mergeAssertions(config: Config, huntAssertions: Assertion[] = []): Assertion[] {
   let noConsoleErrors = config.assertions.noConsoleErrors;
   let noNetworkErrors = config.assertions.noNetworkErrors;
 
-  for (const assertion of goalAssertions) {
+  for (const assertion of huntAssertions) {
     if ("noConsoleErrors" in assertion) {
       noConsoleErrors = assertion.noConsoleErrors;
     }
@@ -44,7 +44,7 @@ function mergeAssertions(config: Config, goalAssertions: Assertion[] = []): Asse
     merged.push({ noNetworkErrors: true });
   }
 
-  for (const assertion of goalAssertions) {
+  for (const assertion of huntAssertions) {
     if ("noConsoleErrors" in assertion || "noNetworkErrors" in assertion) {
       continue;
     }
@@ -57,11 +57,11 @@ function mergeAssertions(config: Config, goalAssertions: Assertion[] = []): Asse
 export async function evaluateAssertions(options: {
   page: Page;
   config: Config;
-  goalAssertions?: Assertion[];
+  huntAssertions?: Assertion[];
   consoleEntries: ConsoleEntry[];
   networkEntries: NetworkEntry[];
 }): Promise<AssertionResult[]> {
-  const assertions = mergeAssertions(options.config, options.goalAssertions);
+  const assertions = mergeAssertions(options.config, options.huntAssertions);
   const results: AssertionResult[] = [];
   const networkEntries = filterNetworkEntries(
     options.networkEntries,

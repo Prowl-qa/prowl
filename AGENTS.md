@@ -7,7 +7,7 @@ This file is the single source of truth for agent behavior on this repo. Follow 
 - Package name: `prowlai` (global install via npm).
 - Node.js 20+ / TypeScript.
 - Chromium only for MVP.
-- Config: `.prowl/config.yml`; goals: `.prowl/goals/*.yml`; artifacts: `.prowl/runs/<timestamp>/`.
+- Config: `.prowl/config.yml`; hunts: `.prowl/hunts/*.yml`; artifacts: `.prowl/runs/<timestamp>/`.
 - `prowlai login` captures `storageState` and saves to `.prowl/auth-state.json`.
 - Screenshots: on-failure plus **always** final screenshot (even on pass).
 - `waitForUrl` uses "includes" matching.

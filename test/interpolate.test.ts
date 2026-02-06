@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { interpolateGoal, interpolateString } from "../src/config/interpolate.js";
-import type { Goal } from "../src/types/index.js";
+import { interpolateHunt, interpolateString } from "../src/config/interpolate.js";
+import type { Hunt } from "../src/types/index.js";
 
 const env = {
   TEST_EMAIL: "user@example.com",
@@ -21,9 +21,9 @@ describe("interpolateString", () => {
   });
 });
 
-describe("interpolateGoal", () => {
+describe("interpolateHunt", () => {
   it("interpolates step values and records redaction", () => {
-    const goal: Goal = {
+    const hunt: Hunt = {
       steps: [
         { navigate: "/" },
         {
@@ -35,7 +35,7 @@ describe("interpolateGoal", () => {
       ]
     };
 
-    const { goal: interpolated, redactedFillSteps } = interpolateGoal(goal, env);
+    const { hunt: interpolated, redactedFillSteps } = interpolateHunt(hunt, env);
     expect(interpolated.steps[1]).toEqual({
       fill: {
         selector: "[data-testid='password']",
@@ -45,8 +45,8 @@ describe("interpolateGoal", () => {
     expect(redactedFillSteps.has(1)).toBe(true);
   });
 
-  it("prefers goal vars over environment", () => {
-    const goal: Goal = {
+  it("prefers hunt vars over environment", () => {
+    const hunt: Hunt = {
       vars: {
         TEST_EMAIL: "override@example.com"
       },
@@ -60,7 +60,7 @@ describe("interpolateGoal", () => {
       ]
     };
 
-    const { goal: interpolated } = interpolateGoal(goal, env);
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
     expect(interpolated.steps[0]).toEqual({
       fill: {
         selector: "[data-testid='email']",

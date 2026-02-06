@@ -8,7 +8,7 @@ All notable changes to Prowl(AI) will be documented in this file.
 - [ ] Project scaffolding (package.json, tsconfig, etc.)
 - [ ] CLI with `prowlai run`, `prowlai login`, `prowlai init`
 - [ ] Configuration system (.prowl/config.yml)
-- [ ] Goal file parsing (.prowl/goals/*.yml)
+- [ ] Hunt file parsing (.prowl/hunts/*.yml)
 - [ ] Playwright browser controller
 - [ ] Step execution (navigate, click, fill, waitFor*)
 - [ ] Assertion evaluation
@@ -21,8 +21,8 @@ All notable changes to Prowl(AI) will be documented in this file.
 
 ### Phase 2 - Agent Intelligence
 - [ ] LLM provider abstraction (OpenAI + Anthropic)
-- [ ] Natural language goal parsing
-- [ ] Planner agent (break goals into steps)
+- [ ] Natural language hunt parsing
+- [ ] Planner agent (break hunts into steps)
 - [ ] Reasoner agent (evaluate success/failure)
 - [ ] Retry logic with adaptive reasoning
 - [ ] Light exploratory mode
@@ -39,7 +39,7 @@ All notable changes to Prowl(AI) will be documented in this file.
 - [ ] Flakiness detection and auto-retry
 - [ ] Visual diff comparison
 - [ ] Accessibility checks (axe-core)
-- [ ] Goal-level variables (vars: block)
+- [ ] Hunt-level variables (vars: block)
 
 ### Phase 5 - Team Features (Future SaaS)
 - [ ] Optional server mode with history
