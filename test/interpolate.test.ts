@@ -14,6 +14,15 @@ describe("interpolateString", () => {
     expect(result.usedVars).toEqual(["TEST_EMAIL"]);
   });
 
+  it("accepts empty-string variables", () => {
+    const result = interpolateString("prefix{{EMPTY}}suffix", {
+      ...env,
+      EMPTY: ""
+    });
+    expect(result.value).toBe("prefixsuffix");
+    expect(result.usedVars).toEqual(["EMPTY"]);
+  });
+
   it("throws on missing variables", () => {
     expect(() => interpolateString("hi {{MISSING}}", env)).toThrow(
       "Missing variable: MISSING"

@@ -19,7 +19,7 @@ export function interpolateString(
   const usedVars: string[] = [];
   const value = input.replace(VAR_PATTERN, (_, name: string) => {
     const varValue = vars[name];
-    if (!varValue) {
+    if (varValue === undefined) {
       throw new Error(`Missing variable: ${name}`);
     }
     usedVars.push(name);
