@@ -97,9 +97,9 @@
 **Description**: `package.json` `files` field only included `"dist"`, so `examples/` was excluded from `npm publish`. The `init` command copies from `examples/`, so it would fail after `npm install -g`. Added `"examples"` to the `files` array.
 
 ### ~~FEAT-002: `setInputFiles` Step Type~~
-**Resolved**: 2026-02-07
+**Resolved**: 2026-02-07 (commit af2700b)
 **Description**: Added `setInputFiles: { selector, files }` step type for `<input type="file">` elements. Supports single file or array of paths relative to `.prowl/` directory. Unit tests added.
 
 ### ~~FEAT-003: `onDialog` Step Type (Dialog Handler)~~
-**Resolved**: 2026-02-07
+**Resolved**: 2026-02-07 (commit af2700b)
 **Description**: Added `onDialog: { action }` step type where action is `"accept"` or `"dismiss"`. Sets up a `page.once('dialog')` listener for browser-native dialogs. Unblocks delete flow hunts and idempotent test cycles. Unit tests added.

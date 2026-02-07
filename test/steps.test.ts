@@ -12,6 +12,7 @@ function createMockPage() {
     click: vi.fn(async () => undefined),
     fill: vi.fn(async () => undefined),
     press: vi.fn(async () => undefined),
+    selectOption: vi.fn(async () => undefined),
     setInputFiles: vi.fn(async () => undefined)
   });
 
@@ -101,6 +102,62 @@ describe("executeSteps", () => {
     expect(result.results[0].type).toBe("onDialog");
     expect(result.results[0].value).toBe("accept");
     expect(page.once).toHaveBeenCalledWith("dialog", expect.any(Function));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes selectOption step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [
+      {
+        selectOption: {
+          selector: "[data-testid=country-select]",
+          value: "US"
+        }
+      }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("selectOption");
+    expect(result.results[0].selector).toBe("[data-testid=country-select]");
+    expect(result.results[0].value).toBe("US");
+    expect(page.locator).toHaveBeenCalledWith("[data-testid=country-select]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails selectOption on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ selectOption: { selector: "[data-danger]", value: "US" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].status).toBe("fail");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
