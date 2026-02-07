@@ -111,12 +111,17 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
 
 export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
   const redactedFillSteps = new Set<number>();
-  const vars = {
-    ...Object.fromEntries(
-      Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
-    ),
-    ...(hunt.vars ?? {})
-  };
+
+  const envVars = Object.fromEntries(
+    Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
+  );
+
+  const resolvedHuntVars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(hunt.vars ?? {})) {
+    resolvedHuntVars[key] = interpolateString(value, envVars).value;
+  }
+
+  const vars = { ...envVars, ...resolvedHuntVars };
   const steps = hunt.steps.map((step, index) => interpolateStep(step, vars, index, redactedFillSteps));
   const assertions = hunt.assertions?.map((assertion) => interpolateAssertion(assertion, vars));
   return {

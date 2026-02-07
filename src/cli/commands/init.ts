@@ -6,8 +6,14 @@ import chalk from "chalk";
 
 function getPackageRoot(): string {
   const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = path.dirname(currentFile);
-  return path.resolve(currentDir, "../../../");
+  let dir = path.dirname(currentFile);
+  while (dir !== path.parse(dir).root) {
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+  throw new Error("Cannot find package root. Reinstall prowlai.");
 }
 
 function copyFile(source: string, destination: string): void {
