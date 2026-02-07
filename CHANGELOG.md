@@ -4,6 +4,10 @@ All notable changes to Prowl(AI) will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `onDialog` step type: register a one-time dialog handler (`accept` or `dismiss`) for browser-native dialogs (FEAT-003)
+- `setInputFiles` step type: set files on `<input type="file">` elements, supports single or array of paths relative to `.prowl/` (FEAT-002)
+
 ### Fixed
 - `init` command: replace hardcoded path resolution with directory walk to find package root (BUG-002)
 - `package.json`: include `examples/` in `files` field so `prowlai init` works after `npm install -g` (BUG-003)

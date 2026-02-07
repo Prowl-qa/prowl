@@ -44,6 +44,8 @@ export type WaitForSelectorStep = { waitForSelector: { selector: string; timeout
 export type WaitForUrlStep = { waitForUrl: { value: string; timeout?: number } };
 export type WaitForNetworkIdleStep = { waitForNetworkIdle: { timeout?: number } };
 export type SelectOptionStep = { selectOption: { selector: string; value: string } };
+export type OnDialogStep = { onDialog: { action: "accept" | "dismiss" } };
+export type SetInputFilesStep = { setInputFiles: { selector: string; files: string | string[] } };
 export type ScreenshotStep = { screenshot: { name?: string } };
 
 export type Step =
@@ -52,6 +54,8 @@ export type Step =
   | FillStep
   | PressStep
   | SelectOptionStep
+  | OnDialogStep
+  | SetInputFilesStep
   | WaitForSelectorStep
   | WaitForUrlStep
   | WaitForNetworkIdleStep

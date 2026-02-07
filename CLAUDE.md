@@ -34,6 +34,17 @@ Prowl(AI) is a CLI QA testing tool that:
 4. **Guardrails** - Forbidden selectors, allowed domains, max steps
 5. **File-based storage** - No database for MVP
 
+## Definition of Done
+
+Every feature or bug fix must include:
+1. **Code** — Implementation with types, schema, interpolation, actions, runner, and tests as applicable
+2. **Tests** — Unit tests covering the new behavior; all existing tests must still pass
+3. **Build & Lint** — `npm run build` and `npm run lint` must pass
+4. **Backlog** — Move the item to the Resolved section in `docs/BACKLOG.md` with commit hash and date
+5. **Changelog** — Add the change to the `[Unreleased]` section in `CHANGELOG.md`
+
+Work is not considered complete until all five items are done.
+
 ## Server Access
 
 Agents can SSH into the beelink server to inspect databases and application state.

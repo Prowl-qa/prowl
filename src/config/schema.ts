@@ -80,6 +80,21 @@ export const selectOptionStepSchema = z
     selectOption: z.object({ selector: z.string().min(1), value: z.string() }).strict()
   })
   .strict();
+export const onDialogStepSchema = z
+  .object({
+    onDialog: z.object({ action: z.enum(["accept", "dismiss"]) }).strict()
+  })
+  .strict();
+export const setInputFilesStepSchema = z
+  .object({
+    setInputFiles: z
+      .object({
+        selector: z.string().min(1),
+        files: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+      })
+      .strict()
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -92,6 +107,8 @@ export const stepSchema = z.union([
   fillStepSchema,
   pressStepSchema,
   selectOptionStepSchema,
+  onDialogStepSchema,
+  setInputFilesStepSchema,
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,

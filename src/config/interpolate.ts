@@ -60,6 +60,17 @@ function interpolateStep(
     const keyResult = interpolateString(step.press.key, vars);
     return { press: { selector: selectorResult.value, key: keyResult.value } };
   }
+  if ("onDialog" in step) {
+    return { onDialog: { action: step.onDialog.action } };
+  }
+  if ("setInputFiles" in step) {
+    const selectorResult = interpolateString(step.setInputFiles.selector, vars);
+    const rawFiles = step.setInputFiles.files;
+    const files = Array.isArray(rawFiles)
+      ? rawFiles.map((f) => interpolateString(f, vars).value)
+      : interpolateString(rawFiles, vars).value;
+    return { setInputFiles: { selector: selectorResult.value, files } };
+  }
   if ("waitForSelector" in step) {
     const selectorResult = interpolateString(step.waitForSelector.selector, vars);
     return {

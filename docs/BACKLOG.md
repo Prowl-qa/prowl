@@ -72,33 +72,7 @@
 
 ## Phase 4: Step Type Expansion
 
-### FEAT-002: `setInputFiles` Step Type
-**Priority**: Medium
-**Found during**: Profile page hunt planning (2026-02-06)
-**Description**: File upload inputs (e.g., avatar upload on the dispatcher Profile page) require Playwright's `setInputFiles()` API. Neither `fill` nor `click` can set a file on `<input type="file">` elements, leaving file upload flows untestable.
-**Acceptance Criteria**:
-- New step type `setInputFiles: { selector, files }` where `files` is a path (or array of paths) relative to the `.prowl/` directory
-- Schema validation added to `src/config/schema.ts`
-- Step execution added to `src/runner/steps.ts`
-- Unit test coverage in `test/steps.test.ts`
-
-### FEAT-003: `onDialog` Step Type (Dialog Handler)
-**Priority**: High
-**Found during**: Orders page hunt planning (2026-02-06)
-**Description**: Delete flows in the dispatcher app use `window.confirm()` for confirmation dialogs. Playwright requires a dialog handler (`page.on('dialog')`) to be set up *before* the action that triggers the dialog. Without this, Prowl cannot test any flow that involves browser-native `alert()`, `confirm()`, or `prompt()` dialogs.
-**Blocked hunts**:
-- `orders-delete` hunt: Cannot be created until this feature is implemented. Delete order (single and bulk) uses `window.confirm()` which Prowl cannot interact with today.
-- Without `orders-delete`, the `orders-create` hunt is not idempotent — re-running it will fail because the test order (`PROWL-TEST-001`) already exists. Implementing this feature unblocks a full create→edit→delete cycle that cleans up after itself.
-**Design notes**:
-- The step must be placed *before* the step that triggers the dialog (e.g., before a `click` on a delete button)
-- It should set up a one-time `page.once('dialog')` listener that accepts or dismisses the dialog
-- Syntax proposal: `onDialog: { action: "accept" }` or `onDialog: { action: "dismiss" }`
-**Acceptance Criteria**:
-- New step type `onDialog: { action }` where action is `"accept"` or `"dismiss"`
-- Sets up a `page.once('dialog', ...)` listener that fires on the next dialog
-- Schema validation added to `src/config/schema.ts`
-- Step execution added to `src/runner/steps.ts`
-- Unit test coverage in `test/steps.test.ts`
+*All Phase 4 items resolved.*
 
 ---
 
@@ -121,3 +95,11 @@
 **Resolved**: 2026-02-07 (commit 72fd515)
 **Found during**: End-user workflow review (2026-02-07)
 **Description**: `package.json` `files` field only included `"dist"`, so `examples/` was excluded from `npm publish`. The `init` command copies from `examples/`, so it would fail after `npm install -g`. Added `"examples"` to the `files` array.
+
+### ~~FEAT-002: `setInputFiles` Step Type~~
+**Resolved**: 2026-02-07
+**Description**: Added `setInputFiles: { selector, files }` step type for `<input type="file">` elements. Supports single file or array of paths relative to `.prowl/` directory. Unit tests added.
+
+### ~~FEAT-003: `onDialog` Step Type (Dialog Handler)~~
+**Resolved**: 2026-02-07
+**Description**: Added `onDialog: { action }` step type where action is `"accept"` or `"dismiss"`. Sets up a `page.once('dialog')` listener for browser-native dialogs. Unblocks delete flow hunts and idempotent test cycles. Unit tests added.
