@@ -45,11 +45,7 @@ Every feature or bug fix must include:
 
 Work is not considered complete until all five items are done.
 
-## Server Access
+## Access Policy
 
-Agents can SSH into the beelink server to inspect databases and application state.
-
-- **Username**: michael
-- **IP Address**: 192.168.86.25
-- **Application paths**:
-  - Dispatcher: `michael/homelab/apps/dispatcher/`
+Infrastructure credentials and host details are not stored in this repository.
+Contact ops for access through the private credentials vault.

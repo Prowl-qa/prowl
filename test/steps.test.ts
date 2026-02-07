@@ -108,7 +108,12 @@ describe("executeSteps", () => {
     const page = createMockPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
-      { setInputFiles: { selector: "input[type=file]", files: "fixtures/avatar.png" } }
+      {
+        setInputFiles: {
+          selector: "[data-testid=avatar-file]",
+          files: "fixtures/avatar.png"
+        }
+      }
     ];
 
     const result = await executeSteps({
@@ -126,8 +131,8 @@ describe("executeSteps", () => {
 
     expect(result.failed).toBe(false);
     expect(result.results[0].type).toBe("setInputFiles");
-    expect(result.results[0].selector).toBe("input[type=file]");
-    expect(page.locator).toHaveBeenCalledWith("input[type=file]");
+    expect(result.results[0].selector).toBe("[data-testid=avatar-file]");
+    expect(page.locator).toHaveBeenCalledWith("[data-testid=avatar-file]");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
