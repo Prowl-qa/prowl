@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Page } from "playwright";
-import { clickElement, fillElement, pressKey } from "../browser/actions.js";
+import { clickElement, fillElement, pressKey, selectOption } from "../browser/actions.js";
 import type { Step, StepResult } from "../types/index.js";
 
 export type StepExecutionContext = {
@@ -33,6 +33,7 @@ function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
   if ("click" in step) return "click";
   if ("fill" in step) return "fill";
+  if ("selectOption" in step) return "selectOption";
   if ("press" in step) return "press";
   if ("waitForSelector" in step) return "waitForSelector";
   if ("waitForUrl" in step) return "waitForUrl";
@@ -137,6 +138,19 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart,
           selector: step.fill.selector,
           value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.fill.value
+        };
+      } else if ("selectOption" in step) {
+        if (isForbiddenSelector(step.selectOption.selector, context.forbiddenSelectors)) {
+          throw new Error(`Forbidden selector: ${step.selectOption.selector}`);
+        }
+        await selectOption(context.page, step.selectOption.selector, step.selectOption.value);
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        stepResult = {
+          type: "selectOption",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.selectOption.selector,
+          value: step.selectOption.value
         };
       } else if ("press" in step) {
         if (isForbiddenSelector(step.press.selector, context.forbiddenSelectors)) {

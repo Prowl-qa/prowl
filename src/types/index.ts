@@ -43,6 +43,7 @@ export type PressStep = { press: { selector: string; key: string } };
 export type WaitForSelectorStep = { waitForSelector: { selector: string; timeout?: number } };
 export type WaitForUrlStep = { waitForUrl: { value: string; timeout?: number } };
 export type WaitForNetworkIdleStep = { waitForNetworkIdle: { timeout?: number } };
+export type SelectOptionStep = { selectOption: { selector: string; value: string } };
 export type ScreenshotStep = { screenshot: { name?: string } };
 
 export type Step =
@@ -50,6 +51,7 @@ export type Step =
   | ClickStep
   | FillStep
   | PressStep
+  | SelectOptionStep
   | WaitForSelectorStep
   | WaitForUrlStep
   | WaitForNetworkIdleStep

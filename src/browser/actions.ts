@@ -11,3 +11,7 @@ export async function fillElement(page: Page, selector: string, value: string): 
 export async function pressKey(page: Page, selector: string, key: string): Promise<void> {
   await page.locator(selector).press(key);
 }
+
+export async function selectOption(page: Page, selector: string, value: string): Promise<void> {
+  await page.locator(selector).selectOption(value);
+}

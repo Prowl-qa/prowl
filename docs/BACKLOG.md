@@ -77,3 +77,49 @@
 - GitHub Actions triggers `prowlai run <failed-hunt>` on the PR branch
 - Results posted as a PR comment (pass/fail with screenshots)
 - PR auto-labeled as `prowl-verified` if the hunt passes
+
+---
+
+## Phase 4: Step Type Expansion
+
+### FEAT-001: `selectOption` Step Type
+**Priority**: High
+**Found during**: Profile page hunt planning (2026-02-06)
+**Description**: `<select>` dropdowns require Playwright's `selectOption()` API. The current `fill` step uses Playwright's `.fill()` which does not work on `<select>` elements, leaving dropdown interactions untestable.
+**Blocked hunts**:
+- Profile page: Locale and Timezone dropdowns
+- Orders page: Status, Driver, and Vehicle dropdowns in the order form
+**Acceptance Criteria**:
+- New step type `selectOption: { selector, value }` that calls `page.locator(selector).selectOption(value)`
+- Value supports `{{VAR}}` interpolation
+- Schema validation added to `src/config/schema.ts`
+- Step execution added to `src/runner/steps.ts`
+- Unit test coverage in `test/steps.test.ts`
+
+### FEAT-002: `setInputFiles` Step Type
+**Priority**: Medium
+**Found during**: Profile page hunt planning (2026-02-06)
+**Description**: File upload inputs (e.g., avatar upload on the dispatcher Profile page) require Playwright's `setInputFiles()` API. Neither `fill` nor `click` can set a file on `<input type="file">` elements, leaving file upload flows untestable.
+**Acceptance Criteria**:
+- New step type `setInputFiles: { selector, files }` where `files` is a path (or array of paths) relative to the `.prowl/` directory
+- Schema validation added to `src/config/schema.ts`
+- Step execution added to `src/runner/steps.ts`
+- Unit test coverage in `test/steps.test.ts`
+
+### FEAT-003: `onDialog` Step Type (Dialog Handler)
+**Priority**: High
+**Found during**: Orders page hunt planning (2026-02-06)
+**Description**: Delete flows in the dispatcher app use `window.confirm()` for confirmation dialogs. Playwright requires a dialog handler (`page.on('dialog')`) to be set up *before* the action that triggers the dialog. Without this, Prowl cannot test any flow that involves browser-native `alert()`, `confirm()`, or `prompt()` dialogs.
+**Blocked hunts**:
+- `orders-delete` hunt: Cannot be created until this feature is implemented. Delete order (single and bulk) uses `window.confirm()` which Prowl cannot interact with today.
+- Without `orders-delete`, the `orders-create` hunt is not idempotent — re-running it will fail because the test order (`PROWL-TEST-001`) already exists. Implementing this feature unblocks a full create→edit→delete cycle that cleans up after itself.
+**Design notes**:
+- The step must be placed *before* the step that triggers the dialog (e.g., before a `click` on a delete button)
+- It should set up a one-time `page.once('dialog')` listener that accepts or dismisses the dialog
+- Syntax proposal: `onDialog: { action: "accept" }` or `onDialog: { action: "dismiss" }`
+**Acceptance Criteria**:
+- New step type `onDialog: { action }` where action is `"accept"` or `"dismiss"`
+- Sets up a `page.once('dialog', ...)` listener that fires on the next dialog
+- Schema validation added to `src/config/schema.ts`
+- Step execution added to `src/runner/steps.ts`
+- Unit test coverage in `test/steps.test.ts`

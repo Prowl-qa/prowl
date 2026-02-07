@@ -33,3 +33,12 @@ Prowl(AI) is a CLI QA testing tool that:
 3. **Developer-ready reports** - Screenshots, traces, repro steps
 4. **Guardrails** - Forbidden selectors, allowed domains, max steps
 5. **File-based storage** - No database for MVP
+
+## Server Access
+
+Agents can SSH into the beelink server to inspect databases and application state.
+
+- **Username**: michael
+- **IP Address**: 192.168.86.25
+- **Application paths**:
+  - Dispatcher: `michael/homelab/apps/dispatcher/`

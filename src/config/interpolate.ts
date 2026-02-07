@@ -50,6 +50,11 @@ function interpolateStep(
     }
     return { fill: { selector: selectorResult.value, value: valueResult.value } };
   }
+  if ("selectOption" in step) {
+    const selectorResult = interpolateString(step.selectOption.selector, vars);
+    const valueResult = interpolateString(step.selectOption.value, vars);
+    return { selectOption: { selector: selectorResult.value, value: valueResult.value } };
+  }
   if ("press" in step) {
     const selectorResult = interpolateString(step.press.selector, vars);
     const keyResult = interpolateString(step.press.key, vars);

@@ -75,6 +75,11 @@ export const waitForNetworkIdleStepSchema = z
     waitForNetworkIdle: z.object({ timeout: z.number().optional() }).strict()
   })
   .strict();
+export const selectOptionStepSchema = z
+  .object({
+    selectOption: z.object({ selector: z.string().min(1), value: z.string() }).strict()
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -86,6 +91,7 @@ export const stepSchema = z.union([
   clickStepSchema,
   fillStepSchema,
   pressStepSchema,
+  selectOptionStepSchema,
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,
