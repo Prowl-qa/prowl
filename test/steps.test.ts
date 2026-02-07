@@ -11,7 +11,9 @@ function createMockPage() {
   const locator = () => ({
     click: vi.fn(async () => undefined),
     fill: vi.fn(async () => undefined),
-    press: vi.fn(async () => undefined)
+    press: vi.fn(async () => undefined),
+    selectOption: vi.fn(async () => undefined),
+    setInputFiles: vi.fn(async () => undefined)
   });
 
   return {
@@ -20,6 +22,7 @@ function createMockPage() {
     }),
     url: () => currentUrl,
     locator: vi.fn(() => locator()),
+    once: vi.fn(),
     waitForSelector: vi.fn(async () => undefined),
     waitForURL: vi.fn(async () => undefined),
     waitForLoadState: vi.fn(async () => undefined),
@@ -45,7 +48,8 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
-      redactedFillSteps: new Set()
+      redactedFillSteps: new Set(),
+      configDir: runDir
     });
 
     expect(result.failed).toBe(false);
@@ -67,7 +71,146 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["[data-danger]"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
-      redactedFillSteps: new Set()
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].status).toBe("fail");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("registers dialog handler for onDialog step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ onDialog: { action: "accept" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("onDialog");
+    expect(result.results[0].value).toBe("accept");
+    expect(page.once).toHaveBeenCalledWith("dialog", expect.any(Function));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes selectOption step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [
+      {
+        selectOption: {
+          selector: "[data-testid=country-select]",
+          value: "US"
+        }
+      }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("selectOption");
+    expect(result.results[0].selector).toBe("[data-testid=country-select]");
+    expect(result.results[0].value).toBe("US");
+    expect(page.locator).toHaveBeenCalledWith("[data-testid=country-select]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails selectOption on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ selectOption: { selector: "[data-danger]", value: "US" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].status).toBe("fail");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes setInputFiles step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [
+      {
+        setInputFiles: {
+          selector: "[data-testid=avatar-file]",
+          files: "fixtures/avatar.png"
+        }
+      }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("setInputFiles");
+    expect(result.results[0].selector).toBe("[data-testid=avatar-file]");
+    expect(page.locator).toHaveBeenCalledWith("[data-testid=avatar-file]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails setInputFiles on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [
+      { setInputFiles: { selector: "[data-danger]", files: "file.png" } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
     });
 
     expect(result.failed).toBe(true);

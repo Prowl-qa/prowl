@@ -50,10 +50,26 @@ function interpolateStep(
     }
     return { fill: { selector: selectorResult.value, value: valueResult.value } };
   }
+  if ("selectOption" in step) {
+    const selectorResult = interpolateString(step.selectOption.selector, vars);
+    const valueResult = interpolateString(step.selectOption.value, vars);
+    return { selectOption: { selector: selectorResult.value, value: valueResult.value } };
+  }
   if ("press" in step) {
     const selectorResult = interpolateString(step.press.selector, vars);
     const keyResult = interpolateString(step.press.key, vars);
     return { press: { selector: selectorResult.value, key: keyResult.value } };
+  }
+  if ("onDialog" in step) {
+    return { onDialog: { action: step.onDialog.action } };
+  }
+  if ("setInputFiles" in step) {
+    const selectorResult = interpolateString(step.setInputFiles.selector, vars);
+    const rawFiles = step.setInputFiles.files;
+    const files = Array.isArray(rawFiles)
+      ? rawFiles.map((f) => interpolateString(f, vars).value)
+      : interpolateString(rawFiles, vars).value;
+    return { setInputFiles: { selector: selectorResult.value, files } };
   }
   if ("waitForSelector" in step) {
     const selectorResult = interpolateString(step.waitForSelector.selector, vars);
@@ -106,12 +122,17 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
 
 export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
   const redactedFillSteps = new Set<number>();
-  const vars = {
-    ...Object.fromEntries(
-      Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
-    ),
-    ...(hunt.vars ?? {})
-  };
+
+  const envVars = Object.fromEntries(
+    Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
+  );
+
+  const resolvedHuntVars: Record<string, string> = {};
+  for (const [key, value] of Object.entries(hunt.vars ?? {})) {
+    resolvedHuntVars[key] = interpolateString(value, envVars).value;
+  }
+
+  const vars = { ...envVars, ...resolvedHuntVars };
   const steps = hunt.steps.map((step, index) => interpolateStep(step, vars, index, redactedFillSteps));
   const assertions = hunt.assertions?.map((assertion) => interpolateAssertion(assertion, vars));
   return {

@@ -136,7 +136,8 @@ export async function runHunt(
         forbiddenSelectors: config.guardrails.forbiddenSelectors,
         allowedDomains,
         maxTotalTimeMs: config.assertions.maxTotalTimeMs,
-        redactedFillSteps
+        redactedFillSteps,
+        configDir
       });
 
       stepResults = stepExecution.results;

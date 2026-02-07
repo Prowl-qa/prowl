@@ -54,6 +54,19 @@ describe("interpolateHunt", () => {
     expect(redactedFillSteps.has(1)).toBe(true);
   });
 
+  it("interpolates hunt vars that reference env vars", () => {
+    const hunt: Hunt = {
+      vars: { EMAIL: "{{TEST_EMAIL}}" },
+      steps: [
+        { fill: { selector: "[data-testid='email']", value: "{{EMAIL}}" } }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    expect(interpolated.steps[0]).toEqual({
+      fill: { selector: "[data-testid='email']", value: "user@example.com" }
+    });
+  });
+
   it("prefers hunt vars over environment", () => {
     const hunt: Hunt = {
       vars: {

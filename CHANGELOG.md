@@ -4,60 +4,29 @@ All notable changes to Prowl(AI) will be documented in this file.
 
 ## [Unreleased]
 
-### Current Sprint - MVP Foundation
-- [ ] Project scaffolding (package.json, tsconfig, etc.)
-- [ ] CLI with `prowlai run`, `prowlai login`, `prowlai init`
-- [ ] Configuration system (.prowl/config.yml)
-- [ ] Hunt file parsing (.prowl/hunts/*.yml)
-- [ ] Playwright browser controller
-- [ ] Step execution (navigate, click, fill, waitFor*)
-- [ ] Assertion evaluation
-- [ ] Artifact bundling (screenshots on failure + final, console)
-- [ ] summary.md and result.json generation
+### Added
+- `onDialog` step type: register a one-time dialog handler (`accept` or `dismiss`) for browser-native dialogs (FEAT-003)
+- `setInputFiles` step type: set files on `<input type="file">` elements, supports single or array of paths relative to `.prowl/` (FEAT-002)
+
+### Fixed
+- `init` command: replace hardcoded path resolution with directory walk to find package root (BUG-002)
+- `package.json`: include `examples/` in `files` field so `prowlai init` works after `npm install -g` (BUG-003)
+- Nested variable interpolation: hunt vars referencing env vars via `{{...}}` now resolve correctly (BUG-001)
 
 ---
 
-## Backlog
-
-### Phase 2 - Agent Intelligence
-- [ ] LLM provider abstraction (OpenAI + Anthropic)
-- [ ] Natural language hunt parsing
-- [ ] Planner agent (break hunts into steps)
-- [ ] Reasoner agent (evaluate success/failure)
-- [ ] Retry logic with adaptive reasoning
-- [ ] Light exploratory mode
-
-### Phase 3 - Developer Experience
-- [ ] `prowlai list` command
-- [ ] Interactive `prowlai init`
-- [ ] Failure diagnosis with suggested fixes
-- [ ] Integration with Claude Code / Codex (report → fix loop)
-- [ ] Watch mode for continuous testing
-
-### Phase 4 - Robustness
-- [ ] Test data seeding strategies
-- [ ] Flakiness detection and auto-retry
-- [ ] Visual diff comparison
-- [ ] Accessibility checks (axe-core)
-- [ ] Hunt-level variables (vars: block)
-
-### Phase 5 - Team Features (Future SaaS)
-- [ ] Optional server mode with history
-- [ ] SQLite/Postgres for run persistence
-- [ ] GitHub Action integration
-- [ ] PR comment reports
-- [ ] JUnit XML output
-- [ ] Slack notifications
-- [ ] Cloud runners
-- [ ] Multi-tenant support
-
----
-
-## [0.1.0] - TBD
+## [0.1.0] - 2026-02-06
 
 ### Added
-- Initial release
-- CLI foundation (`run`, `login`, `init`)
-- Playwright integration (Chromium)
-- Explicit step execution
-- Artifact generation
+- CLI foundation with `run`, `login`, `init`, and `list` commands
+- Playwright integration (Chromium) with headless and headed modes
+- Configuration system (`.prowl/config.yml`) with Zod schema validation
+- Hunt file parsing (`.prowl/hunts/*.yml`) with variable interpolation (`{{VAR}}`)
+- 9 step types: `navigate`, `click`, `fill`, `press`, `selectOption`, `waitForSelector`, `waitForUrl`, `waitForNetworkIdle`, `screenshot`
+- 6 assertion types: `selectorExists`, `selectorNotExists`, `urlIncludes`, `urlEquals`, `noConsoleErrors`, `noNetworkErrors`
+- Guardrails: forbidden selectors, allowed domains, max steps, max total time
+- Artifact generation: screenshots (on-failure/all), console logs, network HAR, Playwright traces
+- Report generation: `summary.md` and `result.json` per run
+- Variable interpolation with redaction of sensitive fill step values
+- Auth state capture via `prowlai login` for authenticated test flows
+- Empty-string variable support with regression test

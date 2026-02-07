@@ -34,17 +34,7 @@
 
 ## Bugs
 
-### BUG-001: Nested Variable Interpolation Not Supported
-**Priority**: High
-**Found during**: Dispatcher login test (2026-02-06)
-**Description**: Hunt `vars` that reference env vars via `{{...}}` syntax are not recursively interpolated. If a hunt defines `vars: { TEST_EMAIL: "{{DISPATCH_TEST_EMAIL}}" }` and a step uses `{{TEST_EMAIL}}`, the resolved value is the literal string `{{DISPATCH_TEST_EMAIL}}` instead of the actual env var value.
-**Root cause**: `interpolateHunt` in `src/config/interpolate.ts` spreads env vars first, then hunt vars override them. Hunt var *values* are never interpolated against env vars before being added to the lookup map.
-**Workaround**: Reference env vars directly in steps (e.g., `{{DISPATCH_TEST_EMAIL}}`) instead of going through intermediate hunt vars.
-**Acceptance Criteria**:
-- Hunt var values are interpolated against env vars before being used
-- `vars: { TEST_EMAIL: "{{DISPATCH_TEST_EMAIL}}" }` followed by `{{TEST_EMAIL}}` in a step resolves to the actual env var value
-- Existing behavior (direct env var references, plain string vars) is unchanged
-- Unit test added covering nested interpolation
+*No open bugs.*
 
 ---
 
@@ -77,3 +67,39 @@
 - GitHub Actions triggers `prowlai run <failed-hunt>` on the PR branch
 - Results posted as a PR comment (pass/fail with screenshots)
 - PR auto-labeled as `prowl-verified` if the hunt passes
+
+---
+
+## Phase 4: Step Type Expansion
+
+*All Phase 4 items resolved.*
+
+---
+
+## Resolved
+
+### ~~FEAT-001: `selectOption` Step Type~~
+**Resolved**: 2026-02-06 (commit aa9188c)
+**Description**: Added `selectOption: { selector, value }` step type for `<select>` dropdowns.
+
+### ~~BUG-001: Nested Variable Interpolation Not Supported~~
+**Resolved**: 2026-02-07 (commit 72fd515)
+**Description**: Hunt var values referencing env vars via `{{...}}` are now pre-interpolated against env vars before merging into the lookup map. Regression test added.
+
+### ~~BUG-002: `init` Command Path Resolution Broken After Bundling~~
+**Resolved**: 2026-02-07 (commit 72fd515)
+**Found during**: End-user workflow review (2026-02-07)
+**Description**: `getPackageRoot()` in `src/cli/commands/init.ts` used a hardcoded `"../../../"` relative path that only worked for the source layout. After tsup bundles to `dist/index.js`, the path resolved 2 levels above the project root. Replaced with a directory walk that finds the nearest `package.json`.
+
+### ~~BUG-003: `examples/` Not Included in npm Package~~
+**Resolved**: 2026-02-07 (commit 72fd515)
+**Found during**: End-user workflow review (2026-02-07)
+**Description**: `package.json` `files` field only included `"dist"`, so `examples/` was excluded from `npm publish`. The `init` command copies from `examples/`, so it would fail after `npm install -g`. Added `"examples"` to the `files` array.
+
+### ~~FEAT-002: `setInputFiles` Step Type~~
+**Resolved**: 2026-02-07 (commit af2700b)
+**Description**: Added `setInputFiles: { selector, files }` step type for `<input type="file">` elements. Supports single file or array of paths relative to `.prowl/` directory. Unit tests added.
+
+### ~~FEAT-003: `onDialog` Step Type (Dialog Handler)~~
+**Resolved**: 2026-02-07 (commit af2700b)
+**Description**: Added `onDialog: { action }` step type where action is `"accept"` or `"dismiss"`. Sets up a `page.once('dialog')` listener for browser-native dialogs. Unblocks delete flow hunts and idempotent test cycles. Unit tests added.

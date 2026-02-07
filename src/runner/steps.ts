@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Page } from "playwright";
-import { clickElement, fillElement, pressKey } from "../browser/actions.js";
+import { clickElement, fillElement, pressKey, selectOption, setupDialogHandler, setInputFiles } from "../browser/actions.js";
 import type { Step, StepResult } from "../types/index.js";
 
 export type StepExecutionContext = {
@@ -14,6 +14,7 @@ export type StepExecutionContext = {
   allowedDomains: string[];
   maxTotalTimeMs: number;
   redactedFillSteps: Set<number>;
+  configDir: string;
 };
 
 export type StepExecutionResult = {
@@ -33,6 +34,9 @@ function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
   if ("click" in step) return "click";
   if ("fill" in step) return "fill";
+  if ("selectOption" in step) return "selectOption";
+  if ("onDialog" in step) return "onDialog";
+  if ("setInputFiles" in step) return "setInputFiles";
   if ("press" in step) return "press";
   if ("waitForSelector" in step) return "waitForSelector";
   if ("waitForUrl" in step) return "waitForUrl";
@@ -137,6 +141,47 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart,
           selector: step.fill.selector,
           value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.fill.value
+        };
+      } else if ("selectOption" in step) {
+        if (isForbiddenSelector(step.selectOption.selector, context.forbiddenSelectors)) {
+          throw new Error(`Forbidden selector: ${step.selectOption.selector}`);
+        }
+        await selectOption(context.page, step.selectOption.selector, step.selectOption.value);
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        stepResult = {
+          type: "selectOption",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.selectOption.selector,
+          value: step.selectOption.value
+        };
+      } else if ("onDialog" in step) {
+        setupDialogHandler(context.page, step.onDialog.action);
+        stepResult = {
+          type: "onDialog",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: step.onDialog.action
+        };
+      } else if ("setInputFiles" in step) {
+        if (isForbiddenSelector(step.setInputFiles.selector, context.forbiddenSelectors)) {
+          throw new Error(`Forbidden selector: ${step.setInputFiles.selector}`);
+        }
+        const rawFiles = step.setInputFiles.files;
+        const resolveFile = (f: string) =>
+          path.isAbsolute(f) ? f : path.join(context.configDir, f);
+        const resolvedFiles = Array.isArray(rawFiles)
+          ? rawFiles.map(resolveFile)
+          : resolveFile(rawFiles);
+        await setInputFiles(context.page, step.setInputFiles.selector, resolvedFiles);
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        const filesLabel = Array.isArray(rawFiles) ? rawFiles.join(", ") : rawFiles;
+        stepResult = {
+          type: "setInputFiles",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.setInputFiles.selector,
+          value: filesLabel
         };
       } else if ("press" in step) {
         if (isForbiddenSelector(step.press.selector, context.forbiddenSelectors)) {
