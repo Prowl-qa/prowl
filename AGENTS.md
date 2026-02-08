@@ -44,3 +44,8 @@ Steps:
 ## Change Policy
 - Do not modify the repo unless explicitly approved by the owner.
 - After approval, implement changes incrementally and commit each logical chunk via `gpush`.
+
+## Code Review Handling
+- When code review issues are provided as input, handle each item by either:
+  1. fixing the issue in code, or
+  2. providing a clear technical argument for why no code change is needed.
