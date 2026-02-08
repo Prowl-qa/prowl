@@ -524,6 +524,29 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails explicit waitForSelector when selector is forbidden", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ waitForSelector: { selector: "[data-danger]" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails wait shorthand when derived text selector is forbidden", async () => {
     const page = createMockPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));

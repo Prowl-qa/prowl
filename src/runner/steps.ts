@@ -459,6 +459,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           selector
         };
       } else if ("waitForSelector" in step) {
+        assertAllowedSelector(step.waitForSelector.selector, context.forbiddenSelectors);
         await context.page.waitForSelector(step.waitForSelector.selector, {
           timeout: step.waitForSelector.timeout
         });
