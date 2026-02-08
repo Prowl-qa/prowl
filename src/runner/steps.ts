@@ -33,8 +33,38 @@ export type StepExecutionResult = {
 
 const ALWAYS_ALLOWED_PROTOCOLS = ["about:", "data:"];
 
+function unwrapTextSelector(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('text="') && trimmed.endsWith('"')) {
+    return trimmed.slice(6, -1);
+  }
+  if (trimmed.startsWith("text='") && trimmed.endsWith("'")) {
+    return trimmed.slice(6, -1);
+  }
+  if (trimmed.startsWith("text=")) {
+    return trimmed.slice(5);
+  }
+  return null;
+}
+
+function matchesForbiddenPattern(selector: string, forbidden: string): boolean {
+  const selectorText = unwrapTextSelector(selector);
+  if (selectorText === null) {
+    return false;
+  }
+
+  const forbiddenText = unwrapTextSelector(forbidden);
+  if (forbiddenText !== null) {
+    return selectorText.includes(forbiddenText);
+  }
+
+  return selectorText.includes(forbidden);
+}
+
 function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): boolean {
-  return forbiddenSelectors.some((forbidden) => selector.includes(forbidden));
+  return forbiddenSelectors.some(
+    (forbidden) => selector.includes(forbidden) || matchesForbiddenPattern(selector, forbidden)
+  );
 }
 
 function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): void {
@@ -195,10 +225,12 @@ async function runInlineAssert(
     notVisible?: string;
     urlIncludes?: string;
     urlEquals?: string;
-  }
+  },
+  forbiddenSelectors: string[]
 ): Promise<string> {
   if (assertion.visible !== undefined) {
     const selector = textSelector(assertion.visible);
+    assertAllowedSelector(selector, forbiddenSelectors);
     const count = await page.locator(selector).count();
     if (count === 0) {
       throw new Error(`Expected visible text: ${assertion.visible}`);
@@ -208,6 +240,7 @@ async function runInlineAssert(
 
   if (assertion.notVisible !== undefined) {
     const selector = textSelector(assertion.notVisible);
+    assertAllowedSelector(selector, forbiddenSelectors);
     const count = await page.locator(selector).count();
     if (count > 0) {
       throw new Error(`Expected text to be hidden: ${assertion.notVisible}`);
@@ -406,7 +439,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           selector: step.press.selector
         };
       } else if ("assert" in step) {
-        const value = await runInlineAssert(context.page, step.assert);
+        const value = await runInlineAssert(context.page, step.assert, context.forbiddenSelectors);
         stepResult = {
           type: "assert",
           status: "pass",
@@ -416,6 +449,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       } else if ("wait" in step) {
         const selector = typeof step.wait === "string" ? textSelector(step.wait) : textSelector(step.wait.for);
         const timeout = typeof step.wait === "string" ? undefined : step.wait.timeout;
+        assertAllowedSelector(selector, context.forbiddenSelectors);
         await context.page.waitForSelector(selector, { timeout });
         stepResult = {
           type: "wait",

@@ -423,6 +423,29 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails wait shorthand when derived text selector is forbidden", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ wait: "Welcome" }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ['text="Welcome"'],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails inline assert visible when text is missing", async () => {
     const page = createMockPage({
       locatorCounts: { 'text="Welcome back"': 0 }
@@ -445,6 +468,29 @@ describe("executeSteps", () => {
 
     expect(result.failed).toBe(true);
     expect(result.results[0].type).toBe("assert");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails inline assert when derived text selector is forbidden", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ assert: { visible: "Welcome back" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ['text="Welcome back"'],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
