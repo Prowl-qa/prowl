@@ -1,11 +1,11 @@
-# prowlai
+# prowl
 
 CLI-first QA testing tool for deterministic Playwright flows.
 
 ## Install
 
 ```bash
-npm install -g prowlai
+npm install -g prowl
 ```
 
 Playwright browsers are not auto-installed. Run:
@@ -17,8 +17,8 @@ npx playwright install chromium
 ## Quick Start
 
 ```bash
-prowlai init
-prowlai run homepage
+prowl init
+prowl run homepage
 ```
 
 ## Config
@@ -88,6 +88,9 @@ precedence over `process.env` and `.env`.
 - `click`: `{ selector: string }`
 - `fill`: `{ selector: string, value: string }`
 - `press`: `{ selector: string, key: string }`
+- `selectOption`: `{ selector: string, value: string }`
+- `onDialog`: `{ action: "accept" | "dismiss" }`
+- `setInputFiles`: `{ selector: string, files: string | string[] }`
 - `waitForSelector`: `{ selector: string, timeout?: number }`
 - `waitForUrl`: `{ value: string, timeout?: number }` (includes match)
 - `waitForNetworkIdle`: `{ timeout?: number }`
@@ -98,7 +101,7 @@ Selectors accept Playwright selector engines, e.g. `role=button[name="Submit"]`.
 ## Auth
 
 ```bash
-prowlai login
+prowl login
 ```
 
 This opens a headed Chromium window and saves storage state to `.prowl/auth-state.json`.
@@ -114,10 +117,10 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 ## CLI
 
 ```bash
-prowlai run <hunt-name>
-prowlai run <hunt-name> --headed
-prowlai run <hunt-name> --trace
-prowlai login
-prowlai init
-prowlai list
+prowl run <hunt-name>
+prowl run <hunt-name> --headed
+prowl run <hunt-name> --trace
+prowl login
+prowl init
+prowl list
 ```

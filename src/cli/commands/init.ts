@@ -20,7 +20,7 @@ function getPackageRoot(): string {
     return root;
   }
 
-  throw new Error("Cannot find package root. Reinstall prowlai.");
+  throw new Error("Cannot find package root. Reinstall prowl.");
 }
 
 function copyFile(source: string, destination: string): void {
@@ -46,7 +46,7 @@ export function buildInitCommand(): Command {
       const exampleHunt = path.join(examplesDir, "hunts", "homepage.yml");
 
       if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleHunt)) {
-        console.error(chalk.red("Examples not found in package. Reinstall prowlai."));
+        console.error(chalk.red("Examples not found in package. Reinstall prowl."));
         process.exitCode = 1;
         return;
       }

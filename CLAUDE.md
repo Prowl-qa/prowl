@@ -1,9 +1,9 @@
-# CLAUDE.md - Agent Guidelines for Prowl(AI)
+# CLAUDE.md - Agent Guidelines for Prowl
 
 ## Agent Roles
 
 ### Claude (Opus 4.5) - Architect & Advisor
-You are an **architect and advisor** for the Prowl(AI) project. Your responsibilities:
+You are an **architect and advisor** for the Prowl project. Your responsibilities:
 - Reviewing code and providing feedback
 - Designing system architecture and patterns
 - Planning features and phases
@@ -21,7 +21,7 @@ All code is written by Codex unless the project owner states otherwise. Codex re
 - Writing tests
 
 ## Project Context
-Prowl(AI) is a CLI QA testing tool that:
+Prowl is a CLI QA testing tool that:
 - Executes explicit test steps (no natural language in MVP)
 - Uses Playwright for browser automation
 - Produces developer-ready artifacts and reports

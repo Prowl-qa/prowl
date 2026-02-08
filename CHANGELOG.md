@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Prowl(AI) will be documented in this file.
+All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
@@ -10,7 +10,7 @@ All notable changes to Prowl(AI) will be documented in this file.
 
 ### Fixed
 - `init` command: replace hardcoded path resolution with directory walk to find package root (BUG-002)
-- `package.json`: include `examples/` in `files` field so `prowlai init` works after `npm install -g` (BUG-003)
+- `package.json`: include `examples/` in `files` field so `prowl init` works after `npm install -g` (BUG-003)
 - Nested variable interpolation: hunt vars referencing env vars via `{{...}}` now resolve correctly (BUG-001)
 
 ---
@@ -28,5 +28,5 @@ All notable changes to Prowl(AI) will be documented in this file.
 - Artifact generation: screenshots (on-failure/all), console logs, network HAR, Playwright traces
 - Report generation: `summary.md` and `result.json` per run
 - Variable interpolation with redaction of sensitive fill step values
-- Auth state capture via `prowlai login` for authenticated test flows
+- Auth state capture via `prowl login` for authenticated test flows
 - Empty-string variable support with regression test

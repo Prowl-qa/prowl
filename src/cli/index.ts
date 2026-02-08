@@ -8,7 +8,7 @@ import { buildListCommand } from "./commands/list.js";
 const program = new Command();
 
 program
-  .name("prowlai")
+  .name("prowl")
   .description("CLI-first QA testing tool for deterministic Playwright flows")
   .version("0.1.0");
 

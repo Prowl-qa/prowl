@@ -1,8 +1,8 @@
-# Prowl(AI) - Product Backlog
+# Prowl - Product Backlog
 
 ## Phase 2: CI Integration & Automated Issue Reporting
 
-### P2-001: `prowlai ci` Command
+### P2-001: `prowl ci` Command
 **Priority**: High
 **Description**: Add a `ci` subcommand that runs all hunts in `.prowl/hunts/` sequentially and produces a combined pass/fail exit code. Designed for unattended execution in CI pipelines or scheduled cron jobs.
 **Acceptance Criteria**:
@@ -13,7 +13,7 @@
 
 ### P2-002: GitHub Issue Creation on Failure
 **Priority**: High
-**Description**: When `prowlai ci` detects a failure, automatically create a GitHub issue using `gh issue create` with failure details, screenshots, and repro steps parsed from the hunt YAML and `result.json`.
+**Description**: When `prowl ci` detects a failure, automatically create a GitHub issue using `gh issue create` with failure details, screenshots, and repro steps parsed from the hunt YAML and `result.json`.
 **Acceptance Criteria**:
 - Issue title includes hunt name and failure reason
 - Issue body includes: failure summary, repro steps from hunt YAML, assertion results
@@ -42,7 +42,7 @@
 
 ### P3-001: GitHub Actions Workflow for Scheduled Prowl Runs
 **Priority**: High
-**Description**: Provide a reusable GitHub Actions workflow that runs `prowlai ci` on a schedule (e.g., nightly) or on PR events against a target application.
+**Description**: Provide a reusable GitHub Actions workflow that runs `prowl ci` on a schedule (e.g., nightly) or on PR events against a target application.
 **Acceptance Criteria**:
 - Workflow template that users can copy into their repos
 - Configurable schedule (cron) and trigger events
@@ -64,7 +64,7 @@
 **Priority**: Medium
 **Description**: When a fix PR is opened by the agent, automatically re-run the failed Prowl hunt against the PR branch to verify the fix before review.
 **Acceptance Criteria**:
-- GitHub Actions triggers `prowlai run <failed-hunt>` on the PR branch
+- GitHub Actions triggers `prowl run <failed-hunt>` on the PR branch
 - Results posted as a PR comment (pass/fail with screenshots)
 - PR auto-labeled as `prowl-verified` if the hunt passes
 
