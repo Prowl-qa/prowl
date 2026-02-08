@@ -90,4 +90,33 @@ describe("interpolateHunt", () => {
       }
     });
   });
+
+  it("interpolates shorthand step values", () => {
+    const hunt: Hunt = {
+      vars: {
+        CTA: "Sign In"
+      },
+      steps: [
+        { click: "{{CTA}}" },
+        { fill: { Email: "{{TEST_EMAIL}}" } },
+        { type: "{{TEST_PASSWORD}}" },
+        { select: { State: "{{STATE}}" } },
+        { wait: "{{CTA}}" },
+        { assert: { visible: "{{CTA}}" } }
+      ]
+    };
+
+    const { hunt: interpolated, redactedFillSteps } = interpolateHunt(hunt, {
+      ...env,
+      STATE: "FL"
+    });
+    expect(interpolated.steps[0]).toEqual({ click: "Sign In" });
+    expect(interpolated.steps[1]).toEqual({ fill: { Email: "user@example.com" } });
+    expect(interpolated.steps[2]).toEqual({ type: "secret" });
+    expect(interpolated.steps[3]).toEqual({ select: { State: "FL" } });
+    expect(interpolated.steps[4]).toEqual({ wait: "Sign In" });
+    expect(interpolated.steps[5]).toEqual({ assert: { visible: "Sign In" } });
+    expect(redactedFillSteps.has(1)).toBe(true);
+    expect(redactedFillSteps.has(2)).toBe(true);
+  });
 });

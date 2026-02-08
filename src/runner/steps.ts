@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Page } from "playwright";
-import { clickElement, fillElement, pressKey, selectOption, setupDialogHandler, setInputFiles } from "../browser/actions.js";
+import {
+  clickElement,
+  fillElement,
+  pressKey,
+  selectOption,
+  setupDialogHandler,
+  setInputFiles
+} from "../browser/actions.js";
 import type { Step, StepResult } from "../types/index.js";
 
 export type StepExecutionContext = {
@@ -26,23 +33,72 @@ export type StepExecutionResult = {
 
 const ALWAYS_ALLOWED_PROTOCOLS = ["about:", "data:"];
 
+function unwrapTextSelector(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('text="') && trimmed.endsWith('"')) {
+    return trimmed.slice(6, -1);
+  }
+  if (trimmed.startsWith("text='") && trimmed.endsWith("'")) {
+    return trimmed.slice(6, -1);
+  }
+  if (trimmed.startsWith("text=")) {
+    return trimmed.slice(5);
+  }
+  return null;
+}
+
+function matchesForbiddenPattern(selector: string, forbidden: string): boolean {
+  const selectorText = unwrapTextSelector(selector);
+  if (selectorText === null) {
+    return false;
+  }
+
+  const forbiddenText = unwrapTextSelector(forbidden);
+  if (forbiddenText !== null) {
+    return selectorText.includes(forbiddenText);
+  }
+
+  return selectorText.includes(forbidden);
+}
+
 function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): boolean {
-  return forbiddenSelectors.some((forbidden) => selector.includes(forbidden));
+  return forbiddenSelectors.some(
+    (forbidden) => selector.includes(forbidden) || matchesForbiddenPattern(selector, forbidden)
+  );
+}
+
+function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): void {
+  if (isForbiddenSelector(selector, forbiddenSelectors)) {
+    throw new Error(`Forbidden selector: ${selector}`);
+  }
 }
 
 function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
   if ("click" in step) return "click";
   if ("fill" in step) return "fill";
+  if ("type" in step) return "type";
   if ("selectOption" in step) return "selectOption";
+  if ("select" in step) return "select";
   if ("onDialog" in step) return "onDialog";
   if ("setInputFiles" in step) return "setInputFiles";
+  if ("assert" in step) return "assert";
   if ("press" in step) return "press";
+  if ("wait" in step) return "wait";
   if ("waitForSelector" in step) return "waitForSelector";
   if ("waitForUrl" in step) return "waitForUrl";
   if ("waitForNetworkIdle" in step) return "waitForNetworkIdle";
   if ("screenshot" in step) return "screenshot";
   return "step";
+}
+
+function isExplicitFillStep(
+  value: { selector: string; value: string } | Record<string, string>
+): value is { selector: string; value: string } {
+  return (
+    typeof (value as { selector?: unknown }).selector === "string" &&
+    typeof (value as { value?: unknown }).value === "string"
+  );
 }
 
 function ensureAllowedUrl(urlValue: string, allowedDomains: string[]): void {
@@ -63,6 +119,152 @@ function resolveNavigationTarget(targetUrl: string, value: string): string {
   } catch {
     return value;
   }
+}
+
+function escapeForText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function escapeForAttribute(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function textSelector(text: string): string {
+  return `text="${escapeForText(text)}"`;
+}
+
+function getSinglePair(value: Record<string, string>, stepType: string): [string, string] {
+  const entries = Object.entries(value);
+  if (entries.length !== 1) {
+    throw new Error(`${stepType} shorthand expects exactly one key-value pair`);
+  }
+  return entries[0];
+}
+
+async function clickByTextWithFallback(
+  page: Page,
+  text: string,
+  forbiddenSelectors: string[]
+): Promise<string> {
+  const roleSelector = `role=button[name="${escapeForAttribute(text)}"]`;
+  assertAllowedSelector(roleSelector, forbiddenSelectors);
+  const button = page.getByRole("button", { name: text });
+  if (await button.count()) {
+    await button.first().click();
+    return roleSelector;
+  }
+
+  const selector = textSelector(text);
+  assertAllowedSelector(selector, forbiddenSelectors);
+  await page.locator(selector).first().click();
+  return selector;
+}
+
+async function fillByLabelOrPlaceholder(
+  page: Page,
+  label: string,
+  value: string,
+  forbiddenSelectors: string[]
+): Promise<string> {
+  const labelSelector = `label="${escapeForAttribute(label)}"`;
+  assertAllowedSelector(labelSelector, forbiddenSelectors);
+  const byLabel = page.getByLabel(label, { exact: true });
+  if (await byLabel.count()) {
+    await byLabel.first().fill(value);
+    return labelSelector;
+  }
+
+  const placeholder = `input[placeholder="${escapeForAttribute(label)}"], textarea[placeholder="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(placeholder, forbiddenSelectors);
+  const byPlaceholder = page.locator(placeholder);
+  if (await byPlaceholder.count()) {
+    await byPlaceholder.first().fill(value);
+    return placeholder;
+  }
+
+  throw new Error(`Could not resolve fill shorthand for "${label}"`);
+}
+
+async function selectByLabelOrFallback(
+  page: Page,
+  label: string,
+  value: string,
+  forbiddenSelectors: string[]
+): Promise<string> {
+  const labelSelector = `label="${escapeForAttribute(label)}"`;
+  assertAllowedSelector(labelSelector, forbiddenSelectors);
+  const byLabel = page.getByLabel(label, { exact: true });
+  if (await byLabel.count()) {
+    await byLabel.first().selectOption(value);
+    return labelSelector;
+  }
+
+  const ariaSelector = `select[aria-label="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(ariaSelector, forbiddenSelectors);
+  const byAria = page.locator(ariaSelector);
+  if (await byAria.count()) {
+    await byAria.first().selectOption(value);
+    return ariaSelector;
+  }
+
+  const placeholderSelector = `select[placeholder="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(placeholderSelector, forbiddenSelectors);
+  const byPlaceholder = page.locator(placeholderSelector);
+  if (await byPlaceholder.count()) {
+    await byPlaceholder.first().selectOption(value);
+    return placeholderSelector;
+  }
+
+  throw new Error(`Could not resolve select shorthand for "${label}"`);
+}
+
+async function runInlineAssert(
+  page: Page,
+  assertion: {
+    visible?: string;
+    notVisible?: string;
+    urlIncludes?: string;
+    urlEquals?: string;
+  },
+  forbiddenSelectors: string[]
+): Promise<string> {
+  if (assertion.visible !== undefined) {
+    const selector = textSelector(assertion.visible);
+    assertAllowedSelector(selector, forbiddenSelectors);
+    const count = await page.locator(selector).count();
+    if (count === 0) {
+      throw new Error(`Expected visible text: ${assertion.visible}`);
+    }
+    return `visible:${assertion.visible}`;
+  }
+
+  if (assertion.notVisible !== undefined) {
+    const selector = textSelector(assertion.notVisible);
+    assertAllowedSelector(selector, forbiddenSelectors);
+    const count = await page.locator(selector).count();
+    if (count > 0) {
+      throw new Error(`Expected text to be hidden: ${assertion.notVisible}`);
+    }
+    return `notVisible:${assertion.notVisible}`;
+  }
+
+  if (assertion.urlIncludes !== undefined) {
+    const current = page.url();
+    if (!current.includes(assertion.urlIncludes)) {
+      throw new Error(`URL did not include ${assertion.urlIncludes}`);
+    }
+    return `urlIncludes:${assertion.urlIncludes}`;
+  }
+
+  if (assertion.urlEquals !== undefined) {
+    const current = page.url();
+    if (current !== assertion.urlEquals) {
+      throw new Error(`URL did not equal ${assertion.urlEquals}`);
+    }
+    return `urlEquals:${assertion.urlEquals}`;
+  }
+
+  throw new Error("assert step is missing an assertion type");
 }
 
 function screenshotPath(screenshotsDir: string, fileName: string): string {
@@ -118,34 +320,64 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = { type: "navigate", status: "pass", durationMs: Date.now() - stepStart };
       } else if ("click" in step) {
-        if (isForbiddenSelector(step.click.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.click.selector}`);
+        let selector: string;
+        if (typeof step.click === "string") {
+          selector = await clickByTextWithFallback(
+            context.page,
+            step.click,
+            context.forbiddenSelectors
+          );
+        } else {
+          assertAllowedSelector(step.click.selector, context.forbiddenSelectors);
+          await clickElement(context.page, step.click.selector);
+          selector = step.click.selector;
         }
-        await clickElement(context.page, step.click.selector);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "click",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.click.selector
+          selector
         };
       } else if ("fill" in step) {
-        if (isForbiddenSelector(step.fill.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.fill.selector}`);
+        let selector: string;
+        let value: string;
+        if (isExplicitFillStep(step.fill)) {
+          assertAllowedSelector(step.fill.selector, context.forbiddenSelectors);
+          await fillElement(context.page, step.fill.selector, step.fill.value);
+          selector = step.fill.selector;
+          value = step.fill.value;
+        } else {
+          const [label, shorthandValue] = getSinglePair(step.fill, "fill");
+          selector = await fillByLabelOrPlaceholder(
+            context.page,
+            label,
+            shorthandValue,
+            context.forbiddenSelectors
+          );
+          value = shorthandValue;
         }
-        await fillElement(context.page, step.fill.selector, step.fill.value);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "fill",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.fill.selector,
-          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.fill.value
+          selector,
+          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : value
+        };
+      } else if ("type" in step) {
+        assertAllowedSelector(":focus", context.forbiddenSelectors);
+        await fillElement(context.page, ":focus", step.type);
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        stepResult = {
+          type: "type",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: ":focus",
+          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.type
         };
       } else if ("selectOption" in step) {
-        if (isForbiddenSelector(step.selectOption.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.selectOption.selector}`);
-        }
+        assertAllowedSelector(step.selectOption.selector, context.forbiddenSelectors);
         await selectOption(context.page, step.selectOption.selector, step.selectOption.value);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
@@ -154,6 +386,22 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart,
           selector: step.selectOption.selector,
           value: step.selectOption.value
+        };
+      } else if ("select" in step) {
+        const [label, value] = getSinglePair(step.select, "select");
+        const selector = await selectByLabelOrFallback(
+          context.page,
+          label,
+          value,
+          context.forbiddenSelectors
+        );
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        stepResult = {
+          type: "select",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector,
+          value
         };
       } else if ("onDialog" in step) {
         setupDialogHandler(context.page, step.onDialog.action);
@@ -164,9 +412,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: step.onDialog.action
         };
       } else if ("setInputFiles" in step) {
-        if (isForbiddenSelector(step.setInputFiles.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.setInputFiles.selector}`);
-        }
+        assertAllowedSelector(step.setInputFiles.selector, context.forbiddenSelectors);
         const rawFiles = step.setInputFiles.files;
         const resolveFile = (f: string) =>
           path.isAbsolute(f) ? f : path.join(context.configDir, f);
@@ -184,9 +430,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: filesLabel
         };
       } else if ("press" in step) {
-        if (isForbiddenSelector(step.press.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.press.selector}`);
-        }
+        assertAllowedSelector(step.press.selector, context.forbiddenSelectors);
         await pressKey(context.page, step.press.selector, step.press.key);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
@@ -195,7 +439,27 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart,
           selector: step.press.selector
         };
+      } else if ("assert" in step) {
+        const value = await runInlineAssert(context.page, step.assert, context.forbiddenSelectors);
+        stepResult = {
+          type: "assert",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value
+        };
+      } else if ("wait" in step) {
+        const selector = typeof step.wait === "string" ? textSelector(step.wait) : textSelector(step.wait.for);
+        const timeout = typeof step.wait === "string" ? undefined : step.wait.timeout;
+        assertAllowedSelector(selector, context.forbiddenSelectors);
+        await context.page.waitForSelector(selector, { timeout });
+        stepResult = {
+          type: "wait",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector
+        };
       } else if ("waitForSelector" in step) {
+        assertAllowedSelector(step.waitForSelector.selector, context.forbiddenSelectors);
         await context.page.waitForSelector(step.waitForSelector.selector, {
           timeout: step.waitForSelector.timeout
         });

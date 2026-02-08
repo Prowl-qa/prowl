@@ -34,26 +34,72 @@ function interpolateStep(
   index: number,
   redacted: Set<number>
 ): Step {
+  const isExplicitFill = (
+    value: { selector: string; value: string } | Record<string, string>
+  ): value is { selector: string; value: string } =>
+    typeof (value as { selector?: unknown }).selector === "string" &&
+    typeof (value as { value?: unknown }).value === "string";
+
+  const interpolateSinglePair = (record: Record<string, string>): Record<string, string> => {
+    const entries = Object.entries(record);
+    if (entries.length !== 1) {
+      throw new Error("Shorthand step expects exactly one key-value pair");
+    }
+    const [key, value] = entries[0];
+    return {
+      [interpolateString(key, vars).value]: interpolateString(value, vars).value
+    };
+  };
+
   if ("navigate" in step) {
     const result = interpolateString(step.navigate, vars);
     return { navigate: result.value };
   }
   if ("click" in step) {
+    if (typeof step.click === "string") {
+      return { click: interpolateString(step.click, vars).value };
+    }
     const result = interpolateString(step.click.selector, vars);
     return { click: { selector: result.value } };
   }
   if ("fill" in step) {
-    const selectorResult = interpolateString(step.fill.selector, vars);
-    const valueResult = interpolateString(step.fill.value, vars);
+    if (isExplicitFill(step.fill)) {
+      const selectorResult = interpolateString(step.fill.selector, vars);
+      const valueResult = interpolateString(step.fill.value, vars);
+      if (valueResult.usedVars.length > 0) {
+        redacted.add(index);
+      }
+      return { fill: { selector: selectorResult.value, value: valueResult.value } };
+    }
+    const [rawLabel, rawValue] = Object.entries(step.fill)[0] ?? [];
+    if (rawLabel === undefined || rawValue === undefined) {
+      throw new Error("Shorthand fill expects exactly one key-value pair");
+    }
+    const labelResult = interpolateString(rawLabel, vars);
+    const valueResult = interpolateString(rawValue, vars);
     if (valueResult.usedVars.length > 0) {
       redacted.add(index);
     }
-    return { fill: { selector: selectorResult.value, value: valueResult.value } };
+    return {
+      fill: {
+        [labelResult.value]: valueResult.value
+      }
+    };
+  }
+  if ("type" in step) {
+    const valueResult = interpolateString(step.type, vars);
+    if (valueResult.usedVars.length > 0) {
+      redacted.add(index);
+    }
+    return { type: valueResult.value };
   }
   if ("selectOption" in step) {
     const selectorResult = interpolateString(step.selectOption.selector, vars);
     const valueResult = interpolateString(step.selectOption.value, vars);
     return { selectOption: { selector: selectorResult.value, value: valueResult.value } };
+  }
+  if ("select" in step) {
+    return { select: interpolateSinglePair(step.select) };
   }
   if ("press" in step) {
     const selectorResult = interpolateString(step.press.selector, vars);
@@ -70,6 +116,32 @@ function interpolateStep(
       ? rawFiles.map((f) => interpolateString(f, vars).value)
       : interpolateString(rawFiles, vars).value;
     return { setInputFiles: { selector: selectorResult.value, files } };
+  }
+  if ("assert" in step) {
+    if (step.assert.visible !== undefined) {
+      return { assert: { visible: interpolateString(step.assert.visible, vars).value } };
+    }
+    if (step.assert.notVisible !== undefined) {
+      return { assert: { notVisible: interpolateString(step.assert.notVisible, vars).value } };
+    }
+    if (step.assert.urlIncludes !== undefined) {
+      return { assert: { urlIncludes: interpolateString(step.assert.urlIncludes, vars).value } };
+    }
+    if (step.assert.urlEquals !== undefined) {
+      return { assert: { urlEquals: interpolateString(step.assert.urlEquals, vars).value } };
+    }
+    return step;
+  }
+  if ("wait" in step) {
+    if (typeof step.wait === "string") {
+      return { wait: interpolateString(step.wait, vars).value };
+    }
+    return {
+      wait: {
+        for: interpolateString(step.wait.for, vars).value,
+        timeout: step.wait.timeout
+      }
+    };
   }
   if ("waitForSelector" in step) {
     const selectorResult = interpolateString(step.waitForSelector.selector, vars);

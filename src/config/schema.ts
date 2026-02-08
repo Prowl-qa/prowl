@@ -45,14 +45,25 @@ export const configSchema = z
 export const navigateStepSchema = z.object({ navigate: z.string().min(1) }).strict();
 export const clickStepSchema = z
   .object({
-    click: z.object({ selector: z.string().min(1) }).strict()
+    click: z.union([z.object({ selector: z.string().min(1) }).strict(), z.string().min(1)])
   })
   .strict();
+
+const singleKeyValueSchema = z
+  .record(z.string().min(1), z.string())
+  .refine((record) => Object.keys(record).length === 1, {
+    message: "Expected exactly one key-value pair"
+  });
+
 export const fillStepSchema = z
   .object({
-    fill: z.object({ selector: z.string().min(1), value: z.string() }).strict()
+    fill: z.union([
+      z.object({ selector: z.string().min(1), value: z.string() }).strict(),
+      singleKeyValueSchema
+    ])
   })
   .strict();
+export const typeStepSchema = z.object({ type: z.string() }).strict();
 export const pressStepSchema = z
   .object({
     press: z.object({ selector: z.string().min(1), key: z.string().min(1) }).strict()
@@ -63,6 +74,14 @@ export const waitForSelectorStepSchema = z
     waitForSelector: z
       .object({ selector: z.string().min(1), timeout: z.number().optional() })
       .strict()
+  })
+  .strict();
+export const waitStepSchema = z
+  .object({
+    wait: z.union([
+      z.string().min(1),
+      z.object({ for: z.string().min(1), timeout: z.number().optional() }).strict()
+    ])
   })
   .strict();
 export const waitForUrlStepSchema = z
@@ -80,6 +99,11 @@ export const selectOptionStepSchema = z
     selectOption: z.object({ selector: z.string().min(1), value: z.string() }).strict()
   })
   .strict();
+export const selectStepSchema = z
+  .object({
+    select: singleKeyValueSchema
+  })
+  .strict();
 export const onDialogStepSchema = z
   .object({
     onDialog: z.object({ action: z.enum(["accept", "dismiss"]) }).strict()
@@ -95,6 +119,27 @@ export const setInputFilesStepSchema = z
       .strict()
   })
   .strict();
+export const inlineAssertStepSchema = z
+  .object({
+    assert: z
+      .object({
+        visible: z.string().min(1).optional(),
+        notVisible: z.string().min(1).optional(),
+        urlIncludes: z.string().min(1).optional(),
+        urlEquals: z.string().min(1).optional()
+      })
+      .strict()
+      .refine(
+        (value) =>
+          [value.visible, value.notVisible, value.urlIncludes, value.urlEquals].filter(
+            (entry) => entry !== undefined
+          ).length === 1,
+        {
+          message: "assert requires exactly one of visible, notVisible, urlIncludes, urlEquals"
+        }
+      )
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -105,10 +150,14 @@ export const stepSchema = z.union([
   navigateStepSchema,
   clickStepSchema,
   fillStepSchema,
+  typeStepSchema,
   pressStepSchema,
+  waitStepSchema,
   selectOptionStepSchema,
+  selectStepSchema,
   onDialogStepSchema,
   setInputFilesStepSchema,
+  inlineAssertStepSchema,
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,

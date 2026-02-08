@@ -111,7 +111,7 @@ export function loadConfig(configPath?: string): {
     : findConfigPath(process.cwd());
 
   if (!resolvedPath) {
-    throw new Error("Could not find .prowl/config.yml. Run `prowlai init` first.");
+    throw new Error("Could not find .prowl/config.yml. Run `prowl init` first.");
   }
 
   if (!fs.existsSync(resolvedPath)) {

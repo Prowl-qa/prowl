@@ -1,10 +1,10 @@
 {
-  "name": "prowlai",
+  "name": "prowl",
   "version": "0.1.0",
   "description": "CLI-first QA testing tool for deterministic Playwright flows.",
   "type": "module",
   "bin": {
-    "prowlai": "dist/index.js"
+    "prowl": "dist/index.js"
   },
   "files": [
     "dist",
