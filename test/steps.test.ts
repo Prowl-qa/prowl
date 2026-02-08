@@ -373,6 +373,32 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails click shorthand with escaped role selector for quoted text", async () => {
+    const text = 'Sign "In" \\ Now';
+    const page = createMockPage({
+      roleCounts: { [`button:${text}`]: 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ click: text }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ['role=button[name="Sign \\"In\\" \\\\ Now"]'],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails fill shorthand when derived placeholder selector is forbidden", async () => {
     const page = createMockPage({
       labelCounts: { Email: 0 }
@@ -398,6 +424,32 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails fill shorthand with escaped label selector for quoted label", async () => {
+    const label = 'E"mail \\ Box';
+    const page = createMockPage({
+      labelCounts: { [label]: 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ fill: { [label]: "user@test.com" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ['label="E\\"mail \\\\ Box"'],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails select shorthand when derived aria-label selector is forbidden", async () => {
     const page = createMockPage({
       labelCounts: { State: 0 }
@@ -412,6 +464,32 @@ describe("executeSteps", () => {
       runDir,
       screenshotsMode: "on-failure",
       forbiddenSelectors: ['select[aria-label="State"]'],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails select shorthand with escaped label selector for quoted label", async () => {
+    const label = 'Sta"te \\ Name';
+    const page = createMockPage({
+      labelCounts: { [label]: 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ select: { [label]: "FL" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ['label="Sta\\"te \\\\ Name"'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       redactedFillSteps: new Set(),

@@ -146,7 +146,7 @@ async function clickByTextWithFallback(
   text: string,
   forbiddenSelectors: string[]
 ): Promise<string> {
-  const roleSelector = `role=button[name="${text}"]`;
+  const roleSelector = `role=button[name="${escapeForAttribute(text)}"]`;
   assertAllowedSelector(roleSelector, forbiddenSelectors);
   const button = page.getByRole("button", { name: text });
   if (await button.count()) {
@@ -166,7 +166,7 @@ async function fillByLabelOrPlaceholder(
   value: string,
   forbiddenSelectors: string[]
 ): Promise<string> {
-  const labelSelector = `label="${label}"`;
+  const labelSelector = `label="${escapeForAttribute(label)}"`;
   assertAllowedSelector(labelSelector, forbiddenSelectors);
   const byLabel = page.getByLabel(label, { exact: true });
   if (await byLabel.count()) {
@@ -191,7 +191,7 @@ async function selectByLabelOrFallback(
   value: string,
   forbiddenSelectors: string[]
 ): Promise<string> {
-  const labelSelector = `label="${label}"`;
+  const labelSelector = `label="${escapeForAttribute(label)}"`;
   assertAllowedSelector(labelSelector, forbiddenSelectors);
   const byLabel = page.getByLabel(label, { exact: true });
   if (await byLabel.count()) {
