@@ -1,5 +1,141 @@
 # Prowl - Product Backlog
 
+## Competitive Analysis
+
+### Primary Competitor: Maestro (mobile-dev-inc)
+- **Website**: maestro.dev | **GitHub**: 10.6k stars, 103 contributors
+- **Funding**: $4M raised ($3M seed, Feb 2025)
+- **Language**: Kotlin (77%) — requires Java 17+
+- **License**: Apache 2.0
+- **Pricing**: Free CLI, cloud at $250/device/mo (mobile), $125/browser/mo (web), enterprise custom
+
+**Maestro's strengths**:
+- Simpler syntax (`tapOn: "Sign In"` vs explicit selectors)
+- MaestroGPT for AI-assisted test authoring
+- Maestro Studio desktop IDE for visual test building
+- Cloud execution with parallel runs
+- Built-in CI/CD PR integration
+- Continuous mode (file watcher re-runs on save)
+- Large community and adoption (10.6k stars)
+
+**Maestro's weaknesses (Prowl's opportunities)**:
+- Web support is in Beta — Chromium only, no locale support, no viewport configuration
+- Accessibility-based selectors break on complex web apps (duplicate labels, dynamic content, shadow DOM)
+- No guardrails (forbidden selectors, allowed domains, max steps)
+- No variable redaction in reports (credential leak risk)
+- Kotlin codebase excludes most web developers from contributing
+- 415 open issues — scale is creating maintenance burden
+- 7-minute cloud execution timeout
+- No real iOS device support (simulator only)
+
+### Differentiation Strategy
+
+Prowl's positioning: **"The best YAML testing tool for web applications."**
+
+Do not compete on mobile. Go deep on web where Maestro is shallow.
+
+| Differentiator | Maestro | Prowl |
+|---------------|---------|-------|
+| Web support maturity | Beta, afterthought | Core focus |
+| Selector precision | Accessibility-based (simple but fragile) | Playwright engine (surgical precision) |
+| Safety guardrails | None | Forbidden selectors, allowed domains, max steps |
+| Credential protection | None | Automatic `{{VAR}}` redaction in reports |
+| Contributor accessibility | Kotlin + Java 17 | TypeScript + Node.js |
+| AI integration approach | Chat sidebar (MaestroGPT) | MCP server (any AI agent can generate/run hunts) |
+| Artifact richness | Basic pass/fail | Screenshots every step, console logs, network errors, Playwright traces |
+
+Key insight: Maestro proved the YAML-declarative model works and has real market demand. Prowl applies that proven model to web testing with better precision, safety, and developer tooling.
+
+---
+
+## Phase 1.5: Syntax Simplification (Compete with Maestro)
+
+### P1.5-001: Shorthand Step Syntax
+**Priority**: Critical
+**Description**: Add shorthand syntax for common step types so hunts are as easy to write as Maestro flows. Both shorthand and explicit forms must be supported — shorthand for simplicity, explicit for precision.
+
+**Shorthand mappings**:
+```yaml
+# Shorthand (new)                    # Explicit (current, still supported)
+- click: "Sign In"                   - click:
+                                         selector: 'button:has-text("Sign In")'
+
+- fill:                              - fill:
+    "Email": "user@test.com"             selector: 'input[placeholder="Email"]'
+                                         value: "user@test.com"
+
+- type: "Hello world"                - fill:
+                                         selector: ':focus'
+                                         value: "Hello world"
+
+- select:                            - selectOption:
+    "State": "FL"                        selector: 'select[name="state"]'
+                                         value: "FL"
+```
+
+**Acceptance Criteria**:
+- When `click` value is a string (not an object), treat it as `button:has-text("value")` or `text=value`
+- When `fill` value is a key-value pair (label: value), resolve the label to the nearest input via Playwright's label matching or placeholder matching
+- Explicit object syntax continues to work unchanged (backward compatible)
+- Schema validation accepts both forms
+- Variable interpolation works in shorthand values
+- Unit tests for both shorthand and explicit parsing
+- Documentation updated with shorthand examples
+
+### P1.5-002: `assert` Inline Step Type
+**Priority**: High
+**Description**: Add an inline assertion step that can be used mid-flow (not just at the end). Maestro has `assertVisible` and `assertNotVisible` as flow steps. Prowl should match this capability.
+
+```yaml
+- assert:
+    visible: "Welcome back"
+- assert:
+    notVisible: "Error"
+- assert:
+    urlIncludes: "/dashboard"
+```
+
+**Acceptance Criteria**:
+- New `assert` step type with `visible`, `notVisible`, `urlIncludes`, `urlEquals` sub-properties
+- Fails the hunt immediately if assertion fails (same as any step failure)
+- Screenshot captured on assertion failure
+- Schema validation
+- Unit tests
+
+### P1.5-003: `wait` Shorthand
+**Priority**: Medium
+**Description**: Simplify `waitForSelector` with a more readable shorthand.
+
+```yaml
+# Shorthand (new)                    # Explicit (current)
+- wait: "Welcome"                    - waitForSelector:
+                                         selector: 'text=Welcome'
+                                         timeout: 30000
+
+- wait:                              - waitForSelector:
+    for: "Welcome"                       selector: 'text=Welcome'
+    timeout: 5000                        timeout: 5000
+```
+
+**Acceptance Criteria**:
+- When `wait` value is a string, treat as `waitForSelector` with `text=value` and default timeout
+- When `wait` is an object with `for` and optional `timeout`, map accordingly
+- Explicit `waitForSelector` still works unchanged
+- Schema validation, unit tests
+
+### P1.5-004: Continuous Watch Mode
+**Priority**: Medium
+**Description**: Add a `prowl watch <hunt-name>` command that monitors the hunt YAML file for changes and re-runs automatically on save. Maestro has this and it's a major DX improvement during hunt authoring.
+
+**Acceptance Criteria**:
+- `prowl watch <hunt-name>` starts a file watcher on the hunt file
+- Re-runs the hunt on every save
+- Displays pass/fail result in terminal with color
+- `Ctrl+C` to stop
+- Debounce rapid saves (300ms)
+
+---
+
 ## Phase 2: CI Integration & Automated Issue Reporting
 
 ### P2-001: `prowl ci` Command
@@ -67,6 +203,37 @@
 - GitHub Actions triggers `prowl run <failed-hunt>` on the PR branch
 - Results posted as a PR comment (pass/fail with screenshots)
 - PR auto-labeled as `prowl-verified` if the hunt passes
+
+---
+
+## Phase 5: MCP Server & AI Integration
+
+### P5-001: MCP Server Core
+**Priority**: High
+**Description**: Expose Prowl functionality as an MCP (Model Context Protocol) server so any AI agent (Claude Code, Codex, Cursor, etc.) can run hunts, read results, and list available hunts programmatically.
+**Acceptance Criteria**:
+- `prowl mcp` command starts the MCP server
+- Tools exposed: `prowl_run`, `prowl_list`, `prowl_get_results`
+- Returns structured JSON responses
+- Works with Claude Code's MCP configuration
+
+### P5-002: Page Analysis Tool
+**Priority**: High
+**Description**: Add a `prowl_analyze_page` MCP tool that crawls a running page and returns a structured description of all interactive elements, their selectors, and form structure.
+**Acceptance Criteria**:
+- Launches browser, navigates to URL, extracts all interactive elements
+- Returns element type, best selector candidates (ranked by stability), labels, placeholder text
+- Detects form groups and required fields
+- Output is JSON consumable by AI models
+
+### P5-003: AI Hunt Generation Tool
+**Priority**: High
+**Description**: Add a `prowl_generate_hunt` MCP tool that takes a page analysis + intent description and generates a complete hunt YAML file.
+**Acceptance Criteria**:
+- Accepts page analysis JSON + intent string (e.g., "test the edit flow")
+- Generates valid hunt YAML with steps and assertions
+- Uses shorthand syntax where appropriate
+- Writes hunt file to `.prowl/hunts/`
 
 ---
 
