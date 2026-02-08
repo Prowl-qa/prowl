@@ -4,6 +4,7 @@ import { buildRunCommand } from "./commands/run.js";
 import { buildInitCommand } from "./commands/init.js";
 import { buildLoginCommand } from "./commands/login.js";
 import { buildListCommand } from "./commands/list.js";
+import { buildWatchCommand } from "./commands/watch.js";
 
 const program = new Command();
 
@@ -13,6 +14,7 @@ program
   .version("0.1.0");
 
 program.addCommand(buildRunCommand());
+program.addCommand(buildWatchCommand());
 program.addCommand(buildInitCommand());
 program.addCommand(buildLoginCommand());
 program.addCommand(buildListCommand());

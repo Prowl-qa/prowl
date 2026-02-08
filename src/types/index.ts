@@ -37,25 +37,40 @@ export type Hunt = {
 };
 
 export type NavigateStep = { navigate: string };
-export type ClickStep = { click: { selector: string } };
-export type FillStep = { fill: { selector: string; value: string } };
+export type ClickStep = { click: { selector: string } | string };
+export type FillStep = { fill: { selector: string; value: string } | Record<string, string> };
+export type TypeStep = { type: string };
 export type PressStep = { press: { selector: string; key: string } };
 export type WaitForSelectorStep = { waitForSelector: { selector: string; timeout?: number } };
+export type WaitStep = { wait: string | { for: string; timeout?: number } };
 export type WaitForUrlStep = { waitForUrl: { value: string; timeout?: number } };
 export type WaitForNetworkIdleStep = { waitForNetworkIdle: { timeout?: number } };
 export type SelectOptionStep = { selectOption: { selector: string; value: string } };
+export type SelectStep = { select: Record<string, string> };
 export type OnDialogStep = { onDialog: { action: "accept" | "dismiss" } };
 export type SetInputFilesStep = { setInputFiles: { selector: string; files: string | string[] } };
+export type InlineAssertStep = {
+  assert: {
+    visible?: string;
+    notVisible?: string;
+    urlIncludes?: string;
+    urlEquals?: string;
+  };
+};
 export type ScreenshotStep = { screenshot: { name?: string } };
 
 export type Step =
   | NavigateStep
   | ClickStep
   | FillStep
+  | TypeStep
   | PressStep
+  | WaitStep
   | SelectOptionStep
+  | SelectStep
   | OnDialogStep
   | SetInputFilesStep
+  | InlineAssertStep
   | WaitForSelectorStep
   | WaitForUrlStep
   | WaitForNetworkIdleStep

@@ -85,18 +85,37 @@ precedence over `process.env` and `.env`.
 ### Step Types
 
 - `navigate`: string (path or full URL)
-- `click`: `{ selector: string }`
-- `fill`: `{ selector: string, value: string }`
+- `click`: `{ selector: string }` or `"Button Text"` (tries button role first, then text fallback)
+- `fill`: `{ selector: string, value: string }` or `{ "Label": "value" }` (label-first, placeholder fallback)
+- `type`: `string` (fills `:focus`)
 - `press`: `{ selector: string, key: string }`
 - `selectOption`: `{ selector: string, value: string }`
+- `select`: `{ "Label": "value" }` (label-first, `aria-label`, placeholder fallback)
 - `onDialog`: `{ action: "accept" | "dismiss" }`
 - `setInputFiles`: `{ selector: string, files: string | string[] }`
+- `assert`: `{ visible | notVisible | urlIncludes | urlEquals }` (inline assertion step)
+- `wait`: `"text"` or `{ for: "text", timeout?: number }`
 - `waitForSelector`: `{ selector: string, timeout?: number }`
 - `waitForUrl`: `{ value: string, timeout?: number }` (includes match)
 - `waitForNetworkIdle`: `{ timeout?: number }`
 - `screenshot`: `{ name?: string }`
 
 Selectors accept Playwright selector engines, e.g. `role=button[name="Submit"]`.
+
+### Shorthand Examples
+
+```yml
+steps:
+  - click: "Sign In"
+  - fill:
+      "Email": "user@test.com"
+  - type: "Hello world"
+  - select:
+      "State": "FL"
+  - wait: "Welcome back"
+  - assert:
+      visible: "Welcome back"
+```
 
 ## Auth
 
@@ -120,6 +139,7 @@ This opens a headed Chromium window and saves storage state to `.prowl/auth-stat
 prowl run <hunt-name>
 prowl run <hunt-name> --headed
 prowl run <hunt-name> --trace
+prowl watch <hunt-name>
 prowl login
 prowl init
 prowl list
