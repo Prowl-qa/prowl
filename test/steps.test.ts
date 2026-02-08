@@ -267,6 +267,29 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails type shorthand when :focus selector is forbidden", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ type: "Hello world" }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [":focus"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("executes selectOption step", async () => {
     const page = createMockPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));

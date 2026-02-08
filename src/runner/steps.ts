@@ -366,6 +366,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: context.redactedFillSteps.has(index) ? "[REDACTED]" : value
         };
       } else if ("type" in step) {
+        assertAllowedSelector(":focus", context.forbiddenSelectors);
         await fillElement(context.page, ":focus", step.type);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
