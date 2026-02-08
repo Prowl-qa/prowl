@@ -95,6 +95,7 @@ Key insight: Maestro proved the YAML-declarative model works and has real market
 - Variable interpolation works in shorthand values
 - Unit tests for both shorthand and explicit parsing
 - Documentation updated with shorthand examples
+**Resolved**: 2026-02-08 (commit 8f47788)
 
 ### P1.5-002: `assert` Inline Step Type
 **Priority**: High
@@ -116,6 +117,7 @@ Key insight: Maestro proved the YAML-declarative model works and has real market
 - Screenshot captured on assertion failure
 - Schema validation
 - Unit tests
+**Resolved**: 2026-02-08 (commit 8f47788)
 
 ### P1.5-003: `wait` Shorthand
 **Priority**: Medium
@@ -137,6 +139,7 @@ Key insight: Maestro proved the YAML-declarative model works and has real market
 - When `wait` is an object with `for` and optional `timeout`, map accordingly
 - Explicit `waitForSelector` still works unchanged
 - Schema validation, unit tests
+**Resolved**: 2026-02-08 (commit 8f47788)
 
 ### P1.5-004: Continuous Watch Mode
 **Priority**: Medium
@@ -149,6 +152,7 @@ Key insight: Maestro proved the YAML-declarative model works and has real market
 - Displays pass/fail result in terminal with color
 - `Ctrl+C` to stop
 - Debounce rapid saves (300ms)
+**Resolved**: 2026-02-08 (commit 8f47788)
 
 ---
 
@@ -830,6 +834,22 @@ steps:
 ---
 
 ## Resolved
+
+### ~~P1.5-001: Shorthand Step Syntax~~
+**Resolved**: 2026-02-08 (commit 8f47788)
+**Description**: Added shorthand forms for `click`, `fill`, `type`, and `select` while preserving explicit selector-driven forms for precision.
+
+### ~~P1.5-002: `assert` Inline Step Type~~
+**Resolved**: 2026-02-08 (commit 8f47788)
+**Description**: Added inline `assert` step with `visible`, `notVisible`, `urlIncludes`, and `urlEquals`, including fail-fast behavior and failure screenshot coverage.
+
+### ~~P1.5-003: `wait` Shorthand~~
+**Resolved**: 2026-02-08 (commit 8f47788)
+**Description**: Added `wait` shorthand (`string` and `{ for, timeout }`) mapped to text-based selector waiting while keeping `waitForSelector` unchanged.
+
+### ~~P1.5-004: Continuous Watch Mode~~
+**Resolved**: 2026-02-08 (commit 8f47788)
+**Description**: Added `prowl watch <hunt-name>` with immediate first run, 300ms debounce, and file watching for hunt, config, and `.env`.
 
 ### ~~FEAT-001: `selectOption` Step Type~~
 **Resolved**: 2026-02-06 (commit aa9188c)
