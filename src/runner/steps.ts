@@ -37,6 +37,12 @@ function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): bo
   return forbiddenSelectors.some((forbidden) => selector.includes(forbidden));
 }
 
+function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): void {
+  if (isForbiddenSelector(selector, forbiddenSelectors)) {
+    throw new Error(`Forbidden selector: ${selector}`);
+  }
+}
+
 function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
   if ("click" in step) return "click";
@@ -105,14 +111,21 @@ function getSinglePair(value: Record<string, string>, stepType: string): [string
   return entries[0];
 }
 
-async function clickByTextWithFallback(page: Page, text: string): Promise<string> {
+async function clickByTextWithFallback(
+  page: Page,
+  text: string,
+  forbiddenSelectors: string[]
+): Promise<string> {
+  const roleSelector = `role=button[name="${text}"]`;
+  assertAllowedSelector(roleSelector, forbiddenSelectors);
   const button = page.getByRole("button", { name: text });
   if (await button.count()) {
     await button.first().click();
-    return `role=button[name="${text}"]`;
+    return roleSelector;
   }
 
   const selector = textSelector(text);
+  assertAllowedSelector(selector, forbiddenSelectors);
   await page.locator(selector).first().click();
   return selector;
 }
@@ -120,15 +133,19 @@ async function clickByTextWithFallback(page: Page, text: string): Promise<string
 async function fillByLabelOrPlaceholder(
   page: Page,
   label: string,
-  value: string
+  value: string,
+  forbiddenSelectors: string[]
 ): Promise<string> {
+  const labelSelector = `label="${label}"`;
+  assertAllowedSelector(labelSelector, forbiddenSelectors);
   const byLabel = page.getByLabel(label, { exact: true });
   if (await byLabel.count()) {
     await byLabel.first().fill(value);
-    return `label="${label}"`;
+    return labelSelector;
   }
 
   const placeholder = `input[placeholder="${escapeForAttribute(label)}"], textarea[placeholder="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(placeholder, forbiddenSelectors);
   const byPlaceholder = page.locator(placeholder);
   if (await byPlaceholder.count()) {
     await byPlaceholder.first().fill(value);
@@ -141,15 +158,19 @@ async function fillByLabelOrPlaceholder(
 async function selectByLabelOrFallback(
   page: Page,
   label: string,
-  value: string
+  value: string,
+  forbiddenSelectors: string[]
 ): Promise<string> {
+  const labelSelector = `label="${label}"`;
+  assertAllowedSelector(labelSelector, forbiddenSelectors);
   const byLabel = page.getByLabel(label, { exact: true });
   if (await byLabel.count()) {
     await byLabel.first().selectOption(value);
-    return `label="${label}"`;
+    return labelSelector;
   }
 
   const ariaSelector = `select[aria-label="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(ariaSelector, forbiddenSelectors);
   const byAria = page.locator(ariaSelector);
   if (await byAria.count()) {
     await byAria.first().selectOption(value);
@@ -157,6 +178,7 @@ async function selectByLabelOrFallback(
   }
 
   const placeholderSelector = `select[placeholder="${escapeForAttribute(label)}"]`;
+  assertAllowedSelector(placeholderSelector, forbiddenSelectors);
   const byPlaceholder = page.locator(placeholderSelector);
   if (await byPlaceholder.count()) {
     await byPlaceholder.first().selectOption(value);
@@ -267,11 +289,13 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       } else if ("click" in step) {
         let selector: string;
         if (typeof step.click === "string") {
-          selector = await clickByTextWithFallback(context.page, step.click);
+          selector = await clickByTextWithFallback(
+            context.page,
+            step.click,
+            context.forbiddenSelectors
+          );
         } else {
-          if (isForbiddenSelector(step.click.selector, context.forbiddenSelectors)) {
-            throw new Error(`Forbidden selector: ${step.click.selector}`);
-          }
+          assertAllowedSelector(step.click.selector, context.forbiddenSelectors);
           await clickElement(context.page, step.click.selector);
           selector = step.click.selector;
         }
@@ -286,15 +310,18 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         let selector: string;
         let value: string;
         if (isExplicitFillStep(step.fill)) {
-          if (isForbiddenSelector(step.fill.selector, context.forbiddenSelectors)) {
-            throw new Error(`Forbidden selector: ${step.fill.selector}`);
-          }
+          assertAllowedSelector(step.fill.selector, context.forbiddenSelectors);
           await fillElement(context.page, step.fill.selector, step.fill.value);
           selector = step.fill.selector;
           value = step.fill.value;
         } else {
           const [label, shorthandValue] = getSinglePair(step.fill, "fill");
-          selector = await fillByLabelOrPlaceholder(context.page, label, shorthandValue);
+          selector = await fillByLabelOrPlaceholder(
+            context.page,
+            label,
+            shorthandValue,
+            context.forbiddenSelectors
+          );
           value = shorthandValue;
         }
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
@@ -313,12 +340,10 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           selector: ":focus",
-          value: step.type
+          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.type
         };
       } else if ("selectOption" in step) {
-        if (isForbiddenSelector(step.selectOption.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.selectOption.selector}`);
-        }
+        assertAllowedSelector(step.selectOption.selector, context.forbiddenSelectors);
         await selectOption(context.page, step.selectOption.selector, step.selectOption.value);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
@@ -330,7 +355,12 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         };
       } else if ("select" in step) {
         const [label, value] = getSinglePair(step.select, "select");
-        const selector = await selectByLabelOrFallback(context.page, label, value);
+        const selector = await selectByLabelOrFallback(
+          context.page,
+          label,
+          value,
+          context.forbiddenSelectors
+        );
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "select",
@@ -348,9 +378,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: step.onDialog.action
         };
       } else if ("setInputFiles" in step) {
-        if (isForbiddenSelector(step.setInputFiles.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.setInputFiles.selector}`);
-        }
+        assertAllowedSelector(step.setInputFiles.selector, context.forbiddenSelectors);
         const rawFiles = step.setInputFiles.files;
         const resolveFile = (f: string) =>
           path.isAbsolute(f) ? f : path.join(context.configDir, f);
@@ -368,9 +396,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: filesLabel
         };
       } else if ("press" in step) {
-        if (isForbiddenSelector(step.press.selector, context.forbiddenSelectors)) {
-          throw new Error(`Forbidden selector: ${step.press.selector}`);
-        }
+        assertAllowedSelector(step.press.selector, context.forbiddenSelectors);
         await pressKey(context.page, step.press.selector, step.press.key);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {

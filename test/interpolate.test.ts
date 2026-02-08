@@ -117,5 +117,6 @@ describe("interpolateHunt", () => {
     expect(interpolated.steps[4]).toEqual({ wait: "Sign In" });
     expect(interpolated.steps[5]).toEqual({ assert: { visible: "Sign In" } });
     expect(redactedFillSteps.has(1)).toBe(true);
+    expect(redactedFillSteps.has(2)).toBe(true);
   });
 });

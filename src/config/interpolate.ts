@@ -87,7 +87,11 @@ function interpolateStep(
     };
   }
   if ("type" in step) {
-    return { type: interpolateString(step.type, vars).value };
+    const valueResult = interpolateString(step.type, vars);
+    if (valueResult.usedVars.length > 0) {
+      redacted.add(index);
+    }
+    return { type: valueResult.value };
   }
   if ("selectOption" in step) {
     const selectorResult = interpolateString(step.selectOption.selector, vars);
