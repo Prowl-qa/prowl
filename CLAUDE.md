@@ -40,10 +40,14 @@ Every feature or bug fix must include:
 1. **Code** — Implementation with types, schema, interpolation, actions, runner, and tests as applicable
 2. **Tests** — Unit tests covering the new behavior; all existing tests must still pass
 3. **Build & Lint** — `npm run build` and `npm run lint` must pass
-4. **Backlog** — Move the item to the Resolved section in `docs/BACKLOG.md` with commit hash and date
+4. **Backlog** — Move the item to the Resolved section in the backlog with commit hash and date
 5. **Changelog** — Add the change to the `[Unreleased]` section in `CHANGELOG.md`
 
 Work is not considered complete until all five items are done.
+
+## Backlog Management
+
+The product backlog is maintained outside this repository. When asked to update the backlog or when completing work that affects backlog items, ask the user for the current file path and name — do not assume it is available in context. Keep all backlog items up to date during sessions by marking completed work as resolved and adding new items as they are identified.
 
 ## Access Policy
 
