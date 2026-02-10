@@ -66,6 +66,20 @@ export function buildInitCommand(): Command {
         );
       }
 
+      // Create .gitignore to keep artifacts and secrets out of version control
+      const gitignore = [
+        "# Run artifacts (screenshots, logs, reports)",
+        "runs/",
+        "",
+        "# Auth state (tokens, cookies)",
+        "auth-state.json",
+        "",
+        "# Environment variables (credentials)",
+        ".env",
+        "",
+      ].join("\n");
+      fs.writeFileSync(path.join(prowlDir, ".gitignore"), gitignore);
+
       console.log(welcomeBanner());
       console.log(chalk.green("  Initialized .prowl directory."));
       console.log(chalk.gray("  Run ") + chalk.bold("prowl run homepage") + chalk.gray(" to get started.\n"));
