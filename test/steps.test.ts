@@ -62,6 +62,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -85,6 +86,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["[data-danger]"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -108,6 +110,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -135,6 +138,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -161,6 +165,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -186,6 +191,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -213,6 +219,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -236,6 +243,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -259,6 +267,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set([0]),
       configDir: runDir
     });
@@ -282,6 +291,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [":focus"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -312,6 +322,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -340,6 +351,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -365,6 +377,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["role=button"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -391,6 +404,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['role=button[name="Sign \\"In\\" \\\\ Now"]'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -416,6 +430,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['input[placeholder="Email"]'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -442,6 +457,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['label="E\\"mail \\\\ Box"'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -467,6 +483,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['select[aria-label="State"]'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -493,6 +510,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['label="Sta\\"te \\\\ Name"'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -516,6 +534,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -539,6 +558,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["[data-danger]"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -562,6 +582,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['text="Welcome"'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -587,6 +608,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -610,6 +632,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ['text="Welcome back"'],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -633,6 +656,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["[data-danger]"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -663,6 +687,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -690,6 +715,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: ["[data-danger]"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir: runDir
     });
@@ -724,6 +750,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir,
       huntStack: ["parent"]
@@ -758,6 +785,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir,
       huntStack: ["self"]
@@ -795,6 +823,7 @@ describe("executeSteps", () => {
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
+      maxSteps: 50,
       redactedFillSteps: new Set(),
       configDir,
       huntStack: []
@@ -804,6 +833,39 @@ describe("executeSteps", () => {
     const fillStep = result.results.find((r) => r.type === "login > fill");
     expect(fillStep).toBeDefined();
     expect(fillStep?.status).toBe("pass");
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("fails runHunt when sub-hunt exceeds maxSteps", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-maxsteps-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = {
+      steps: [{ navigate: "/one" }, { navigate: "/two" }]
+    };
+    fs.writeFileSync(path.join(huntsDir, "oversized.yml"), yaml.stringify(subHunt));
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps: [{ runHunt: "oversized" }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 1,
+      redactedFillSteps: new Set(),
+      configDir,
+      huntStack: ["parent"]
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Max allowed is 1");
     fs.rmSync(configDir, { recursive: true, force: true });
   });
 });

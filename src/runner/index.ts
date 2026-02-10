@@ -136,9 +136,11 @@ export async function runHunt(
         screenshotsMode: config.artifacts.screenshots,
         forbiddenSelectors: config.guardrails.forbiddenSelectors,
         allowedDomains,
+        maxSteps,
         maxTotalTimeMs: config.assertions.maxTotalTimeMs,
         redactedFillSteps,
         configDir,
+        huntStack: [options.huntName],
         onStep: options.onStep
       });
 

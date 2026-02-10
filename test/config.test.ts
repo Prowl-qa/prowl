@@ -52,6 +52,18 @@ describe("loadHunt", () => {
     process.chdir(cwd);
     fs.rmSync(project, { recursive: true, force: true });
   });
+
+  it("rejects invalid hunt names", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    process.chdir(project);
+
+    const { configDir } = loadConfig();
+    expect(() => loadHunt("../secrets", configDir)).toThrow("Invalid hunt name");
+
+    process.chdir(cwd);
+    fs.rmSync(project, { recursive: true, force: true });
+  });
 });
 
 describe("ensureAllowedDomain", () => {

@@ -23,6 +23,7 @@ export type StepExecutionContext = {
   screenshotsMode: "on-failure" | "all";
   forbiddenSelectors: string[];
   allowedDomains: string[];
+  maxSteps: number;
   maxTotalTimeMs: number;
   redactedFillSteps: Set<number>;
   configDir: string;
@@ -76,6 +77,15 @@ function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): bo
 function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): void {
   if (isForbiddenSelector(selector, forbiddenSelectors)) {
     throw new Error(`Forbidden selector: ${selector}`);
+  }
+}
+
+function assertWithinMaxSteps(stepCount: number, maxSteps: number, huntName?: string): void {
+  if (stepCount > maxSteps) {
+    if (huntName) {
+      throw new Error(`Hunt "${huntName}" has ${stepCount} steps. Max allowed is ${maxSteps}.`);
+    }
+    throw new Error(`Hunt has ${stepCount} steps. Max allowed is ${maxSteps}.`);
   }
 }
 
@@ -290,6 +300,8 @@ async function captureScreenshot(page: Page, filePath: string): Promise<void> {
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
   const screenshotsDir = path.join(context.runDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
+  const currentHuntName = context.huntStack?.[context.huntStack.length - 1];
+  assertWithinMaxSteps(context.steps.length, context.maxSteps, currentHuntName);
 
   const results: StepResult[] = [];
   const screenshots: string[] = [];
@@ -451,6 +463,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           subHunt,
           process.env
         );
+        assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
         const subResult = await executeSteps({
           ...context,
           steps: interpolatedSubHunt.steps,

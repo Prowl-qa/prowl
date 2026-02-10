@@ -584,7 +584,7 @@ CLI Commands
 
 ## Community Hub
 
-Browse and contribute hunt templates at [Prowl Hub](https://github.com/prowltools/prowl-hub).
+Browse and contribute hunt templates through the internal community registry (contact ops for access).
 
 Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS patterns, and more. Each template is heavily commented and ready to customize.
 

@@ -35,6 +35,20 @@ describe("huntSchema shorthand syntax", () => {
     expect(parsed.steps).toHaveLength(2);
   });
 
+  it("rejects runHunt names with path traversal or separators", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ runHunt: "../secrets" }]
+      })
+    ).toThrow("Invalid hunt name");
+
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ runHunt: { name: "auth/login" } }]
+      })
+    ).toThrow("Invalid hunt name");
+  });
+
   it("rejects shorthand records with multiple keys", () => {
     expect(() =>
       huntSchema.parse({
