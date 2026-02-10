@@ -57,6 +57,7 @@ export type InlineAssertStep = {
     urlEquals?: string;
   };
 };
+export type RunHuntStep = { runHunt: string | { name: string; vars?: Record<string, string> } };
 export type ScreenshotStep = { screenshot: { name?: string } };
 
 export type Step =
@@ -71,6 +72,7 @@ export type Step =
   | OnDialogStep
   | SetInputFilesStep
   | InlineAssertStep
+  | RunHuntStep
   | WaitForSelectorStep
   | WaitForUrlStep
   | WaitForNetworkIdleStep

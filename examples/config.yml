@@ -1,31 +1,41 @@
+# Prowl Configuration
+# This file controls how Prowl runs your hunts.
+# All options shown with their default values.
+
+# Target application — the base URL for all hunt navigation
 target:
   url: "http://localhost:3000"
 
+# Browser settings
 browser:
-  headless: true
-  slowMo: 0
-  timeout: 30000
+  headless: true       # Set to false or use --headed to see the browser
+  slowMo: 0            # Milliseconds to wait between actions (useful for debugging)
+  timeout: 30000       # Default timeout for page operations (30s)
 
+# Artifact generation — what gets saved per run
 artifacts:
-  screenshots: "on-failure"
-  networkHar: false
-  console: true
+  screenshots: "on-failure"  # "on-failure" or "all" (screenshot every step)
+  networkHar: false          # Save network activity as HAR file
+  console: true              # Save browser console output
 
+# Hunt-level assertions — applied after every hunt's steps complete
 assertions:
-  noConsoleErrors: true
-  noNetworkErrors: true
-  maxTotalTimeMs: 30000
-  networkIgnorePatterns: []
+  noConsoleErrors: true      # Fail if browser console has errors
+  noNetworkErrors: true      # Fail if any HTTP response >= 400
+  maxTotalTimeMs: 30000      # Max total time for all steps (30s)
+  networkIgnorePatterns: []  # URL patterns to ignore for network error checks
 
+# Safety guardrails — prevent accidental damage
 guardrails:
-  maxSteps: 50
-  allowedDomains:
+  maxSteps: 50               # Maximum steps per hunt
+  allowedDomains:            # Only navigate to these domains
     - "localhost"
     - "127.0.0.1"
     - "0.0.0.0"
-  forbiddenSelectors:
+  forbiddenSelectors:        # Selectors that steps cannot interact with
     - "[data-danger]"
     - ".delete-btn"
 
+# Auth state — captured by `prowl login`, used to skip login in hunts
 auth:
   storageStatePath: ".prowl/auth-state.json"

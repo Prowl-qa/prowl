@@ -10,6 +10,10 @@ import {
   setInputFiles
 } from "../browser/actions.js";
 import type { Step, StepResult } from "../types/index.js";
+import { loadHunt } from "../config/loader.js";
+import { interpolateHunt } from "../config/interpolate.js";
+
+export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
 export type StepExecutionContext = {
   page: Page;
@@ -19,9 +23,12 @@ export type StepExecutionContext = {
   screenshotsMode: "on-failure" | "all";
   forbiddenSelectors: string[];
   allowedDomains: string[];
+  maxSteps: number;
   maxTotalTimeMs: number;
   redactedFillSteps: Set<number>;
   configDir: string;
+  onStep?: StepCallback;
+  huntStack?: string[];
 };
 
 export type StepExecutionResult = {
@@ -73,6 +80,15 @@ function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): 
   }
 }
 
+function assertWithinMaxSteps(stepCount: number, maxSteps: number, huntName?: string): void {
+  if (stepCount > maxSteps) {
+    if (huntName) {
+      throw new Error(`Hunt "${huntName}" has ${stepCount} steps. Max allowed is ${maxSteps}.`);
+    }
+    throw new Error(`Hunt has ${stepCount} steps. Max allowed is ${maxSteps}.`);
+  }
+}
+
 function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
   if ("click" in step) return "click";
@@ -82,6 +98,7 @@ function getStepType(step: Step): string {
   if ("select" in step) return "select";
   if ("onDialog" in step) return "onDialog";
   if ("setInputFiles" in step) return "setInputFiles";
+  if ("runHunt" in step) return "runHunt";
   if ("assert" in step) return "assert";
   if ("press" in step) return "press";
   if ("wait" in step) return "wait";
@@ -283,6 +300,8 @@ async function captureScreenshot(page: Page, filePath: string): Promise<void> {
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
   const screenshotsDir = path.join(context.runDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
+  const currentHuntName = context.huntStack?.[context.huntStack.length - 1];
+  assertWithinMaxSteps(context.steps.length, context.maxSteps, currentHuntName);
 
   const results: StepResult[] = [];
   const screenshots: string[] = [];
@@ -429,6 +448,47 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           selector: step.setInputFiles.selector,
           value: filesLabel
         };
+      } else if ("runHunt" in step) {
+        const huntName = typeof step.runHunt === "string" ? step.runHunt : step.runHunt.name;
+        const overrideVars = typeof step.runHunt === "string" ? undefined : step.runHunt.vars;
+        const stack = context.huntStack ?? [];
+        if (stack.includes(huntName)) {
+          throw new Error(`Circular hunt dependency: ${[...stack, huntName].join(" → ")}`);
+        }
+        const subHunt = loadHunt(huntName, context.configDir);
+        if (overrideVars) {
+          subHunt.vars = { ...subHunt.vars, ...overrideVars };
+        }
+        const { hunt: interpolatedSubHunt, redactedFillSteps: subRedacted } = interpolateHunt(
+          subHunt,
+          process.env
+        );
+        assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
+        const subResult = await executeSteps({
+          ...context,
+          steps: interpolatedSubHunt.steps,
+          redactedFillSteps: subRedacted,
+          huntStack: [...stack, huntName],
+          onStep: context.onStep
+        });
+        for (const sr of subResult.results) {
+          results.push({ ...sr, type: `${huntName} > ${sr.type}` });
+        }
+        screenshots.push(...subResult.screenshots);
+        if (subResult.failed) {
+          return {
+            results,
+            screenshots,
+            failed: true,
+            error: `Sub-hunt "${huntName}" failed: ${subResult.error}`
+          };
+        }
+        stepResult = {
+          type: "runHunt",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: huntName
+        };
       } else if ("press" in step) {
         assertAllowedSelector(step.press.selector, context.forbiddenSelectors);
         await pressKey(context.page, step.press.selector, step.press.key);
@@ -512,6 +572,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       }
 
       results.push(stepResult);
+      context.onStep?.(stepResult, step, index);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Step failed";
       stepResult = {
@@ -527,6 +588,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       }
 
       results.push(stepResult);
+      context.onStep?.(stepResult, step, index);
       return { results, screenshots, failed: true, error: message };
     }
   }

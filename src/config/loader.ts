@@ -4,6 +4,7 @@ import yaml from "yaml";
 import dotenv from "dotenv";
 import type { Config, Hunt } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
+import { assertValidHuntName } from "./hunt-name.js";
 
 const DEFAULT_CONFIG: Config = {
   target: {
@@ -135,6 +136,7 @@ export function loadConfig(configPath?: string): {
 }
 
 export function loadHunt(huntName: string, configDir: string): Hunt {
+  assertValidHuntName(huntName);
   const huntPath = path.join(configDir, "hunts", `${huntName}.yml`);
   if (!fs.existsSync(huntPath)) {
     throw new Error(`Hunt file not found: ${huntPath}`);

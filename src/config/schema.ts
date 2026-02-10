@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidHuntName } from "./hunt-name.js";
 
 export const configSchema = z
   .object({
@@ -140,6 +141,31 @@ export const inlineAssertStepSchema = z
       )
   })
   .strict();
+export const runHuntStepSchema = z
+  .object({
+    runHunt: z.union([
+      z
+        .string()
+        .min(1)
+        .refine(isValidHuntName, {
+          message:
+            "Invalid hunt name. Use only letters, numbers, hyphens, and underscores."
+        }),
+      z
+        .object({
+          name: z
+            .string()
+            .min(1)
+            .refine(isValidHuntName, {
+              message:
+                "Invalid hunt name. Use only letters, numbers, hyphens, and underscores."
+            }),
+          vars: z.record(z.string(), z.string()).optional()
+        })
+        .strict()
+    ])
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -158,6 +184,7 @@ export const stepSchema = z.union([
   onDialogStepSchema,
   setInputFilesStepSchema,
   inlineAssertStepSchema,
+  runHuntStepSchema,
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,

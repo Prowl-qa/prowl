@@ -1,14 +1,36 @@
 {
-  "name": "prowl",
-  "version": "0.1.0",
+  "name": "prowlai",
+  "version": "1.0.0",
   "description": "CLI-first QA testing tool for deterministic Playwright flows.",
   "type": "module",
+  "license": "Apache-2.0",
+  "author": "Prowl Tools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prowltools/prowl.git"
+  },
+  "homepage": "https://github.com/prowltools/prowl#readme",
+  "bugs": {
+    "url": "https://github.com/prowltools/prowl/issues"
+  },
+  "keywords": [
+    "testing",
+    "qa",
+    "playwright",
+    "yaml",
+    "e2e",
+    "browser-testing",
+    "automation",
+    "web-testing",
+    "cli"
+  ],
   "bin": {
     "prowl": "dist/index.js"
   },
   "files": [
     "dist",
-    "examples"
+    "examples",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.0.0"

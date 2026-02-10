@@ -1,6 +1,7 @@
 import { Command } from "commander";
-import chalk from "chalk";
 import { runHunt } from "../../runner/index.js";
+import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
+import { resultMascot } from "../mascot.js";
 
 export function buildRunCommand(): Command {
   const command = new Command("run")
@@ -12,24 +13,27 @@ export function buildRunCommand(): Command {
     .option("--config <path>", "Custom config path")
     .action(async (huntName, options) => {
       try {
+        printHuntHeader(huntName);
+
         const { result, runDir } = await runHunt({
           huntName,
           urlOverride: options.url,
           headed: Boolean(options.headed),
           slowMo: Number.isFinite(options.slowMo) ? options.slowMo : undefined,
           trace: Boolean(options.trace),
-          configPath: options.config
+          configPath: options.config,
+          onStep(stepResult, step, index) {
+            printStepResult(stepResult, step, index);
+          }
         });
 
-        const status =
-          result.status === "pass" ? chalk.green("PASS") : chalk.red("FAIL");
-
-        console.log(`${status} - ${result.hunt} (${result.durationMs}ms)`);
-        console.log(`Artifacts: ${runDir}`);
+        console.log(resultMascot(result.status));
+        printHuntSummary(result, runDir);
         process.exitCode = result.exitCode;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Run failed";
-        console.error(chalk.red(`Error: ${message}`));
+        console.log(resultMascot("fail"));
+        console.error(`\n  Error: ${message}\n`);
         process.exitCode = 1;
       }
     });

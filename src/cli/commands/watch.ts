@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { loadConfig } from "../../config/loader.js";
 import { runHunt } from "../../runner/index.js";
 import { createDebouncer, getWatchTargets } from "../watch-utils.js";
+import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 
 export function buildWatchCommand(): Command {
   const command = new Command("watch")
@@ -34,19 +35,22 @@ export function buildWatchCommand(): Command {
         running = true;
         do {
           pending = false;
-          const started = Date.now();
           try {
-            const { result } = await runHunt({
+            printHuntHeader(huntName);
+
+            const { result, runDir } = await runHunt({
               huntName,
               urlOverride: options.url,
               headed: Boolean(options.headed),
               slowMo: Number.isFinite(options.slowMo) ? options.slowMo : undefined,
               trace: Boolean(options.trace),
-              configPath: options.config
+              configPath: options.config,
+              onStep(stepResult, step, index) {
+                printStepResult(stepResult, step, index);
+              }
             });
 
-            const status = result.status === "pass" ? chalk.green("PASS") : chalk.red("FAIL");
-            console.log(`${status} - ${result.hunt} (${Date.now() - started}ms)`);
+            printHuntSummary(result, runDir);
           } catch (error) {
             const message = error instanceof Error ? error.message : "Run failed";
             console.error(chalk.red(`Error: ${message}`));

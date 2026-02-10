@@ -24,6 +24,31 @@ describe("huntSchema shorthand syntax", () => {
     expect(parsed.steps).toHaveLength(13);
   });
 
+  it("accepts runHunt step in simple and object forms", () => {
+    const parsed = huntSchema.parse({
+      steps: [
+        { runHunt: "login" },
+        { runHunt: { name: "login", vars: { EMAIL: "admin@test.com" } } }
+      ]
+    });
+
+    expect(parsed.steps).toHaveLength(2);
+  });
+
+  it("rejects runHunt names with path traversal or separators", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ runHunt: "../secrets" }]
+      })
+    ).toThrow("Invalid hunt name");
+
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ runHunt: { name: "auth/login" } }]
+      })
+    ).toThrow("Invalid hunt name");
+  });
+
   it("rejects shorthand records with multiple keys", () => {
     expect(() =>
       huntSchema.parse({

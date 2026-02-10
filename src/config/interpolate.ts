@@ -117,6 +117,22 @@ function interpolateStep(
       : interpolateString(rawFiles, vars).value;
     return { setInputFiles: { selector: selectorResult.value, files } };
   }
+  if ("runHunt" in step) {
+    if (typeof step.runHunt === "string") {
+      return { runHunt: interpolateString(step.runHunt, vars).value };
+    }
+    const nameResult = interpolateString(step.runHunt.name, vars);
+    const interpolatedVars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(step.runHunt.vars ?? {})) {
+      interpolatedVars[key] = interpolateString(value, vars).value;
+    }
+    return {
+      runHunt: {
+        name: nameResult.value,
+        ...(Object.keys(interpolatedVars).length > 0 ? { vars: interpolatedVars } : {})
+      }
+    };
+  }
   if ("assert" in step) {
     if (step.assert.visible !== undefined) {
       return { assert: { visible: interpolateString(step.assert.visible, vars).value } };
