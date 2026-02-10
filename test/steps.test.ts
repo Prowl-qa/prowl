@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import yaml from "yaml";
 import { describe, expect, it, vi } from "vitest";
 import { executeSteps } from "../src/runner/steps.js";
 import type { Page } from "playwright";
@@ -696,5 +697,113 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(true);
     expect(result.results[0].status).toBe("fail");
     fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes runHunt step and merges sub-hunt results", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = { steps: [{ navigate: "/sub" }] };
+    fs.writeFileSync(path.join(huntsDir, "login.yml"), yaml.stringify(subHunt));
+
+    const steps: Step[] = [
+      { navigate: "/" },
+      { runHunt: "login" }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir,
+      huntStack: ["parent"]
+    });
+
+    expect(result.failed).toBe(false);
+    const subStep = result.results.find((r) => r.type === "login > navigate");
+    expect(subStep).toBeDefined();
+    expect(subStep?.status).toBe("pass");
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("detects circular hunt dependency", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-circular-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const selfHunt = { steps: [{ navigate: "/" }] };
+    fs.writeFileSync(path.join(huntsDir, "self.yml"), yaml.stringify(selfHunt));
+
+    const steps: Step[] = [{ runHunt: "self" }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir,
+      huntStack: ["self"]
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Circular hunt dependency");
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("executes runHunt with variable overrides", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-vars-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = {
+      vars: { EMAIL: "default@test.com" },
+      steps: [{ fill: { selector: "#email", value: "{{EMAIL}}" } }]
+    };
+    fs.writeFileSync(path.join(huntsDir, "login.yml"), yaml.stringify(subHunt));
+
+    const steps: Step[] = [
+      { runHunt: { name: "login", vars: { EMAIL: "admin@test.com" } } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      redactedFillSteps: new Set(),
+      configDir,
+      huntStack: []
+    });
+
+    expect(result.failed).toBe(false);
+    const fillStep = result.results.find((r) => r.type === "login > fill");
+    expect(fillStep).toBeDefined();
+    expect(fillStep?.status).toBe("pass");
+    fs.rmSync(configDir, { recursive: true, force: true });
   });
 });

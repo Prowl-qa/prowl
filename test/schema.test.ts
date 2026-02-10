@@ -24,6 +24,17 @@ describe("huntSchema shorthand syntax", () => {
     expect(parsed.steps).toHaveLength(13);
   });
 
+  it("accepts runHunt step in simple and object forms", () => {
+    const parsed = huntSchema.parse({
+      steps: [
+        { runHunt: "login" },
+        { runHunt: { name: "login", vars: { EMAIL: "admin@test.com" } } }
+      ]
+    });
+
+    expect(parsed.steps).toHaveLength(2);
+  });
+
   it("rejects shorthand records with multiple keys", () => {
     expect(() =>
       huntSchema.parse({

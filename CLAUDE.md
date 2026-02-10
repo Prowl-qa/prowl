@@ -49,6 +49,10 @@ Work is not considered complete until all five items are done.
 
 The product backlog is maintained outside this repository. When asked to update the backlog or when completing work that affects backlog items, ask the user for the current file path and name — do not assume it is available in context. Keep all backlog items up to date during sessions by marking completed work as resolved and adding new items as they are identified.
 
+## Related Repositories
+
+- **Prowl Hub** (community hunt templates): `/Users/prowltools/Desktop/prowl-hub` — GitHub: `prowltools/prowl-hub`
+
 ## Access Policy
 
 Infrastructure credentials and host details are not stored in this repository.

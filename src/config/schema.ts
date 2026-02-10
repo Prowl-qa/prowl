@@ -140,6 +140,19 @@ export const inlineAssertStepSchema = z
       )
   })
   .strict();
+export const runHuntStepSchema = z
+  .object({
+    runHunt: z.union([
+      z.string().min(1),
+      z
+        .object({
+          name: z.string().min(1),
+          vars: z.record(z.string(), z.string()).optional()
+        })
+        .strict()
+    ])
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -158,6 +171,7 @@ export const stepSchema = z.union([
   onDialogStepSchema,
   setInputFilesStepSchema,
   inlineAssertStepSchema,
+  runHuntStepSchema,
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,

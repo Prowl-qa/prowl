@@ -1,0 +1,43 @@
+# Signup Flow
+# ---
+# Pattern: Registration with form validation
+# What it tests: Fill registration form, submit, verify success state.
+# Customize: Update field labels, button text, and success indicators
+#             to match your app's registration page.
+
+name: signup-flow
+description: Register a new account and verify success
+
+vars:
+  NAME: "Test User"
+  EMAIL: "{{TEST_EMAIL}}"
+  PASSWORD: "{{TEST_PASSWORD}}"
+
+steps:
+  - navigate: "/signup"
+
+  - fill:
+      "Full Name": "{{NAME}}"
+
+  - fill:
+      "Email": "{{EMAIL}}"
+
+  - fill:
+      "Password": "{{PASSWORD}}"
+
+  - fill:
+      "Confirm Password": "{{PASSWORD}}"
+
+  - click: "Create Account"
+
+  # Wait for the signup to process
+  - waitForNetworkIdle:
+      timeout: 10000
+
+  # Verify we see a success message or redirect
+  - assert:
+      visible: "Account created"
+
+assertions:
+  - noConsoleErrors: true
+  - noNetworkErrors: true

@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import chalk from "chalk";
+import { welcomeBanner } from "../mascot.js";
 
 function getPackageRoot(): string {
   const currentFile = fileURLToPath(import.meta.url);
@@ -43,9 +44,9 @@ export function buildInitCommand(): Command {
       const packageRoot = getPackageRoot();
       const examplesDir = path.join(packageRoot, "examples");
       const exampleConfig = path.join(examplesDir, "config.yml");
-      const exampleHunt = path.join(examplesDir, "hunts", "homepage.yml");
+      const exampleHuntsDir = path.join(examplesDir, "hunts");
 
-      if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleHunt)) {
+      if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleHuntsDir)) {
         console.error(chalk.red("Examples not found in package. Reinstall prowl."));
         process.exitCode = 1;
         return;
@@ -56,9 +57,18 @@ export function buildInitCommand(): Command {
       }
 
       copyFile(exampleConfig, path.join(prowlDir, "config.yml"));
-      copyFile(exampleHunt, path.join(prowlDir, "hunts", "homepage.yml"));
 
-      console.log(chalk.green("Initialized .prowl directory."));
+      const huntFiles = fs.readdirSync(exampleHuntsDir).filter((f) => f.endsWith(".yml"));
+      for (const huntFile of huntFiles) {
+        copyFile(
+          path.join(exampleHuntsDir, huntFile),
+          path.join(prowlDir, "hunts", huntFile)
+        );
+      }
+
+      console.log(welcomeBanner());
+      console.log(chalk.green("  Initialized .prowl directory."));
+      console.log(chalk.gray("  Run ") + chalk.bold("prowl run homepage") + chalk.gray(" to get started.\n"));
     });
 
   return command;

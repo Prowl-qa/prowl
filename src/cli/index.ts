@@ -11,7 +11,7 @@ const program = new Command();
 program
   .name("prowl")
   .description("CLI-first QA testing tool for deterministic Playwright flows")
-  .version("0.1.0");
+  .version("1.0.0");
 
 program.addCommand(buildRunCommand());
 program.addCommand(buildWatchCommand());

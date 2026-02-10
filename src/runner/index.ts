@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AssertionResult, RunResult, StepResult } from "../types/index.js";
+import type { AssertionResult, RunResult, Step, StepResult } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { launchBrowser, closeBrowser } from "../browser/controller.js";
-import { captureFinalScreenshot, executeSteps } from "./steps.js";
+import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { writeReports } from "../reporter/index.js";
 
@@ -15,6 +15,7 @@ export type RunOptions = {
   slowMo?: number;
   trace?: boolean;
   configPath?: string;
+  onStep?: StepCallback;
 };
 
 function timestamp(): string {
@@ -69,7 +70,7 @@ function writeConsoleLog(runDir: string, entries: ConsoleEntry[]): string {
 
 export async function runHunt(
   options: RunOptions
-): Promise<{ result: RunResult; runDir: string }> {
+): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
   const { config, configDir } = loadConfig(options.configPath);
   const hunt = loadHunt(options.huntName, configDir);
   const { hunt: interpolatedHunt, redactedFillSteps } = interpolateHunt(hunt, process.env);
@@ -137,7 +138,8 @@ export async function runHunt(
         allowedDomains,
         maxTotalTimeMs: config.assertions.maxTotalTimeMs,
         redactedFillSteps,
-        configDir
+        configDir,
+        onStep: options.onStep
       });
 
       stepResults = stepExecution.results;
@@ -204,5 +206,5 @@ export async function runHunt(
     await closeBrowser(session);
   }
 
-  return { result, runDir };
+  return { result, runDir, steps: interpolatedHunt.steps };
 }
