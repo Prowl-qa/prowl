@@ -156,9 +156,22 @@ export function listHunts(configDir: string): string[] {
   if (!stats.isDirectory()) {
     throw new Error(`Hunts path is not a directory: ${huntsDir}`);
   }
-  const entries = fs.readdirSync(huntsDir, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".yml"))
-    .map((entry) => path.basename(entry.name, ".yml"))
-    .sort((a, b) => a.localeCompare(b));
+
+  const results: string[] = [];
+
+  function scanDir(dir: string) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith(".yml")) {
+        const fullPath = path.join(dir, entry.name);
+        const relative = path.relative(huntsDir, fullPath);
+        results.push(relative.replace(/\.yml$/, ""));
+      } else if (entry.isDirectory()) {
+        scanDir(path.join(dir, entry.name));
+      }
+    }
+  }
+
+  scanDir(huntsDir);
+  return results.sort((a, b) => a.localeCompare(b));
 }

@@ -1,4 +1,4 @@
-const HUNT_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
+const HUNT_NAME_PATTERN = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
 
 export function isValidHuntName(name: string): boolean {
   return HUNT_NAME_PATTERN.test(name);
@@ -7,7 +7,7 @@ export function isValidHuntName(name: string): boolean {
 export function assertValidHuntName(name: string): void {
   if (!isValidHuntName(name)) {
     throw new Error(
-      `Invalid hunt name: "${name}". Use only letters, numbers, hyphens, and underscores.`
+      `Invalid hunt name: "${name}". Use only letters, numbers, hyphens, underscores, and forward slashes.`
     );
   }
 }

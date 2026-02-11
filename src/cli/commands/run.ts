@@ -5,7 +5,7 @@ import { resultMascot } from "../mascot.js";
 
 export function buildRunCommand(): Command {
   const command = new Command("run")
-    .argument("<hunt-name>", "Hunt name (filename without .yml)")
+    .argument("<hunt-name>", "Hunt name or path (e.g. homepage or admin/users-crud)")
     .option("--url <target>", "Override target URL")
     .option("--headed", "Show browser window")
     .option("--slow-mo <ms>", "Slow down Playwright actions", (value) => Number(value))

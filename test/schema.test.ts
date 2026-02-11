@@ -35,7 +35,18 @@ describe("huntSchema shorthand syntax", () => {
     expect(parsed.steps).toHaveLength(2);
   });
 
-  it("rejects runHunt names with path traversal or separators", () => {
+  it("accepts runHunt names with subfolder paths", () => {
+    const parsed = huntSchema.parse({
+      steps: [
+        { runHunt: "auth/login" },
+        { runHunt: { name: "admin/users-crud" } }
+      ]
+    });
+
+    expect(parsed.steps).toHaveLength(2);
+  });
+
+  it("rejects runHunt names with path traversal", () => {
     expect(() =>
       huntSchema.parse({
         steps: [{ runHunt: "../secrets" }]
@@ -44,7 +55,7 @@ describe("huntSchema shorthand syntax", () => {
 
     expect(() =>
       huntSchema.parse({
-        steps: [{ runHunt: { name: "auth/login" } }]
+        steps: [{ runHunt: { name: "../../etc/passwd" } }]
       })
     ).toThrow("Invalid hunt name");
   });

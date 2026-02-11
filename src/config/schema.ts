@@ -149,7 +149,7 @@ export const runHuntStepSchema = z
         .min(1)
         .refine(isValidHuntName, {
           message:
-            "Invalid hunt name. Use only letters, numbers, hyphens, and underscores."
+            "Invalid hunt name. Use only letters, numbers, hyphens, underscores, and forward slashes."
         }),
       z
         .object({
@@ -158,7 +158,7 @@ export const runHuntStepSchema = z
             .min(1)
             .refine(isValidHuntName, {
               message:
-                "Invalid hunt name. Use only letters, numbers, hyphens, and underscores."
+                "Invalid hunt name. Use only letters, numbers, hyphens, underscores, and forward slashes."
             }),
           vars: z.record(z.string(), z.string()).optional()
         })

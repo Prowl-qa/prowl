@@ -8,7 +8,7 @@ import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js
 
 export function buildWatchCommand(): Command {
   const command = new Command("watch")
-    .argument("<hunt-name>", "Hunt name (filename without .yml)")
+    .argument("<hunt-name>", "Hunt name or path (e.g. homepage or admin/users-crud)")
     .option("--url <target>", "Override target URL")
     .option("--headed", "Show browser window")
     .option("--slow-mo <ms>", "Slow down Playwright actions", (value) => Number(value))

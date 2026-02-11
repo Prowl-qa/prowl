@@ -32,6 +32,23 @@ describe("listHunts", () => {
     }
   });
 
+  it("lists hunts from subfolders with path prefix", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    try {
+      const huntsDir = path.join(tempDir, "hunts");
+      fs.mkdirSync(path.join(huntsDir, "admin"), { recursive: true });
+
+      fs.writeFileSync(path.join(huntsDir, "homepage.yml"), "steps:\n  - navigate: '/'\n");
+      fs.writeFileSync(path.join(huntsDir, "admin", "users-crud.yml"), "steps:\n  - navigate: '/'\n");
+      fs.writeFileSync(path.join(huntsDir, "admin", "company-edit.yml"), "steps:\n  - navigate: '/'\n");
+
+      const hunts = listHunts(tempDir);
+      expect(hunts).toEqual(["admin/company-edit", "admin/users-crud", "homepage"]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("throws when hunts path is not a directory", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
     try {

@@ -64,6 +64,26 @@ describe("loadHunt", () => {
     process.chdir(cwd);
     fs.rmSync(project, { recursive: true, force: true });
   });
+
+  it("loads a hunt from a subfolder", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    process.chdir(project);
+
+    const prowlDir = path.join(project, ".prowl");
+    fs.mkdirSync(path.join(prowlDir, "hunts", "admin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(prowlDir, "hunts", "admin", "users-crud.yml"),
+      "steps:\n  - navigate: '/admin/users'\n"
+    );
+
+    const { configDir } = loadConfig();
+    const hunt = loadHunt("admin/users-crud", configDir);
+    expect(hunt.steps.length).toBe(1);
+
+    process.chdir(cwd);
+    fs.rmSync(project, { recursive: true, force: true });
+  });
 });
 
 describe("ensureAllowedDomain", () => {
