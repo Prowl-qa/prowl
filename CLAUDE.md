@@ -49,9 +49,24 @@ Work is not considered complete until all five items are done.
 
 The product backlog is maintained outside this repository. When asked to update the backlog or when completing work that affects backlog items, ask the user for the current file path and name — do not assume it is available in context. Keep all backlog items up to date during sessions by marking completed work as resolved and adding new items as they are identified.
 
-## Related Repositories
+## Prowl Ecosystem
 
-- **Prowl Hub** (community hunt templates): `/Users/prowltools/Desktop/prowl-hub` — GitHub: `prowltools/prowl-hub`
+**GitHub Org**: [Prowl-qa](https://github.com/Prowl-qa)
+
+### Repositories
+
+| Repo | Purpose | Local Path |
+|------|---------|------------|
+| `Prowl-qa/prowl` | CLI tool (this repo) | `~/Desktop/prowl` |
+| `Prowl-qa/prowl-docs` | Documentation site (Docusaurus) | `~/Desktop/prowl-docs` |
+| `Prowl-qa/prowl-web` | Marketing landing page (Next.js) | `~/Desktop/prowl-web` |
+| `Prowl-qa/prowl-hub` | Community hunt templates | `~/Desktop/prowl-hub` |
+
+### Cross-Repo Guidelines
+- **This repo** is the source of truth for all CLI features and step types
+- **prowl-docs** should be updated when step types, config options, or CLI commands change
+- **prowl-web** is the marketing site — update feature descriptions when major features ship
+- **prowl-hub** has its own CLAUDE.md with strict read-only security rules for agents
 
 ## Access Policy
 
