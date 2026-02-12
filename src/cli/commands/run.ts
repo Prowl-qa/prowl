@@ -27,12 +27,12 @@ export function buildRunCommand(): Command {
           }
         });
 
-        console.log(resultMascot(result.status));
+        console.log(resultMascot(result.status, huntName));
         printHuntSummary(result, runDir);
         process.exitCode = result.exitCode;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Run failed";
-        console.log(resultMascot("fail"));
+        console.log(resultMascot("fail", huntName));
         console.error(`\n  Error: ${message}\n`);
         process.exitCode = 1;
       }
