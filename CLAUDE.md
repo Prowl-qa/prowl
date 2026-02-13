@@ -49,6 +49,8 @@ Work is not considered complete until all five items are done.
 
 The product backlog is maintained outside this repository. When asked to update the backlog or when completing work that affects backlog items, ask the user for the current file path and name — do not assume it is available in context. Keep all backlog items up to date during sessions by marking completed work as resolved and adding new items as they are identified.
 
+After every push to origin, review the backlog and update resolved items with the commit hash and date. Move any resolved items into `resolved.md` under the correct section: **Prowl CLI**, **Prowl Docs**, or **Prowl Web**. Ask the user for the backlog and resolved file paths if not already available in context.
+
 ## Prowl Ecosystem
 
 **GitHub Org**: [Prowl-qa](https://github.com/Prowl-qa)

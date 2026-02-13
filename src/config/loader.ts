@@ -184,6 +184,20 @@ export function loadHuntTags(huntName: string, configDir: string): string[] {
   return Array.isArray(parsed.tags) ? parsed.tags : [];
 }
 
+export function loadHuntMeta(huntName: string, configDir: string): { description?: string; tags: string[] } {
+  assertValidHuntName(huntName);
+  const huntPath = path.join(configDir, "hunts", `${huntName}.yml`);
+  if (!fs.existsSync(huntPath)) {
+    return { tags: [] };
+  }
+  const raw = fs.readFileSync(huntPath, "utf-8");
+  const parsed = yaml.parse(raw) ?? {};
+  return {
+    description: typeof parsed.description === "string" ? parsed.description : undefined,
+    tags: Array.isArray(parsed.tags) ? parsed.tags : []
+  };
+}
+
 export function listHunts(configDir: string): string[] {
   const huntsDir = path.join(configDir, "hunts");
   if (!fs.existsSync(huntsDir)) {

@@ -52,10 +52,6 @@ export function buildInitCommand(): Command {
         return;
       }
 
-      if (fs.existsSync(prowlDir) && options.force) {
-        fs.rmSync(prowlDir, { recursive: true, force: true });
-      }
-
       copyFile(exampleConfig, path.join(prowlDir, "config.yml"));
 
       const huntFiles = fs.readdirSync(exampleHuntsDir).filter((f) => f.endsWith(".yml"));

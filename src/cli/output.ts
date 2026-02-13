@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import type { Step, StepResult, RunResult } from "../types/index.js";
 
-function describeStep(step: Step): string {
+export function describeStep(step: Step): string {
   if ("navigate" in step) return `navigate "${step.navigate}"`;
   if ("click" in step) {
     if (typeof step.click === "string") return `click "${step.click}"`;
@@ -49,7 +49,7 @@ function describeStep(step: Step): string {
   return "unknown step";
 }
 
-function truncate(text: string, max: number): string {
+export function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.slice(0, max - 1) + "\u2026";
 }

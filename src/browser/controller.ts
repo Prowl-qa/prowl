@@ -34,8 +34,12 @@ export async function launchBrowser(options: BrowserOptions): Promise<BrowserSes
     contextOptions.viewport = options.viewport;
   }
 
-  if (options.storageStatePath && fs.existsSync(options.storageStatePath)) {
-    contextOptions.storageState = options.storageStatePath;
+  if (options.storageStatePath) {
+    if (fs.existsSync(options.storageStatePath)) {
+      contextOptions.storageState = options.storageStatePath;
+    } else {
+      console.warn(`Auth state file not found: ${options.storageStatePath}. Run "prowl login" to create it.`);
+    }
   }
 
   if (options.recordHar) {

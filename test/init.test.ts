@@ -66,4 +66,28 @@ describe("prowl init", () => {
     runInit(["--force"]);
     expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(true);
   });
+
+  it("--force preserves user-created files not in templates", () => {
+    runInit();
+
+    // Create a user-owned file inside .prowl
+    const userFile = path.join(tempDir, ".prowl", "my-notes.txt");
+    fs.writeFileSync(userFile, "user data");
+
+    // Create a user-owned hunt file
+    const userHunt = path.join(tempDir, ".prowl", "hunts", "my-custom.yml");
+    fs.writeFileSync(userHunt, "steps:\n  - navigate: /custom");
+
+    runInit(["--force"]);
+
+    // User files should still exist
+    expect(fs.existsSync(userFile)).toBe(true);
+    expect(fs.readFileSync(userFile, "utf-8")).toBe("user data");
+    expect(fs.existsSync(userHunt)).toBe(true);
+    expect(fs.readFileSync(userHunt, "utf-8")).toBe("steps:\n  - navigate: /custom");
+
+    // Template files should be refreshed
+    expect(fs.existsSync(path.join(tempDir, ".prowl", "config.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(true);
+  });
 });

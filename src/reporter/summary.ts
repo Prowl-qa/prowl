@@ -2,17 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import type { AssertionResult, RunResult, StepResult } from "../types/index.js";
 
+export function escapeMd(text: string): string {
+  return text.replace(/([|`*_{}[\]()#+\-!\\])/g, "\\$1");
+}
+
 function formatStep(step: StepResult): string {
   const base = `- [${step.status.toUpperCase()}] ${step.type} (${step.durationMs}ms)`;
   const selector = step.selector ? ` selector=${step.selector}` : "";
-  const value = step.value ? ` value=${step.value}` : "";
-  const error = step.error ? ` error=${step.error}` : "";
+  const value = step.value ? ` value=${escapeMd(step.value)}` : "";
+  const error = step.error ? ` error=${escapeMd(step.error)}` : "";
   return `${base}${selector}${value}${error}`;
 }
 
 function formatAssertion(assertion: AssertionResult): string {
-  const value = assertion.value !== undefined ? ` value=${assertion.value}` : "";
-  const error = assertion.error ? ` error=${assertion.error}` : "";
+  const value = assertion.value !== undefined ? ` value=${typeof assertion.value === "string" ? escapeMd(assertion.value) : assertion.value}` : "";
+  const error = assertion.error ? ` error=${escapeMd(assertion.error)}` : "";
   return `- [${assertion.status.toUpperCase()}] ${assertion.type}${value}${error}`;
 }
 

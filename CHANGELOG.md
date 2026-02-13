@@ -5,6 +5,13 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Test coverage: CLI output formatting tests for all 19 step types and `truncate()` edge cases (P1.7-004)
+- Test coverage: Reporter content validation — markdown content sections, JSON structure, and edge cases (P1.7-005)
+- Test coverage: Browser lifecycle tests — engine selection, storage state, trace, HAR, viewport, timeouts (P1.7-002)
+- Test coverage: Runner orchestration tests — success/failure flows, retry logic, maxSteps, viewport/browser passthrough (P1.7-001)
+- Test coverage: CLI command tests — run command options, tag filtering, list command output (P1.7-003)
+- Auth state warning: `console.warn` when `storageStatePath` is set but file doesn't exist (P1.7-006)
+- Markdown escaping: `escapeMd()` helper applied to step/assertion values and errors in report summaries (P1.7-008)
 - `hover` step type: hover over an element by selector (`hover: { selector: "..." }`) (P1.6-008)
 - `scroll` step type: scroll the page by direction and amount (`scroll: { direction: "down", amount: 500 }`) (P1.6-009)
 - `scrollTo` step type: scroll an element into view (`scrollTo: { selector: "..." }`) (P1.6-009)
@@ -13,7 +20,12 @@ All notable changes to Prowl will be documented in this file.
 - Hunt tags: optional `tags` field in hunt YAML for categorization (P1.6-001)
 - Tag filtering: `--include-tags` and `--exclude-tags` CLI flags on `prowl run` (P1.6-001)
 - `prowl list` now displays tags per hunt (P1.6-001)
+- `prowl list` enhanced output: aligned columns with description, tags, and `--json` flag (P1.6-005)
 - Retry logic: optional `retry: { maxRetries, delay? }` field in hunt YAML for automatic retries on failure (P1.6-003)
+
+### Changed
+- `init --force` now preserves user-created files; only overwrites known template files (config.yml, example hunts, .gitignore) (P1.7-009)
+- Documented substring-matching behavior on `matchesForbiddenPattern` and `isForbiddenSelector` in `steps.ts` (P1.7-007)
 
 ### Fixed
 - Screenshot path traversal: reject screenshot names containing `/`, `\`, or `..` (BUG-004)

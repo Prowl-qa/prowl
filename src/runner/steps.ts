@@ -54,6 +54,9 @@ function unwrapTextSelector(value: string): string | null {
   return null;
 }
 
+// Substring match: if both the selector and forbidden pattern are text= selectors,
+// the selector's text is checked for whether it *contains* the forbidden text.
+// For example, forbidden 'text="Delete"' would match selector 'text="Delete All"'.
 function matchesForbiddenPattern(selector: string, forbidden: string): boolean {
   const selectorText = unwrapTextSelector(selector);
   if (selectorText === null) {
@@ -68,6 +71,9 @@ function matchesForbiddenPattern(selector: string, forbidden: string): boolean {
   return selectorText.includes(forbidden);
 }
 
+// Uses substring matching: a selector is forbidden if it contains any forbidden
+// pattern as a substring (e.g., forbidden "[data-danger]" matches "[data-danger].active"),
+// or if the text-based pattern match above succeeds.
 function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): boolean {
   return forbiddenSelectors.some(
     (forbidden) => selector.includes(forbidden) || matchesForbiddenPattern(selector, forbidden)
