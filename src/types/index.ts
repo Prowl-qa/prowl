@@ -1,5 +1,9 @@
 export type BrowserEngine = "chromium" | "firefox" | "webkit";
 
+export type BrowserChannel =
+  | "chrome" | "chrome-beta" | "chrome-canary" | "chrome-dev"
+  | "msedge" | "msedge-beta" | "msedge-canary" | "msedge-dev";
+
 export type Viewport = {
   width: number;
   height: number;
@@ -14,6 +18,7 @@ export type Config = {
     slowMo: number;
     timeout: number;
     engine: BrowserEngine;
+    channel?: BrowserChannel;
     viewport: Viewport;
   };
   artifacts: {

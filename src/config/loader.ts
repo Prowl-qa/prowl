@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
 import dotenv from "dotenv";
-import type { BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
+import type { BrowserChannel, BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
 import { assertValidHuntName } from "./hunt-name.js";
 
@@ -86,6 +86,7 @@ function mergeConfig(partial: Partial<Config>): Config {
       slowMo: partial.browser?.slowMo ?? DEFAULT_CONFIG.browser.slowMo,
       timeout: partial.browser?.timeout ?? DEFAULT_CONFIG.browser.timeout,
       engine: (partial.browser as { engine?: BrowserEngine } | undefined)?.engine ?? DEFAULT_CONFIG.browser.engine,
+      channel: (partial.browser as { channel?: BrowserChannel } | undefined)?.channel,
       viewport: resolveViewport((partial.browser as { viewport?: string | Viewport } | undefined)?.viewport)
     },
     artifacts: {

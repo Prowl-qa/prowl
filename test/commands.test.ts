@@ -117,6 +117,29 @@ describe("run command", () => {
     expect(mockRunHunt).toHaveBeenCalled();
   });
 
+  it("passes --channel flag to runHunt", async () => {
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowl/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowl", "homepage", "--channel", "chrome"]);
+
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "chrome"
+      })
+    );
+  });
+
   it("sets process.exitCode on failure", async () => {
     mockRunHunt.mockResolvedValue({
       result: {

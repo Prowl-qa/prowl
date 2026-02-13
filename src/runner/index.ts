@@ -17,6 +17,7 @@ export type RunOptions = {
   configPath?: string;
   onStep?: StepCallback;
   browser?: "chromium" | "firefox" | "webkit";
+  channel?: string;
   viewport?: string;
 };
 
@@ -97,6 +98,7 @@ async function executeHuntAttempt(
   const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
 
   const engine = options.browser ?? config.browser.engine;
+  const channel = options.channel ?? config.browser.channel;
   const viewport = options.viewport
     ? resolveViewport(parseViewportFlag(options.viewport))
     : config.browser.viewport;
@@ -110,6 +112,7 @@ async function executeHuntAttempt(
     recordHar: config.artifacts.networkHar,
     runDir,
     engine,
+    channel,
     viewport
   });
 

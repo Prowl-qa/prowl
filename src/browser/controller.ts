@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from "playwright";
-import type { BrowserEngine, Viewport } from "../types/index.js";
+import type { BrowserChannel, BrowserEngine, Viewport } from "../types/index.js";
 
 const ENGINES = { chromium, firefox, webkit } as const;
 
@@ -21,12 +21,17 @@ export type BrowserOptions = {
   recordHar: boolean;
   runDir: string;
   engine?: BrowserEngine;
+  channel?: BrowserChannel;
   viewport?: Viewport;
 };
 
 export async function launchBrowser(options: BrowserOptions): Promise<BrowserSession> {
   const engine = ENGINES[options.engine ?? "chromium"];
-  const browser = await engine.launch({ headless: options.headless, slowMo: options.slowMo });
+  const browser = await engine.launch({
+    headless: options.headless,
+    slowMo: options.slowMo,
+    channel: options.channel
+  });
 
   const contextOptions: Parameters<typeof browser.newContext>[0] = {};
 

@@ -61,7 +61,7 @@ describe("launchBrowser", () => {
     const opts = makeOptions();
     try {
       await launchBrowser(opts);
-      expect(chromium.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0 });
+      expect(chromium.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0, channel: undefined });
       expect(firefox.launch).not.toHaveBeenCalled();
       expect(webkit.launch).not.toHaveBeenCalled();
     } finally {
@@ -73,7 +73,7 @@ describe("launchBrowser", () => {
     const opts = makeOptions({ engine: "firefox" });
     try {
       await launchBrowser(opts);
-      expect(firefox.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0 });
+      expect(firefox.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0, channel: undefined });
     } finally {
       fs.rmSync(opts.runDir, { recursive: true, force: true });
     }
@@ -83,7 +83,7 @@ describe("launchBrowser", () => {
     const opts = makeOptions({ engine: "webkit" });
     try {
       await launchBrowser(opts);
-      expect(webkit.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0 });
+      expect(webkit.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0, channel: undefined });
     } finally {
       fs.rmSync(opts.runDir, { recursive: true, force: true });
     }
@@ -93,7 +93,27 @@ describe("launchBrowser", () => {
     const opts = makeOptions({ headless: false, slowMo: 200 });
     try {
       await launchBrowser(opts);
-      expect(chromium.launch).toHaveBeenCalledWith({ headless: false, slowMo: 200 });
+      expect(chromium.launch).toHaveBeenCalledWith({ headless: false, slowMo: 200, channel: undefined });
+    } finally {
+      fs.rmSync(opts.runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes channel to engine launch", async () => {
+    const opts = makeOptions({ channel: "chrome" });
+    try {
+      await launchBrowser(opts);
+      expect(chromium.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0, channel: "chrome" });
+    } finally {
+      fs.rmSync(opts.runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not pass channel by default", async () => {
+    const opts = makeOptions();
+    try {
+      await launchBrowser(opts);
+      expect(chromium.launch).toHaveBeenCalledWith({ headless: true, slowMo: 0, channel: undefined });
     } finally {
       fs.rmSync(opts.runDir, { recursive: true, force: true });
     }

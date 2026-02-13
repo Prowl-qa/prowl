@@ -15,6 +15,7 @@ All notable changes to Prowl will be documented in this file.
 - `hover` step type: hover over an element by selector (`hover: { selector: "..." }`) (P1.6-008)
 - `scroll` step type: scroll the page by direction and amount (`scroll: { direction: "down", amount: 500 }`) (P1.6-009)
 - `scrollTo` step type: scroll an element into view (`scrollTo: { selector: "..." }`) (P1.6-009)
+- Browser channel support: `browser.channel` config option and `--channel` CLI flag for testing against installed browsers (chrome, msedge, etc.)
 - Multi-browser support: `browser.engine` config option (`chromium`, `firefox`, `webkit`) and `--browser` CLI flag (P1.6-010)
 - Viewport configuration: `browser.viewport` config option (presets: `mobile`, `tablet`, `desktop` or custom `{ width, height }`) and `--viewport` CLI flag (P1.6-011)
 - Hunt tags: optional `tags` field in hunt YAML for categorization (P1.6-001)
