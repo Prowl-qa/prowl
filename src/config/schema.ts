@@ -10,7 +10,14 @@ export const configSchema = z
       .object({
         headless: z.boolean().optional(),
         slowMo: z.number().optional(),
-        timeout: z.number().optional()
+        timeout: z.number().optional(),
+        engine: z.enum(["chromium", "firefox", "webkit"]).optional(),
+        viewport: z
+          .union([
+            z.enum(["mobile", "tablet", "desktop"]),
+            z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).strict()
+          ])
+          .optional()
       })
       .optional(),
     artifacts: z
@@ -166,6 +173,26 @@ export const runHuntStepSchema = z
     ])
   })
   .strict();
+export const hoverStepSchema = z
+  .object({
+    hover: z.object({ selector: z.string().min(1) }).strict()
+  })
+  .strict();
+export const scrollStepSchema = z
+  .object({
+    scroll: z
+      .object({
+        direction: z.enum(["up", "down", "left", "right"]),
+        amount: z.number().optional()
+      })
+      .strict()
+  })
+  .strict();
+export const scrollToStepSchema = z
+  .object({
+    scrollTo: z.object({ selector: z.string().min(1) }).strict()
+  })
+  .strict();
 export const screenshotStepSchema = z
   .object({
     screenshot: z.object({ name: z.string().optional() }).strict()
@@ -188,6 +215,9 @@ export const stepSchema = z.union([
   waitForSelectorStepSchema,
   waitForUrlStepSchema,
   waitForNetworkIdleStepSchema,
+  hoverStepSchema,
+  scrollStepSchema,
+  scrollToStepSchema,
   screenshotStepSchema
 ]);
 
@@ -204,8 +234,16 @@ export const huntSchema = z
   .object({
     name: z.string().optional(),
     description: z.string().optional(),
+    tags: z.array(z.string().min(1)).optional(),
     vars: z.record(z.string(), z.string()).optional(),
     steps: z.array(stepSchema),
-    assertions: z.array(assertionSchema).optional()
+    assertions: z.array(assertionSchema).optional(),
+    retry: z
+      .object({
+        maxRetries: z.number().int().min(0),
+        delay: z.number().int().min(0).optional()
+      })
+      .strict()
+      .optional()
   })
   .strict();

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { loadConfig, listHunts } from "../../config/loader.js";
+import { loadConfig, listHunts, loadHuntTags } from "../../config/loader.js";
 
 export function buildListCommand(): Command {
   const command = new Command("list")
@@ -17,7 +17,9 @@ export function buildListCommand(): Command {
         }
 
         hunts.forEach((hunt) => {
-          console.log(hunt);
+          const tags = loadHuntTags(hunt, configDir);
+          const tagLabel = tags.length > 0 ? chalk.gray(` [${tags.join(", ")}]`) : "";
+          console.log(`${hunt}${tagLabel}`);
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "List failed";

@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from "playwright";
+import type { BrowserEngine, Viewport } from "../types/index.js";
+
+const ENGINES = { chromium, firefox, webkit } as const;
 
 export type BrowserSession = {
   browser: Browser;
@@ -17,12 +20,19 @@ export type BrowserOptions = {
   trace: boolean;
   recordHar: boolean;
   runDir: string;
+  engine?: BrowserEngine;
+  viewport?: Viewport;
 };
 
 export async function launchBrowser(options: BrowserOptions): Promise<BrowserSession> {
-  const browser = await chromium.launch({ headless: options.headless, slowMo: options.slowMo });
+  const engine = ENGINES[options.engine ?? "chromium"];
+  const browser = await engine.launch({ headless: options.headless, slowMo: options.slowMo });
 
   const contextOptions: Parameters<typeof browser.newContext>[0] = {};
+
+  if (options.viewport) {
+    contextOptions.viewport = options.viewport;
+  }
 
   if (options.storageStatePath && fs.existsSync(options.storageStatePath)) {
     contextOptions.storageState = options.storageStatePath;

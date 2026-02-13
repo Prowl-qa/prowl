@@ -4,6 +4,20 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `hover` step type: hover over an element by selector (`hover: { selector: "..." }`) (P1.6-008)
+- `scroll` step type: scroll the page by direction and amount (`scroll: { direction: "down", amount: 500 }`) (P1.6-009)
+- `scrollTo` step type: scroll an element into view (`scrollTo: { selector: "..." }`) (P1.6-009)
+- Multi-browser support: `browser.engine` config option (`chromium`, `firefox`, `webkit`) and `--browser` CLI flag (P1.6-010)
+- Viewport configuration: `browser.viewport` config option (presets: `mobile`, `tablet`, `desktop` or custom `{ width, height }`) and `--viewport` CLI flag (P1.6-011)
+- Hunt tags: optional `tags` field in hunt YAML for categorization (P1.6-001)
+- Tag filtering: `--include-tags` and `--exclude-tags` CLI flags on `prowl run` (P1.6-001)
+- `prowl list` now displays tags per hunt (P1.6-001)
+- Retry logic: optional `retry: { maxRetries, delay? }` field in hunt YAML for automatic retries on failure (P1.6-003)
+
+### Fixed
+- Screenshot path traversal: reject screenshot names containing `/`, `\`, or `..` (BUG-004)
+
 ---
 
 ## [1.0.0] - 2026-02-09

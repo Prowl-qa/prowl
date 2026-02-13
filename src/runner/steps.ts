@@ -105,6 +105,9 @@ function getStepType(step: Step): string {
   if ("waitForSelector" in step) return "waitForSelector";
   if ("waitForUrl" in step) return "waitForUrl";
   if ("waitForNetworkIdle" in step) return "waitForNetworkIdle";
+  if ("hover" in step) return "hover";
+  if ("scroll" in step) return "scroll";
+  if ("scrollTo" in step) return "scrollTo";
   if ("screenshot" in step) return "screenshot";
   return "step";
 }
@@ -550,8 +553,46 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart
         };
+      } else if ("hover" in step) {
+        assertAllowedSelector(step.hover.selector, context.forbiddenSelectors);
+        await context.page.locator(step.hover.selector).hover();
+        ensureAllowedUrl(context.page.url(), context.allowedDomains);
+        stepResult = {
+          type: "hover",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.hover.selector
+        };
+      } else if ("scroll" in step) {
+        const amount = step.scroll.amount ?? 500;
+        const scrollMap: Record<string, [number, number]> = {
+          up: [0, -amount],
+          down: [0, amount],
+          left: [-amount, 0],
+          right: [amount, 0]
+        };
+        const [x, y] = scrollMap[step.scroll.direction];
+        await context.page.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
+        stepResult = {
+          type: "scroll",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: `${step.scroll.direction} ${amount}px`
+        };
+      } else if ("scrollTo" in step) {
+        assertAllowedSelector(step.scrollTo.selector, context.forbiddenSelectors);
+        await context.page.locator(step.scrollTo.selector).scrollIntoViewIfNeeded();
+        stepResult = {
+          type: "scrollTo",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.scrollTo.selector
+        };
       } else if ("screenshot" in step) {
         const name = step.screenshot.name ?? `manual_step_${index + 1}.png`;
+        if (/[/\\]|\.\./.test(name)) {
+          throw new Error(`Invalid screenshot name: "${name}" must not contain path separators or ".."`);
+        }
         const fileName = name.endsWith(".png") ? name : `${name}.png`;
         const relative = await addScreenshot(fileName);
         stepResult = {

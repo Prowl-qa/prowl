@@ -21,7 +21,9 @@ function createMockPage(options?: {
       fill: vi.fn(async () => undefined),
       press: vi.fn(async () => undefined),
       selectOption: vi.fn(async () => undefined),
-      setInputFiles: vi.fn(async () => undefined)
+      setInputFiles: vi.fn(async () => undefined),
+      hover: vi.fn(async () => undefined),
+      scrollIntoViewIfNeeded: vi.fn(async () => undefined)
     };
     return locator;
   };
@@ -40,6 +42,7 @@ function createMockPage(options?: {
     waitForSelector: vi.fn(async () => undefined),
     waitForURL: vi.fn(async () => undefined),
     waitForLoadState: vi.fn(async () => undefined),
+    evaluate: vi.fn(async () => undefined),
     screenshot: vi.fn(async () => undefined)
   };
 }
@@ -834,6 +837,180 @@ describe("executeSteps", () => {
     expect(fillStep).toBeDefined();
     expect(fillStep?.status).toBe("pass");
     fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("executes hover step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ hover: { selector: "[data-testid=menu-item]" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("hover");
+    expect(result.results[0].selector).toBe("[data-testid=menu-item]");
+    expect(page.locator).toHaveBeenCalledWith("[data-testid=menu-item]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails hover on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ hover: { selector: "[data-danger]" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes scroll step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ scroll: { direction: "down", amount: 300 } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("scroll");
+    expect(result.results[0].value).toBe("down 300px");
+    expect(page.evaluate).toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes scrollTo step", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ scrollTo: { selector: "#footer" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("scrollTo");
+    expect(result.results[0].selector).toBe("#footer");
+    expect(page.locator).toHaveBeenCalledWith("#footer");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails scrollTo on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ scrollTo: { selector: "[data-danger]" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("rejects screenshot name with path traversal", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ screenshot: { name: "../../etc/passwd" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Invalid screenshot name");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("rejects screenshot name with path separator", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ screenshot: { name: "sub/dir" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Invalid screenshot name");
+    fs.rmSync(runDir, { recursive: true, force: true });
   });
 
   it("fails runHunt when sub-hunt exceeds maxSteps", async () => {

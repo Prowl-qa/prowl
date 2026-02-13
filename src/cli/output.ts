@@ -42,6 +42,9 @@ function describeStep(step: Step): string {
   if ("waitForSelector" in step) return `waitForSelector "${step.waitForSelector.selector}"`;
   if ("waitForUrl" in step) return `waitForUrl "${step.waitForUrl.value}"`;
   if ("waitForNetworkIdle" in step) return "waitForNetworkIdle";
+  if ("hover" in step) return `hover "${step.hover.selector}"`;
+  if ("scroll" in step) return `scroll ${step.scroll.direction} ${step.scroll.amount ?? 500}px`;
+  if ("scrollTo" in step) return `scrollTo "${step.scrollTo.selector}"`;
   if ("screenshot" in step) return `screenshot "${step.screenshot.name ?? "auto"}"`;
   return "unknown step";
 }

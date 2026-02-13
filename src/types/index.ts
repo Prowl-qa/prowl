@@ -1,3 +1,10 @@
+export type BrowserEngine = "chromium" | "firefox" | "webkit";
+
+export type Viewport = {
+  width: number;
+  height: number;
+};
+
 export type Config = {
   target: {
     url: string;
@@ -6,6 +13,8 @@ export type Config = {
     headless: boolean;
     slowMo: number;
     timeout: number;
+    engine: BrowserEngine;
+    viewport: Viewport;
   };
   artifacts: {
     screenshots: "on-failure" | "all";
@@ -31,9 +40,14 @@ export type Config = {
 export type Hunt = {
   name?: string;
   description?: string;
+  tags?: string[];
   vars?: Record<string, string>;
   steps: Step[];
   assertions?: Assertion[];
+  retry?: {
+    maxRetries: number;
+    delay?: number;
+  };
 };
 
 export type NavigateStep = { navigate: string };
@@ -58,6 +72,9 @@ export type InlineAssertStep = {
   };
 };
 export type RunHuntStep = { runHunt: string | { name: string; vars?: Record<string, string> } };
+export type HoverStep = { hover: { selector: string } };
+export type ScrollStep = { scroll: { direction: "up" | "down" | "left" | "right"; amount?: number } };
+export type ScrollToStep = { scrollTo: { selector: string } };
 export type ScreenshotStep = { screenshot: { name?: string } };
 
 export type Step =
@@ -76,6 +93,9 @@ export type Step =
   | WaitForSelectorStep
   | WaitForUrlStep
   | WaitForNetworkIdleStep
+  | HoverStep
+  | ScrollStep
+  | ScrollToStep
   | ScreenshotStep;
 
 export type Assertion =

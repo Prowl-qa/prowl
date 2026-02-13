@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
 import dotenv from "dotenv";
-import type { Config, Hunt } from "../types/index.js";
+import type { BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
 import { assertValidHuntName } from "./hunt-name.js";
 
@@ -13,7 +13,9 @@ const DEFAULT_CONFIG: Config = {
   browser: {
     headless: true,
     slowMo: 0,
-    timeout: 30000
+    timeout: 30000,
+    engine: "chromium",
+    viewport: { width: 1280, height: 720 }
   },
   artifacts: {
     screenshots: "on-failure",
@@ -52,6 +54,28 @@ export function findConfigPath(startDir: string): string | null {
   return null;
 }
 
+const VIEWPORT_PRESETS: Record<string, Viewport> = {
+  mobile: { width: 375, height: 812 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1280, height: 720 }
+};
+
+export function resolveViewport(
+  value: string | Viewport | undefined
+): Viewport {
+  if (value === undefined) {
+    return DEFAULT_CONFIG.browser.viewport;
+  }
+  if (typeof value === "string") {
+    const preset = VIEWPORT_PRESETS[value];
+    if (!preset) {
+      throw new Error(`Unknown viewport preset: "${value}". Use mobile, tablet, or desktop.`);
+    }
+    return preset;
+  }
+  return value;
+}
+
 function mergeConfig(partial: Partial<Config>): Config {
   return {
     target: {
@@ -60,7 +84,9 @@ function mergeConfig(partial: Partial<Config>): Config {
     browser: {
       headless: partial.browser?.headless ?? DEFAULT_CONFIG.browser.headless,
       slowMo: partial.browser?.slowMo ?? DEFAULT_CONFIG.browser.slowMo,
-      timeout: partial.browser?.timeout ?? DEFAULT_CONFIG.browser.timeout
+      timeout: partial.browser?.timeout ?? DEFAULT_CONFIG.browser.timeout,
+      engine: (partial.browser as { engine?: BrowserEngine } | undefined)?.engine ?? DEFAULT_CONFIG.browser.engine,
+      viewport: resolveViewport((partial.browser as { viewport?: string | Viewport } | undefined)?.viewport)
     },
     artifacts: {
       screenshots: partial.artifacts?.screenshots ?? DEFAULT_CONFIG.artifacts.screenshots,
@@ -145,6 +171,17 @@ export function loadHunt(huntName: string, configDir: string): Hunt {
   const parsed = yaml.parse(raw) ?? {};
   const validated = huntSchema.parse(parsed);
   return validated as Hunt;
+}
+
+export function loadHuntTags(huntName: string, configDir: string): string[] {
+  assertValidHuntName(huntName);
+  const huntPath = path.join(configDir, "hunts", `${huntName}.yml`);
+  if (!fs.existsSync(huntPath)) {
+    return [];
+  }
+  const raw = fs.readFileSync(huntPath, "utf-8");
+  const parsed = yaml.parse(raw) ?? {};
+  return Array.isArray(parsed.tags) ? parsed.tags : [];
 }
 
 export function listHunts(configDir: string): string[] {

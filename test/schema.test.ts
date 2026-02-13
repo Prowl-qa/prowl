@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { huntSchema } from "../src/config/schema.js";
+import { configSchema, huntSchema } from "../src/config/schema.js";
 
 describe("huntSchema shorthand syntax", () => {
   it("accepts shorthand and explicit step forms", () => {
@@ -74,5 +74,122 @@ describe("huntSchema shorthand syntax", () => {
         steps: [{ assert: { visible: "Welcome", urlIncludes: "/dashboard" } }]
       })
     ).toThrow("assert requires exactly one");
+  });
+});
+
+describe("huntSchema new step types", () => {
+  it("accepts hover step", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ hover: { selector: "[data-testid=menu]" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts scroll step", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ scroll: { direction: "down", amount: 300 } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts scroll step without amount", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ scroll: { direction: "up" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects scroll step with invalid direction", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ scroll: { direction: "diagonal" } }]
+      })
+    ).toThrow();
+  });
+
+  it("accepts scrollTo step", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ scrollTo: { selector: "#footer" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+});
+
+describe("huntSchema tags and retry", () => {
+  it("accepts hunt with tags", () => {
+    const parsed = huntSchema.parse({
+      tags: ["smoke", "auth"],
+      steps: [{ navigate: "/" }]
+    });
+    expect(parsed.tags).toEqual(["smoke", "auth"]);
+  });
+
+  it("accepts hunt with retry config", () => {
+    const parsed = huntSchema.parse({
+      retry: { maxRetries: 3, delay: 1000 },
+      steps: [{ navigate: "/" }]
+    });
+    expect(parsed.retry).toEqual({ maxRetries: 3, delay: 1000 });
+  });
+
+  it("accepts retry without delay", () => {
+    const parsed = huntSchema.parse({
+      retry: { maxRetries: 2 },
+      steps: [{ navigate: "/" }]
+    });
+    expect(parsed.retry).toEqual({ maxRetries: 2 });
+  });
+
+  it("rejects retry with negative maxRetries", () => {
+    expect(() =>
+      huntSchema.parse({
+        retry: { maxRetries: -1 },
+        steps: [{ navigate: "/" }]
+      })
+    ).toThrow();
+  });
+});
+
+describe("configSchema browser options", () => {
+  it("accepts browser engine options", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { engine: "firefox" }
+    });
+    expect(parsed.browser?.engine).toBe("firefox");
+  });
+
+  it("rejects invalid browser engine", () => {
+    expect(() =>
+      configSchema.parse({
+        target: { url: "http://localhost" },
+        browser: { engine: "opera" }
+      })
+    ).toThrow();
+  });
+
+  it("accepts viewport preset string", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { viewport: "mobile" }
+    });
+    expect(parsed.browser?.viewport).toBe("mobile");
+  });
+
+  it("accepts viewport object with width and height", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { viewport: { width: 1920, height: 1080 } }
+    });
+    expect(parsed.browser?.viewport).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it("rejects viewport with invalid preset", () => {
+    expect(() =>
+      configSchema.parse({
+        target: { url: "http://localhost" },
+        browser: { viewport: "widescreen" }
+      })
+    ).toThrow();
   });
 });

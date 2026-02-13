@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AssertionResult, RunResult, Step, StepResult } from "../types/index.js";
-import { loadConfig, loadHunt, ensureAllowedDomain } from "../config/loader.js";
+import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { launchBrowser, closeBrowser } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
@@ -16,7 +16,17 @@ export type RunOptions = {
   trace?: boolean;
   configPath?: string;
   onStep?: StepCallback;
+  browser?: "chromium" | "firefox" | "webkit";
+  viewport?: string;
 };
+
+function parseViewportFlag(value: string): string | { width: number; height: number } {
+  const match = /^(\d+)x(\d+)$/i.exec(value);
+  if (match) {
+    return { width: Number(match[1]), height: Number(match[2]) };
+  }
+  return value;
+}
 
 function timestamp(): string {
   const now = new Date();
@@ -68,28 +78,28 @@ function writeConsoleLog(runDir: string, entries: ConsoleEntry[]): string {
   return fileName;
 }
 
-export async function runHunt(
-  options: RunOptions
+async function executeHuntAttempt(
+  options: RunOptions,
+  config: ReturnType<typeof loadConfig>["config"],
+  configDir: string,
+  interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
+  redactedFillSteps: Set<number>,
+  targetUrl: string,
+  allowedDomains: string[]
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
-  const { config, configDir } = loadConfig(options.configPath);
-  const hunt = loadHunt(options.huntName, configDir);
-  const { hunt: interpolatedHunt, redactedFillSteps } = interpolateHunt(hunt, process.env);
-
-  const targetUrl = options.urlOverride ?? config.target.url;
-  const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
-
   const headless = options.headed ? false : config.browser.headless;
   const slowMo = options.slowMo ?? config.browser.slowMo;
   const maxSteps = config.guardrails.maxSteps;
-
-  if (interpolatedHunt.steps.length > maxSteps) {
-    throw new Error(`Hunt has ${interpolatedHunt.steps.length} steps. Max allowed is ${maxSteps}.`);
-  }
 
   const runDir = path.join(configDir, "runs", timestamp());
   fs.mkdirSync(runDir, { recursive: true });
 
   const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
+
+  const engine = options.browser ?? config.browser.engine;
+  const viewport = options.viewport
+    ? resolveViewport(parseViewportFlag(options.viewport))
+    : config.browser.viewport;
 
   const session = await launchBrowser({
     headless,
@@ -98,7 +108,9 @@ export async function runHunt(
     storageStatePath,
     trace: Boolean(options.trace),
     recordHar: config.artifacts.networkHar,
-    runDir
+    runDir,
+    engine,
+    viewport
   });
 
   let result: RunResult;
@@ -209,4 +221,60 @@ export async function runHunt(
   }
 
   return { result, runDir, steps: interpolatedHunt.steps };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function runHunt(
+  options: RunOptions
+): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+  const { config, configDir } = loadConfig(options.configPath);
+  const hunt = loadHunt(options.huntName, configDir);
+  const { hunt: interpolatedHunt, redactedFillSteps } = interpolateHunt(hunt, process.env);
+
+  const targetUrl = options.urlOverride ?? config.target.url;
+  const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
+  const maxSteps = config.guardrails.maxSteps;
+
+  if (interpolatedHunt.steps.length > maxSteps) {
+    throw new Error(`Hunt has ${interpolatedHunt.steps.length} steps. Max allowed is ${maxSteps}.`);
+  }
+
+  const maxRetries = hunt.retry?.maxRetries ?? 0;
+  const retryDelay = hunt.retry?.delay ?? 0;
+
+  let lastResult: { result: RunResult; runDir: string; steps: Step[] } | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0 && retryDelay > 0) {
+      await delay(retryDelay);
+    }
+
+    lastResult = await executeHuntAttempt(
+      options,
+      config,
+      configDir,
+      interpolatedHunt,
+      redactedFillSteps,
+      targetUrl,
+      allowedDomains
+    );
+
+    if (lastResult.result.status === "pass") {
+      if (attempt > 0) {
+        lastResult.result.artifacts.summary =
+          `Passed on attempt ${attempt + 1} of ${maxRetries + 1}`;
+      }
+      return lastResult;
+    }
+  }
+
+  if (maxRetries > 0 && lastResult) {
+    lastResult.result.artifacts.summary =
+      `Failed after ${maxRetries + 1} attempts`;
+  }
+
+  return lastResult!;
 }

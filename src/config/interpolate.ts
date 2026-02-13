@@ -180,6 +180,17 @@ function interpolateStep(
   if ("waitForNetworkIdle" in step) {
     return { waitForNetworkIdle: { timeout: step.waitForNetworkIdle.timeout } };
   }
+  if ("hover" in step) {
+    const selectorResult = interpolateString(step.hover.selector, vars);
+    return { hover: { selector: selectorResult.value } };
+  }
+  if ("scroll" in step) {
+    return { scroll: { direction: step.scroll.direction, amount: step.scroll.amount } };
+  }
+  if ("scrollTo" in step) {
+    const selectorResult = interpolateString(step.scrollTo.selector, vars);
+    return { scrollTo: { selector: selectorResult.value } };
+  }
   if ("screenshot" in step) {
     return { screenshot: { name: step.screenshot.name } };
   }
