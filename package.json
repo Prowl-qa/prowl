@@ -1,5 +1,5 @@
 {
-  "name": "prowlai",
+  "name": "prowlqa",
   "version": "1.0.0",
   "description": "CLI-first QA testing tool for deterministic Playwright flows.",
   "type": "module",
