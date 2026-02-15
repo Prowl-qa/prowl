@@ -29,8 +29,8 @@ vi.mock("../src/cli/mascot.js", () => ({
 }));
 
 import { buildCiCommand } from "../src/cli/commands/ci.js";
-import { printCiSummary, writeCiResult } from "../src/reporter/ci-summary.js";
-import type { CiHuntResult } from "../src/reporter/ci-summary.js";
+import { printCiSummary, writeCiResult, countCiResults, resolveCiStatus } from "../src/reporter/ci-summary.js";
+import type { CiHuntResult, CiResult } from "../src/types/index.js";
 
 function makeRunResult(huntName: string, status: "pass" | "fail") {
   return {
@@ -91,7 +91,7 @@ describe("ci command", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("prints warning and exits cleanly when no hunts found", async () => {
+  it("prints warning and exits 2 when no hunts found", async () => {
     mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue([]);
 
@@ -100,7 +100,20 @@ describe("ci command", () => {
 
     expect(mockRunHunt).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No hunts found"));
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("exits 2 when all hunts are skipped by tag filters", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow"]);
+    mockLoadHuntTags.mockReturnValue(["regression"]);
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--include-tags", "smoke"]);
+
+    expect(mockRunHunt).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("All hunts were skipped"));
+    expect(process.exitCode).toBe(2);
   });
 
   it("filters hunts with --include-tags", async () => {
@@ -137,6 +150,25 @@ describe("ci command", () => {
     expect(mockRunHunt).toHaveBeenCalledTimes(1);
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "homepage" }));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Skipped"));
+  });
+
+  it("filters hunts with combined --include-tags and --exclude-tags", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["fast-smoke", "slow-smoke", "regression"]);
+    mockLoadHuntTags
+      .mockReturnValueOnce(["smoke", "fast"])
+      .mockReturnValueOnce(["smoke", "slow"])
+      .mockReturnValueOnce(["regression"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("fast-smoke", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--include-tags", "smoke", "--exclude-tags", "slow"]);
+
+    // "fast-smoke" matches include (smoke) and doesn't match exclude → runs
+    // "slow-smoke" matches include (smoke) but also matches exclude (slow) → skipped
+    // "regression" doesn't match include (smoke) → skipped
+    expect(mockRunHunt).toHaveBeenCalledTimes(1);
+    expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "fast-smoke" }));
   });
 
   it("continues running remaining hunts when one throws", async () => {
@@ -179,9 +211,103 @@ describe("ci command", () => {
     const cmd = buildCiCommand();
     await cmd.parseAsync(["node", "prowlqa", "--url", "http://staging.example.com"]);
 
+    for (const call of mockRunHunt.mock.calls) {
+      expect(call[0]).toMatchObject({ urlOverride: "http://staging.example.com" });
+    }
+  });
+
+  it("passes --browser flag to each runHunt call", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--browser", "firefox"]);
+
     expect(mockRunHunt).toHaveBeenCalledWith(
-      expect.objectContaining({ urlOverride: "http://staging.example.com" })
+      expect.objectContaining({ browser: "firefox" })
     );
+  });
+
+  it("passes --channel flag to each runHunt call", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--channel", "chrome"]);
+
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "chrome" })
+    );
+  });
+
+  it("passes --viewport flag to each runHunt call", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--viewport", "1920x1080"]);
+
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({ viewport: "1920x1080" })
+    );
+  });
+});
+
+describe("countCiResults", () => {
+  it("counts pass, fail, and skipped results", () => {
+    const results: CiHuntResult[] = [
+      { hunt: "a", status: "pass", durationMs: 100 },
+      { hunt: "b", status: "fail", durationMs: 200 },
+      { hunt: "c", status: "skipped", durationMs: 0 },
+      { hunt: "d", status: "pass", durationMs: 150 }
+    ];
+    const counts = countCiResults(results);
+    expect(counts).toEqual({ passed: 2, failed: 1, skipped: 1 });
+  });
+
+  it("returns zeros for empty results", () => {
+    expect(countCiResults([])).toEqual({ passed: 0, failed: 0, skipped: 0 });
+  });
+});
+
+describe("resolveCiStatus", () => {
+  it("returns 'no-hunts' for empty results", () => {
+    expect(resolveCiStatus([])).toBe("no-hunts");
+  });
+
+  it("returns 'fail' when any hunt fails", () => {
+    const results: CiHuntResult[] = [
+      { hunt: "a", status: "pass", durationMs: 100 },
+      { hunt: "b", status: "fail", durationMs: 200 }
+    ];
+    expect(resolveCiStatus(results)).toBe("fail");
+  });
+
+  it("returns 'pass' when all hunts pass", () => {
+    const results: CiHuntResult[] = [
+      { hunt: "a", status: "pass", durationMs: 100 },
+      { hunt: "b", status: "pass", durationMs: 200 }
+    ];
+    expect(resolveCiStatus(results)).toBe("pass");
+  });
+
+  it("returns 'pass' when mix of pass and skipped", () => {
+    const results: CiHuntResult[] = [
+      { hunt: "a", status: "pass", durationMs: 100 },
+      { hunt: "b", status: "skipped", durationMs: 0 }
+    ];
+    expect(resolveCiStatus(results)).toBe("pass");
+  });
+
+  it("returns 'all-skipped' when every hunt is skipped", () => {
+    const results: CiHuntResult[] = [
+      { hunt: "a", status: "skipped", durationMs: 0 },
+      { hunt: "b", status: "skipped", durationMs: 0 }
+    ];
+    expect(resolveCiStatus(results)).toBe("all-skipped");
   });
 });
 
@@ -231,7 +357,7 @@ describe("writeCiResult", () => {
 
     expect(fs.existsSync(filePath)).toBe(true);
 
-    const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const content: CiResult = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     expect(content.status).toBe("fail");
     expect(content.startedAt).toBe("2026-02-15T10:30:45.000Z");
     expect(content.durationMs).toBe(1210);
@@ -240,8 +366,10 @@ describe("writeCiResult", () => {
     expect(content.failed).toBe(1);
     expect(content.skipped).toBe(1);
     expect(content.hunts).toHaveLength(3);
+    expect(content.hunts[0]).toMatchObject({ hunt: "homepage", status: "pass" });
+    expect(content.hunts[1]).toMatchObject({ hunt: "checkout", status: "fail", error: "assertion failed" });
+    expect(content.hunts[2]).toMatchObject({ hunt: "admin", status: "skipped" });
 
-    // Cleanup
     fs.rmSync(tmpDir, { recursive: true });
   });
 
@@ -255,10 +383,29 @@ describe("writeCiResult", () => {
 
     const filePath = writeCiResult(ciRunDir, results, "2026-02-15T10:30:45.000Z", 320);
 
-    const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const content: CiResult = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     expect(content.status).toBe("pass");
     expect(content.passed).toBe(1);
     expect(content.failed).toBe(0);
+
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it("writes all-skipped status when every hunt is skipped", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-ci-test-"));
+    const ciRunDir = path.join(tmpDir, "ci-run");
+
+    const results: CiHuntResult[] = [
+      { hunt: "homepage", status: "skipped", durationMs: 0 },
+      { hunt: "login", status: "skipped", durationMs: 0 }
+    ];
+
+    const filePath = writeCiResult(ciRunDir, results, "2026-02-15T10:30:45.000Z", 50);
+
+    const content: CiResult = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    expect(content.status).toBe("all-skipped");
+    expect(content.passed).toBe(0);
+    expect(content.skipped).toBe(2);
 
     fs.rmSync(tmpDir, { recursive: true });
   });

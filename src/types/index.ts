@@ -147,3 +147,24 @@ export type RunResult = {
   assertions: AssertionResult[];
   artifacts: RunArtifacts;
 };
+
+export type CiHuntResult = {
+  hunt: string;
+  status: "pass" | "fail" | "skipped";
+  durationMs: number;
+  runDir?: string;
+  error?: string;
+};
+
+export type CiStatus = "pass" | "fail" | "no-hunts" | "all-skipped";
+
+export type CiResult = {
+  status: CiStatus;
+  startedAt: string;
+  durationMs: number;
+  totalHunts: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  hunts: CiHuntResult[];
+};

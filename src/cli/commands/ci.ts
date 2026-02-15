@@ -5,16 +5,9 @@ import { runHunt } from "../../runner/index.js";
 import { loadConfig, listHunts, loadHuntTags } from "../../config/loader.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 import { resultMascot } from "../mascot.js";
-import { printCiSummary, writeCiResult } from "../../reporter/ci-summary.js";
-import type { CiHuntResult } from "../../reporter/ci-summary.js";
-
-function ciTimestamp(): string {
-  const now = new Date();
-  const pad = (value: number): string => value.toString().padStart(2, "0");
-  return `ci-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
-    now.getHours()
-  )}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-}
+import { printCiSummary, writeCiResult, resolveCiStatus } from "../../reporter/ci-summary.js";
+import { timestamp } from "../../utils/timestamp.js";
+import type { CiHuntResult } from "../../types/index.js";
 
 export function buildCiCommand(): Command {
   const command = new Command("ci")
@@ -38,6 +31,7 @@ export function buildCiCommand(): Command {
 
       if (hunts.length === 0) {
         console.log(chalk.yellow("\n  No hunts found. Create hunts in .prowlqa/hunts/\n"));
+        process.exitCode = 2;
         return;
       }
 
@@ -115,12 +109,19 @@ export function buildCiCommand(): Command {
       printCiSummary(results, totalDurationMs);
 
       // Write ci-result.json
-      const ciRunDir = path.join(configDir, "runs", ciTimestamp());
+      const ciRunDir = path.join(configDir, "runs", timestamp("ci"));
       const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs);
       console.log(`\n  CI Result: ${chalk.gray(resultPath)}\n`);
 
-      const anyFailed = results.some((r) => r.status === "fail");
-      process.exitCode = anyFailed ? 1 : 0;
+      const status = resolveCiStatus(results);
+      if (status === "fail") {
+        process.exitCode = 1;
+      } else if (status === "all-skipped") {
+        console.log(chalk.yellow("  All hunts were skipped by tag filters.\n"));
+        process.exitCode = 2;
+      } else {
+        process.exitCode = 0;
+      }
     });
 
   return command;

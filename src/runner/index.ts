@@ -7,6 +7,7 @@ import { launchBrowser, closeBrowser } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { writeReports } from "../reporter/index.js";
+import { timestamp } from "../utils/timestamp.js";
 
 export type RunOptions = {
   huntName: string;
@@ -27,14 +28,6 @@ function parseViewportFlag(value: string): string | { width: number; height: num
     return { width: Number(match[1]), height: Number(match[2]) };
   }
   return value;
-}
-
-function timestamp(): string {
-  const now = new Date();
-  const pad = (value: number): string => value.toString().padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
-    now.getHours()
-  )}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 }
 
 function resolvePath(configDir: string, inputPath: string): string {

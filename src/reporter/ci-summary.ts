@@ -1,30 +1,32 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
+import type { CiHuntResult, CiResult, CiStatus } from "../types/index.js";
 
-export type CiHuntResult = {
-  hunt: string;
-  status: "pass" | "fail" | "skipped";
-  durationMs: number;
-  runDir?: string;
-  error?: string;
-};
-
-export type CiResult = {
-  status: "pass" | "fail";
-  startedAt: string;
-  durationMs: number;
-  totalHunts: number;
+export type CiCounts = {
   passed: number;
   failed: number;
   skipped: number;
-  hunts: CiHuntResult[];
 };
 
+export function countCiResults(results: CiHuntResult[]): CiCounts {
+  return {
+    passed: results.filter((r) => r.status === "pass").length,
+    failed: results.filter((r) => r.status === "fail").length,
+    skipped: results.filter((r) => r.status === "skipped").length
+  };
+}
+
+export function resolveCiStatus(results: CiHuntResult[]): CiStatus {
+  if (results.length === 0) return "no-hunts";
+  const { failed, passed } = countCiResults(results);
+  if (failed > 0) return "fail";
+  if (passed > 0) return "pass";
+  return "all-skipped";
+}
+
 export function printCiSummary(results: CiHuntResult[], totalDurationMs: number): void {
-  const passed = results.filter((r) => r.status === "pass").length;
-  const failed = results.filter((r) => r.status === "fail").length;
-  const skipped = results.filter((r) => r.status === "skipped").length;
+  const { passed, failed, skipped } = countCiResults(results);
 
   const lineWidth = 45;
   console.log(`\n  ── CI Summary ${"─".repeat(lineWidth - 15)}`);
@@ -49,12 +51,10 @@ export function printCiSummary(results: CiHuntResult[], totalDurationMs: number)
 }
 
 export function writeCiResult(ciRunDir: string, results: CiHuntResult[], startedAt: string, totalDurationMs: number): string {
-  const passed = results.filter((r) => r.status === "pass").length;
-  const failed = results.filter((r) => r.status === "fail").length;
-  const skipped = results.filter((r) => r.status === "skipped").length;
+  const { passed, failed, skipped } = countCiResults(results);
 
   const ciResult: CiResult = {
-    status: failed > 0 ? "fail" : "pass",
+    status: resolveCiStatus(results),
     startedAt,
     durationMs: totalDurationMs,
     totalHunts: results.length,
