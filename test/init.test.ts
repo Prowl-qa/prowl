@@ -69,17 +69,21 @@ describe("prowlqa init", () => {
 
   it("shows non-destructive guidance when .prowlqa exists without --force", () => {
     runInit();
+    const originalExitCode = process.exitCode;
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    process.exitCode = undefined;
 
-    runInit();
+    try {
+      process.exitCode = undefined;
+      runInit();
 
-    expect(process.exitCode).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("without deleting existing files")
-    );
-
-    errorSpy.mockRestore();
+      expect(process.exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("without deleting existing files")
+      );
+    } finally {
+      process.exitCode = originalExitCode;
+      errorSpy.mockRestore();
+    }
   });
 
   it("--force preserves user-created files not in templates", () => {
