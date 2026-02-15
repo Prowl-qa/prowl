@@ -13,6 +13,7 @@ export const configSchema = z
         timeout: z.number().optional(),
         engine: z.enum(["chromium", "firefox", "webkit"]).optional(),
         channel: z.enum([
+          "chromium",
           "chrome", "chrome-beta", "chrome-canary", "chrome-dev",
           "msedge", "msedge-beta", "msedge-canary", "msedge-dev"
         ]).optional(),

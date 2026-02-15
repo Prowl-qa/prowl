@@ -36,7 +36,11 @@ export function buildInitCommand(): Command {
       const root = process.cwd();
       const prowlqaDir = path.join(root, ".prowlqa");
       if (fs.existsSync(prowlqaDir) && !options.force) {
-        console.error(chalk.red(".prowlqa already exists. Use --force to overwrite."));
+        console.error(
+          chalk.red(
+            ".prowlqa already exists. Run with --force to reinitialize prowlqa configuration without deleting existing files."
+          )
+        );
         process.exitCode = 1;
         return;
       }

@@ -82,4 +82,4 @@ All notable changes to ProwlQA will be documented in this file.
 - Variable interpolation with redaction of sensitive fill step values
 - Auth state capture via `prowlqa login` for authenticated test flows
 
-- Empty-string variable support with regression test
+- Empty-string variable support with regression test coverage in interpolation logic

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildInitCommand } from "../src/cli/commands/init.js";
 
 describe("prowlqa init", () => {
@@ -65,6 +65,21 @@ describe("prowlqa init", () => {
 
     runInit(["--force"]);
     expect(fs.existsSync(path.join(tempDir, ".prowlqa", ".gitignore"))).toBe(true);
+  });
+
+  it("shows non-destructive guidance when .prowlqa exists without --force", () => {
+    runInit();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = undefined;
+
+    runInit();
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("without deleting existing files")
+    );
+
+    errorSpy.mockRestore();
   });
 
   it("--force preserves user-created files not in templates", () => {

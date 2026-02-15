@@ -1,6 +1,7 @@
 export type BrowserEngine = "chromium" | "firefox" | "webkit";
 
 export type BrowserChannel =
+  | "chromium"
   | "chrome" | "chrome-beta" | "chrome-canary" | "chrome-dev"
   | "msedge" | "msedge-beta" | "msedge-canary" | "msedge-dev";
 

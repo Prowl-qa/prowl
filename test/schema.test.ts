@@ -209,6 +209,14 @@ describe("configSchema browser options", () => {
     expect(parsed.browser?.channel).toBe("msedge");
   });
 
+  it("accepts chromium browser channel", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { channel: "chromium" }
+    });
+    expect(parsed.browser?.channel).toBe("chromium");
+  });
+
   it("rejects invalid browser channel", () => {
     expect(() =>
       configSchema.parse({
