@@ -40,7 +40,7 @@ import { chromium, firefox, webkit } from "playwright";
 import { launchBrowser, closeBrowser, type BrowserOptions } from "../src/browser/controller.js";
 
 function makeOptions(overrides?: Partial<BrowserOptions>): BrowserOptions {
-  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ctrl-"));
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-ctrl-"));
   return {
     headless: true,
     slowMo: 0,

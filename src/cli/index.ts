@@ -9,7 +9,7 @@ import { buildWatchCommand } from "./commands/watch.js";
 const program = new Command();
 
 program
-  .name("prowl")
+  .name("prowlqa")
   .description("CLI-first QA testing tool for deterministic Playwright flows")
   .version("1.0.0");
 

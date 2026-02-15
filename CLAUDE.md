@@ -1,7 +1,7 @@
-# CLAUDE.md - Agent Guidelines for Prowl
+# CLAUDE.md - Agent Guidelines for ProwlQA
 
 ## Project Context
-Prowl is a CLI QA testing tool that:
+ProwlQA is a CLI QA testing tool that:
 - Executes explicit test steps (no natural language in MVP)
 - Uses Playwright for browser automation
 - Produces developer-ready artifacts and reports
@@ -24,7 +24,7 @@ Every feature or bug fix must include:
 
 Work is not considered complete until all four items are done.
 
-## Prowl Ecosystem
+## ProwlQA Ecosystem
 
 **GitHub Org**: [Prowl-qa](https://github.com/Prowl-qa)
 

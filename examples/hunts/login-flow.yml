@@ -3,14 +3,14 @@
 # Pattern: Authentication — email/password login with redirect verification
 # What it tests: Fill credentials, submit, verify redirect to dashboard.
 # Customize: Update the selectors and URL paths to match your app's login page.
-#             Store credentials in .prowl/.env and reference them with {{VAR}}.
+#             Store credentials in .prowlqa/.env and reference them with {{VAR}}.
 #
-# Tip: Use `prowl login` to capture auth state so other hunts can skip login.
+# Tip: Use `prowlqa login` to capture auth state so other hunts can skip login.
 
 name: login-flow
 description: Log in with email and password, verify redirect to dashboard
 
-# Store secrets in .prowl/.env — they'll be redacted in reports automatically.
+# Store secrets in .prowlqa/.env — they'll be redacted in reports automatically.
 # Example .env:
 #   TEST_EMAIL=user@example.com
 #   TEST_PASSWORD=secret123
@@ -21,7 +21,7 @@ vars:
 steps:
   - navigate: "/login"
 
-  # Shorthand fill — Prowl finds the input by its label or placeholder text.
+  # Shorthand fill — ProwlQA finds the input by its label or placeholder text.
   # Equivalent explicit form:
   #   fill:
   #     selector: "input[placeholder='Email']"
@@ -32,7 +32,7 @@ steps:
   - fill:
       "Password": "{{PASSWORD}}"
 
-  # Shorthand click — Prowl finds a button by its text content.
+  # Shorthand click — ProwlQA finds a button by its text content.
   # Equivalent explicit form:
   #   click:
   #     selector: "button:has-text('Sign In')"

@@ -6,7 +6,7 @@ import { listHunts } from "../src/config/loader.js";
 
 describe("listHunts", () => {
   it("lists hunt files in alphabetical order", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-list-"));
     try {
       const huntsDir = path.join(tempDir, "hunts");
       fs.mkdirSync(huntsDir, { recursive: true });
@@ -23,7 +23,7 @@ describe("listHunts", () => {
   });
 
   it("returns empty list when no hunts directory", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-list-"));
     try {
       const hunts = listHunts(tempDir);
       expect(hunts).toEqual([]);
@@ -33,7 +33,7 @@ describe("listHunts", () => {
   });
 
   it("lists hunts from subfolders with path prefix", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-list-"));
     try {
       const huntsDir = path.join(tempDir, "hunts");
       fs.mkdirSync(path.join(huntsDir, "admin"), { recursive: true });
@@ -50,7 +50,7 @@ describe("listHunts", () => {
   });
 
   it("throws when hunts path is not a directory", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-list-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-list-"));
     try {
       const huntsPath = path.join(tempDir, "hunts");
       fs.writeFileSync(huntsPath, "not a directory");

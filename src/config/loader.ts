@@ -34,14 +34,14 @@ const DEFAULT_CONFIG: Config = {
     forbiddenSelectors: ["[data-danger]", ".delete-btn"]
   },
   auth: {
-    storageStatePath: ".prowl/auth-state.json"
+    storageStatePath: ".prowlqa/auth-state.json"
   }
 };
 
 export function findConfigPath(startDir: string): string | null {
   let current = startDir;
   while (current) {
-    const candidate = path.join(current, ".prowl", "config.yml");
+    const candidate = path.join(current, ".prowlqa", "config.yml");
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -139,7 +139,7 @@ export function loadConfig(configPath?: string): {
     : findConfigPath(process.cwd());
 
   if (!resolvedPath) {
-    throw new Error("Could not find .prowl/config.yml. Run `prowl init` first.");
+    throw new Error("Could not find .prowlqa/config.yml. Run `prowlqa init` first.");
   }
 
   if (!fs.existsSync(resolvedPath)) {

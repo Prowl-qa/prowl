@@ -3,11 +3,11 @@ import { createDebouncer, getWatchTargets } from "../src/cli/watch-utils.js";
 
 describe("getWatchTargets", () => {
   it("returns hunt, config, and env paths", () => {
-    const targets = getWatchTargets("/tmp/project/.prowl", "login");
+    const targets = getWatchTargets("/tmp/project/.prowlqa", "login");
     expect(targets).toEqual([
-      "/tmp/project/.prowl/hunts/login.yml",
-      "/tmp/project/.prowl/config.yml",
-      "/tmp/project/.prowl/.env"
+      "/tmp/project/.prowlqa/hunts/login.yml",
+      "/tmp/project/.prowlqa/config.yml",
+      "/tmp/project/.prowlqa/.env"
     ]);
   });
 });
