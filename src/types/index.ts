@@ -1,5 +1,10 @@
 export type BrowserEngine = "chromium" | "firefox" | "webkit";
 
+export type BrowserChannel =
+  | "chromium"
+  | "chrome" | "chrome-beta" | "chrome-canary" | "chrome-dev"
+  | "msedge" | "msedge-beta" | "msedge-canary" | "msedge-dev";
+
 export type Viewport = {
   width: number;
   height: number;
@@ -14,6 +19,7 @@ export type Config = {
     slowMo: number;
     timeout: number;
     engine: BrowserEngine;
+    channel?: BrowserChannel;
     viewport: Viewport;
   };
   artifacts: {
@@ -141,4 +147,25 @@ export type RunResult = {
   steps: StepResult[];
   assertions: AssertionResult[];
   artifacts: RunArtifacts;
+};
+
+export type CiHuntResult = {
+  hunt: string;
+  status: "pass" | "fail" | "skipped";
+  durationMs: number;
+  runDir?: string;
+  error?: string;
+};
+
+export type CiStatus = "pass" | "fail" | "no-hunts" | "all-skipped";
+
+export type CiResult = {
+  status: CiStatus;
+  startedAt: string;
+  durationMs: number;
+  totalHunts: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  hunts: CiHuntResult[];
 };

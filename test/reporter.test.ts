@@ -23,7 +23,7 @@ function makeResult(overrides?: Partial<RunResult>): RunResult {
 
 describe("reporter", () => {
   it("writes summary and result files", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-report-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-report-"));
     try {
       const result = makeResult();
 
@@ -40,7 +40,7 @@ describe("reporter", () => {
 
 describe("writeSummary content", () => {
   it("includes status, hunt, target, and duration", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-summary-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-summary-"));
     try {
       const result = makeResult({ hunt: "login-flow", targetUrl: "http://example.com", durationMs: 5000 });
       writeSummary(runDir, result);
@@ -56,7 +56,7 @@ describe("writeSummary content", () => {
   });
 
   it("formats steps with status, type, and duration", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-summary-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-summary-"));
     try {
       const result = makeResult({
         steps: [
@@ -75,7 +75,7 @@ describe("writeSummary content", () => {
   });
 
   it("formats assertions with status and value", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-summary-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-summary-"));
     try {
       const result = makeResult({
         assertions: [
@@ -94,7 +94,7 @@ describe("writeSummary content", () => {
   });
 
   it("includes artifact paths", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-summary-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-summary-"));
     try {
       const result = makeResult({
         artifacts: {
@@ -119,7 +119,7 @@ describe("writeSummary content", () => {
   });
 
   it("handles empty steps and assertions", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-summary-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-summary-"));
     try {
       const result = makeResult({ steps: [], assertions: [] });
       writeSummary(runDir, result);
@@ -137,7 +137,7 @@ describe("writeSummary content", () => {
 
 describe("markdown escaping", () => {
   it("escapes markdown special characters in step values and errors", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-escape-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-escape-"));
     try {
       const result = makeResult({
         steps: [
@@ -162,7 +162,7 @@ describe("markdown escaping", () => {
 
 describe("writeResult content", () => {
   it("writes valid JSON matching the RunResult structure", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-result-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-result-"));
     try {
       const result = makeResult({
         status: "fail",

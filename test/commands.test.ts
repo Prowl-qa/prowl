@@ -60,11 +60,11 @@ describe("run command", () => {
         assertions: [],
         artifacts: {}
       },
-      runDir: "/tmp/prowl/runs/test"
+      runDir: "/tmp/prowlqa/runs/test"
     });
 
     const cmd = buildRunCommand();
-    await cmd.parseAsync(["node", "prowl", "homepage", "--url", "http://example.com"]);
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--url", "http://example.com"]);
 
     expect(mockRunHunt).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -75,29 +75,29 @@ describe("run command", () => {
   });
 
   it("skips hunt when include-tags do not match", async () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockLoadHuntTags.mockReturnValue(["smoke"]);
 
     const cmd = buildRunCommand();
-    await cmd.parseAsync(["node", "prowl", "homepage", "--include-tags", "regression"]);
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--include-tags", "regression"]);
 
     expect(mockRunHunt).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Skipped"));
   });
 
   it("skips hunt when exclude-tags match", async () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockLoadHuntTags.mockReturnValue(["slow", "regression"]);
 
     const cmd = buildRunCommand();
-    await cmd.parseAsync(["node", "prowl", "homepage", "--exclude-tags", "slow"]);
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--exclude-tags", "slow"]);
 
     expect(mockRunHunt).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Skipped"));
   });
 
   it("runs hunt when include-tags match", async () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockLoadHuntTags.mockReturnValue(["smoke", "fast"]);
     mockRunHunt.mockResolvedValue({
       result: {
@@ -108,13 +108,36 @@ describe("run command", () => {
         assertions: [],
         artifacts: {}
       },
-      runDir: "/tmp/prowl/runs/test"
+      runDir: "/tmp/prowlqa/runs/test"
     });
 
     const cmd = buildRunCommand();
-    await cmd.parseAsync(["node", "prowl", "homepage", "--include-tags", "smoke"]);
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--include-tags", "smoke"]);
 
     expect(mockRunHunt).toHaveBeenCalled();
+  });
+
+  it("passes --channel flag to runHunt", async () => {
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowlqa/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--channel", "chrome"]);
+
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "chrome"
+      })
+    );
   });
 
   it("sets process.exitCode on failure", async () => {
@@ -127,11 +150,11 @@ describe("run command", () => {
         assertions: [],
         artifacts: {}
       },
-      runDir: "/tmp/prowl/runs/test"
+      runDir: "/tmp/prowlqa/runs/test"
     });
 
     const cmd = buildRunCommand();
-    await cmd.parseAsync(["node", "prowl", "homepage"]);
+    await cmd.parseAsync(["node", "prowlqa", "homepage"]);
 
     expect(process.exitCode).toBe(1);
   });
@@ -153,7 +176,7 @@ describe("list command", () => {
   });
 
   it("lists hunts with description and tags", () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockLoadHuntMeta.mockImplementation((name: string) => {
       if (name === "homepage") return { description: "Basic page load test", tags: ["smoke"] };
@@ -171,7 +194,7 @@ describe("list command", () => {
   });
 
   it("outputs valid JSON with --json flag", () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockLoadHuntMeta.mockImplementation((name: string) => {
       if (name === "homepage") return { description: "Basic page load test", tags: ["smoke"] };
@@ -179,7 +202,7 @@ describe("list command", () => {
     });
 
     const cmd = buildListCommand();
-    cmd.parse(["node", "prowl", "--json"]);
+    cmd.parse(["node", "prowlqa", "--json"]);
 
     const output = logSpy.mock.calls[0][0];
     const parsed = JSON.parse(output);
@@ -190,7 +213,7 @@ describe("list command", () => {
   });
 
   it("shows message when no hunts found", () => {
-    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue([]);
 
     const cmd = buildListCommand();

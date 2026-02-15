@@ -55,7 +55,7 @@ function defaultConfig() {
     artifacts: { screenshots: "on-failure", networkHar: false, console: true },
     assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000, networkIgnorePatterns: [] },
     guardrails: { maxSteps: 50, allowedDomains: ["localhost"], forbiddenSelectors: [] },
-    auth: { storageStatePath: ".prowl/auth-state.json" }
+    auth: { storageStatePath: ".prowlqa/auth-state.json" }
   };
 }
 
@@ -80,7 +80,7 @@ function setupMocks(overrides?: {
   huntRetry?: { maxRetries: number; delay?: number };
 }) {
   const config = defaultConfig();
-  const configDir = "/tmp/prowl-test-runner/.prowl";
+  const configDir = "/tmp/prowlqa-test-runner/.prowlqa";
 
   mockLoadConfig.mockReturnValue({ config, configDir, configPath: `${configDir}/config.yml` });
   mockLoadHunt.mockReturnValue({

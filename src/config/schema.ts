@@ -12,6 +12,11 @@ export const configSchema = z
         slowMo: z.number().optional(),
         timeout: z.number().optional(),
         engine: z.enum(["chromium", "firefox", "webkit"]).optional(),
+        channel: z.enum([
+          "chromium",
+          "chrome", "chrome-beta", "chrome-canary", "chrome-dev",
+          "msedge", "msedge-beta", "msedge-canary", "msedge-dev"
+        ]).optional(),
         viewport: z
           .union([
             z.enum(["mobile", "tablet", "desktop"]),

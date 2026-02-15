@@ -1,13 +1,13 @@
-# Prowl
+# ProwlQA
 
 CLI-first QA testing tool for deterministic web testing with Playwright.
 
-<!-- ILLUSTRATION: Prowl raccoon mascot hero image — cyan raccoon with terminal window showing pass/fail output -->
+<!-- ILLUSTRATION: ProwlQA raccoon mascot hero image — cyan raccoon with terminal window showing pass/fail output -->
 
 Write tests in YAML. Run them from the terminal. Get screenshots, traces, and reports automatically.
 
 ```yaml
-# .prowl/hunts/login-flow.yml
+# .prowlqa/hunts/login-flow.yml
 name: login-flow
 steps:
   - navigate: "/login"
@@ -29,7 +29,7 @@ steps:
     ✓ assert visible "Dashboard" (15ms)
 
   PASS login-flow (622ms) 5/5 steps
-  Artifacts: .prowl/runs/2026-02-09_10-30-45
+  Artifacts: .prowlqa/runs/2026-02-09_10-30-45
 ```
 
 ---
@@ -39,10 +39,10 @@ steps:
 ### 1. Install
 
 ```bash
-npm install -g prowlai
+npm install -g prowlqa
 ```
 
-Prowl uses Playwright under the hood. Install the browser:
+ProwlQA uses Playwright under the hood. Install the browser:
 
 ```bash
 npx playwright install chromium
@@ -52,15 +52,15 @@ npx playwright install chromium
 
 ```bash
 cd your-project
-prowl init
+prowlqa init
 ```
 
-<!-- ILLUSTRATION: Terminal screenshot showing `prowl init` output with raccoon mascot and file listing -->
+<!-- ILLUSTRATION: Terminal screenshot showing `prowlqa init` output with raccoon mascot and file listing -->
 
-This creates a `.prowl/` directory with a config file and 8 example hunts:
+This creates a `.prowlqa/` directory with a config file and 8 example hunts:
 
 ```
-.prowl/
+.prowlqa/
 ├── config.yml              # Target URL, browser settings, guardrails
 └── hunts/
     ├── homepage.yml         # Basic page load smoke test
@@ -75,7 +75,7 @@ This creates a `.prowl/` directory with a config file and 8 example hunts:
 
 ### 3. Configure
 
-Edit `.prowl/config.yml` to point at your app:
+Edit `.prowlqa/config.yml` to point at your app:
 
 ```yaml
 target:
@@ -84,7 +84,7 @@ target:
 
 ### 4. Write Your First Hunt
 
-Edit `.prowl/hunts/homepage.yml` or create a new file:
+Edit `.prowlqa/hunts/homepage.yml` or create a new file:
 
 ```yaml
 name: smoke-test
@@ -100,7 +100,7 @@ assertions:
 ### 5. Run
 
 ```bash
-prowl run smoke-test
+prowlqa run smoke-test
 ```
 
 <!-- ILLUSTRATION: Terminal screenshot showing colorized pass/fail output with step timings -->
@@ -111,7 +111,7 @@ That's it. You're testing.
 
 ## Step Type Reference
 
-Prowl supports both **shorthand** and **explicit** syntax for most step types. Shorthand is concise and readable. Explicit gives you full control over selectors.
+ProwlQA supports both **shorthand** and **explicit** syntax for most step types. Shorthand is concise and readable. Explicit gives you full control over selectors.
 
 ### navigate
 
@@ -258,7 +258,7 @@ Handle browser-native dialogs (alert, confirm, prompt). Register the handler **b
 
 ### setInputFiles
 
-Set files on `<input type="file">` elements. Paths are relative to `.prowl/`.
+Set files on `<input type="file">` elements. Paths are relative to `.prowlqa/`.
 
 ```yaml
 # Single file
@@ -338,7 +338,7 @@ assertions:
 
 ## Config Reference
 
-Config lives at `.prowl/config.yml`. All options with defaults:
+Config lives at `.prowlqa/config.yml`. All options with defaults:
 
 ```yaml
 # The base URL for all hunt navigation
@@ -374,9 +374,9 @@ guardrails:
     - "[data-danger]"
     - ".delete-btn"
 
-# Auth state from `prowl login`
+# Auth state from `prowlqa login`
 auth:
-  storageStatePath: ".prowl/auth-state.json"
+  storageStatePath: ".prowlqa/auth-state.json"
 ```
 
 <!-- ILLUSTRATION: Annotated diagram showing each config section's purpose and how it maps to runtime behavior -->
@@ -391,10 +391,10 @@ Use `{{VAR_NAME}}` to inject dynamic values into your hunts.
 
 1. **Hunt vars** — defined in the hunt's `vars:` block (highest priority)
 2. **Environment variables** — from `process.env`
-3. **`.env` file** — from `.prowl/.env` (loaded automatically)
+3. **`.env` file** — from `.prowlqa/.env` (loaded automatically)
 
 ```yaml
-# .prowl/hunts/login-flow.yml
+# .prowlqa/hunts/login-flow.yml
 vars:
   EMAIL: "{{TEST_EMAIL}}"     # References env var TEST_EMAIL
   TIMEOUT: "5000"             # Static value
@@ -406,7 +406,7 @@ steps:
 
 ### .env File
 
-Create `.prowl/.env` for secrets:
+Create `.prowlqa/.env` for secrets:
 
 ```env
 TEST_EMAIL=user@example.com
@@ -443,7 +443,7 @@ Every shorthand has an explicit equivalent. Use shorthand for readability, expli
 
 ## Selector Best Practices
 
-Prowl uses Playwright's selector engine. For stable, maintainable selectors:
+ProwlQA uses Playwright's selector engine. For stable, maintainable selectors:
 
 1. **`data-testid`** (best) — explicit test hooks that don't change with UI refactors
    ```yaml
@@ -455,7 +455,7 @@ Prowl uses Playwright's selector engine. For stable, maintainable selectors:
    - click: { selector: "role=button[name='Submit']" }
    ```
 
-3. **Labels/placeholders** — via shorthand, Prowl resolves these automatically
+3. **Labels/placeholders** — via shorthand, ProwlQA resolves these automatically
    ```yaml
    - fill: { "Email": "user@test.com" }
    ```
@@ -474,15 +474,15 @@ Prowl uses Playwright's selector engine. For stable, maintainable selectors:
 
 ## Auth Setup
 
-For hunts that require authentication, use `prowl login` to capture browser state:
+For hunts that require authentication, use `prowlqa login` to capture browser state:
 
 ```bash
-prowl login
+prowlqa login
 ```
 
-This opens a headed Chromium window. Log in manually, then close the browser. Prowl saves cookies, localStorage, and sessionStorage to `.prowl/auth-state.json`.
+This opens a headed Chromium window. Log in manually, then close the browser. ProwlQA saves cookies, localStorage, and sessionStorage to `.prowlqa/auth-state.json`.
 
-All subsequent `prowl run` commands will load this auth state, so your hunts start already logged in.
+All subsequent `prowlqa run` commands will load this auth state, so your hunts start already logged in.
 
 ### Using Auth State in Hunts
 
@@ -490,21 +490,21 @@ No changes needed — auth state is loaded automatically from the path in `confi
 
 ```yaml
 auth:
-  storageStatePath: ".prowl/auth-state.json"
+  storageStatePath: ".prowlqa/auth-state.json"
 ```
 
 ### Refreshing Auth
 
-If your session expires, run `prowl login` again to re-capture.
+If your session expires, run `prowlqa login` again to re-capture.
 
 ---
 
 ## Artifacts
 
-Every hunt run generates artifacts in `.prowl/runs/<timestamp>/`:
+Every hunt run generates artifacts in `.prowlqa/runs/<timestamp>/`:
 
 ```
-.prowl/runs/2026-02-09_10-30-45/
+.prowlqa/runs/2026-02-09_10-30-45/
 ├── summary.md           # Human-readable report
 ├── result.json          # Machine-readable results
 ├── console.log          # Browser console output
@@ -520,7 +520,7 @@ Every hunt run generates artifacts in `.prowl/runs/<timestamp>/`:
 ### Viewing Traces
 
 ```bash
-npx playwright show-trace .prowl/runs/2026-02-09_10-30-45/trace.zip
+npx playwright show-trace .prowlqa/runs/2026-02-09_10-30-45/trace.zip
 ```
 
 ---
@@ -529,25 +529,25 @@ npx playwright show-trace .prowl/runs/2026-02-09_10-30-45/trace.zip
 
 ```bash
 # Run a hunt
-prowl run <hunt-name>
-prowl run <hunt-name> --headed          # Show browser window
-prowl run <hunt-name> --trace           # Capture Playwright trace
-prowl run <hunt-name> --slow-mo 500     # Slow down actions (ms)
-prowl run <hunt-name> --url <override>  # Override target URL
-prowl run <hunt-name> --config <path>   # Custom config path
+prowlqa run <hunt-name>
+prowlqa run <hunt-name> --headed          # Show browser window
+prowlqa run <hunt-name> --trace           # Capture Playwright trace
+prowlqa run <hunt-name> --slow-mo 500     # Slow down actions (ms)
+prowlqa run <hunt-name> --url <override>  # Override target URL
+prowlqa run <hunt-name> --config <path>   # Custom config path
 
 # Watch mode — re-runs on file changes
-prowl watch <hunt-name>
+prowlqa watch <hunt-name>
 
 # Auth — capture login state interactively
-prowl login
+prowlqa login
 
-# Initialize — create .prowl directory with examples
-prowl init
-prowl init --force                      # Overwrite existing
+# Initialize — create .prowlqa directory with examples
+prowlqa init
+prowlqa init --force                      # Overwrite existing
 
 # List available hunts
-prowl list
+prowlqa list
 ```
 
 ---
@@ -592,9 +592,9 @@ Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS
 
 ## Troubleshooting
 
-### "Could not find .prowl/config.yml"
+### "Could not find .prowlqa/config.yml"
 
-Run `prowl init` in your project root to create the `.prowl/` directory.
+Run `prowlqa init` in your project root to create the `.prowlqa/` directory.
 
 ### "Navigation to disallowed domain"
 
@@ -615,7 +615,7 @@ The selector matches a pattern in `guardrails.forbiddenSelectors`. Either change
 
 The `{{VAR_NAME}}` in your hunt couldn't be resolved. Check:
 1. Is it defined in the hunt's `vars:` block?
-2. Is it set in your `.prowl/.env` file?
+2. Is it set in your `.prowlqa/.env` file?
 3. Is it set as an environment variable?
 
 ### Selectors not finding elements

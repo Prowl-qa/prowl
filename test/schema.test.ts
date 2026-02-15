@@ -192,4 +192,37 @@ describe("configSchema browser options", () => {
       })
     ).toThrow();
   });
+
+  it("accepts valid browser channel", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { channel: "chrome" }
+    });
+    expect(parsed.browser?.channel).toBe("chrome");
+  });
+
+  it("accepts msedge browser channel", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { channel: "msedge" }
+    });
+    expect(parsed.browser?.channel).toBe("msedge");
+  });
+
+  it("accepts chromium browser channel", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      browser: { channel: "chromium" }
+    });
+    expect(parsed.browser?.channel).toBe("chromium");
+  });
+
+  it("rejects invalid browser channel", () => {
+    expect(() =>
+      configSchema.parse({
+        target: { url: "http://localhost" },
+        browser: { channel: "safari" }
+      })
+    ).toThrow();
+  });
 });

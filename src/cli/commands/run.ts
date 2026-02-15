@@ -13,6 +13,7 @@ export function buildRunCommand(): Command {
     .option("--slow-mo <ms>", "Slow down Playwright actions", (value) => Number(value))
     .option("--trace", "Capture Playwright trace")
     .option("--browser <engine>", "Browser engine: chromium, firefox, or webkit")
+    .option("--channel <name>", "Browser channel: chrome, msedge, chrome-beta, etc.")
     .option("--viewport <size>", "Viewport size: WxH (e.g. 1920x1080) or preset (mobile, tablet, desktop)")
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
@@ -48,6 +49,7 @@ export function buildRunCommand(): Command {
           slowMo: Number.isFinite(options.slowMo) ? options.slowMo : undefined,
           trace: Boolean(options.trace),
           browser: options.browser,
+          channel: options.channel,
           viewport: options.viewport,
           configPath: options.config,
           onStep(stepResult, step, index) {

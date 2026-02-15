@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
 import dotenv from "dotenv";
-import type { BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
+import type { BrowserChannel, BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
 import { assertValidHuntName } from "./hunt-name.js";
 
@@ -34,14 +34,14 @@ const DEFAULT_CONFIG: Config = {
     forbiddenSelectors: ["[data-danger]", ".delete-btn"]
   },
   auth: {
-    storageStatePath: ".prowl/auth-state.json"
+    storageStatePath: ".prowlqa/auth-state.json"
   }
 };
 
 export function findConfigPath(startDir: string): string | null {
   let current = startDir;
   while (current) {
-    const candidate = path.join(current, ".prowl", "config.yml");
+    const candidate = path.join(current, ".prowlqa", "config.yml");
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -86,6 +86,7 @@ function mergeConfig(partial: Partial<Config>): Config {
       slowMo: partial.browser?.slowMo ?? DEFAULT_CONFIG.browser.slowMo,
       timeout: partial.browser?.timeout ?? DEFAULT_CONFIG.browser.timeout,
       engine: (partial.browser as { engine?: BrowserEngine } | undefined)?.engine ?? DEFAULT_CONFIG.browser.engine,
+      channel: (partial.browser as { channel?: BrowserChannel } | undefined)?.channel,
       viewport: resolveViewport((partial.browser as { viewport?: string | Viewport } | undefined)?.viewport)
     },
     artifacts: {
@@ -138,7 +139,7 @@ export function loadConfig(configPath?: string): {
     : findConfigPath(process.cwd());
 
   if (!resolvedPath) {
-    throw new Error("Could not find .prowl/config.yml. Run `prowl init` first.");
+    throw new Error("Could not find .prowlqa/config.yml. Run `prowlqa init` first.");
   }
 
   if (!fs.existsSync(resolvedPath)) {

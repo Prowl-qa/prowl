@@ -14,7 +14,7 @@ const baseConfig: Config = {
     networkIgnorePatterns: []
   },
   guardrails: { maxSteps: 50, allowedDomains: ["example.com"], forbiddenSelectors: [] },
-  auth: { storageStatePath: ".prowl/auth-state.json" }
+  auth: { storageStatePath: ".prowlqa/auth-state.json" }
 };
 
 function createMockPage() {

@@ -7,6 +7,7 @@ import { launchBrowser, closeBrowser } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { writeReports } from "../reporter/index.js";
+import { timestamp } from "../utils/timestamp.js";
 
 export type RunOptions = {
   huntName: string;
@@ -17,6 +18,7 @@ export type RunOptions = {
   configPath?: string;
   onStep?: StepCallback;
   browser?: "chromium" | "firefox" | "webkit";
+  channel?: string;
   viewport?: string;
 };
 
@@ -26,14 +28,6 @@ function parseViewportFlag(value: string): string | { width: number; height: num
     return { width: Number(match[1]), height: Number(match[2]) };
   }
   return value;
-}
-
-function timestamp(): string {
-  const now = new Date();
-  const pad = (value: number): string => value.toString().padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(
-    now.getHours()
-  )}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 }
 
 function resolvePath(configDir: string, inputPath: string): string {
@@ -97,6 +91,7 @@ async function executeHuntAttempt(
   const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
 
   const engine = options.browser ?? config.browser.engine;
+  const channel = options.channel ?? config.browser.channel;
   const viewport = options.viewport
     ? resolveViewport(parseViewportFlag(options.viewport))
     : config.browser.viewport;
@@ -110,6 +105,7 @@ async function executeHuntAttempt(
     recordHar: config.artifacts.networkHar,
     runDir,
     engine,
+    channel,
     viewport
   });
 

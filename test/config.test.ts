@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { ensureAllowedDomain, loadConfig, loadHunt } from "../src/config/loader.js";
 
 function setupTempProject(): string {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-"));
-  const prowlDir = path.join(tmpDir, ".prowl");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-"));
+  const prowlDir = path.join(tmpDir, ".prowlqa");
   fs.mkdirSync(path.join(prowlDir, "hunts"), { recursive: true });
 
   fs.writeFileSync(
@@ -70,7 +70,7 @@ describe("loadHunt", () => {
     const cwd = process.cwd();
     process.chdir(project);
 
-    const prowlDir = path.join(project, ".prowl");
+    const prowlDir = path.join(project, ".prowlqa");
     fs.mkdirSync(path.join(prowlDir, "hunts", "admin"), { recursive: true });
     fs.writeFileSync(
       path.join(prowlDir, "hunts", "admin", "users-crud.yml"),

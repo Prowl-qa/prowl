@@ -22,7 +22,7 @@ function formatAssertion(assertion: AssertionResult): string {
 
 export function writeSummary(runDir: string, result: RunResult): string {
   const lines: string[] = [];
-  lines.push("# Prowl Run Summary");
+  lines.push("# ProwlQA Run Summary");
   lines.push("");
   lines.push(`Status: ${result.status.toUpperCase()}`);
   lines.push(`Hunt: ${result.hunt}`);

@@ -5,7 +5,7 @@
 # Customize: Update product names, form fields, and confirmation text for your store.
 #
 # Tip: For payment forms in iframes (like Stripe), you may need explicit selectors
-#      targeting the iframe content. Prowl's Playwright engine handles iframes natively.
+#      targeting the iframe content. ProwlQA's Playwright engine handles iframes natively.
 
 name: checkout-flow
 description: Browse products, add to cart, complete checkout
