@@ -30,15 +30,17 @@ vi.mock("../src/cli/mascot.js", () => ({
 
 import { buildCiCommand } from "../src/cli/commands/ci.js";
 import { printCiSummary, writeCiResult, countCiResults, resolveCiStatus } from "../src/reporter/ci-summary.js";
-import type { CiHuntResult, CiResult } from "../src/types/index.js";
+import type { CiHuntResult, CiResult, RunResult } from "../src/types/index.js";
 
-function makeRunResult(huntName: string, status: "pass" | "fail") {
+function makeRunResult(huntName: string, status: "pass" | "fail"): { result: RunResult; runDir: string } {
   return {
     result: {
       status,
       exitCode: status === "pass" ? 0 : 1,
       hunt: huntName,
       durationMs: 100,
+      startedAt: new Date().toISOString(),
+      targetUrl: "http://localhost:3000",
       steps: [],
       assertions: [],
       artifacts: {}
