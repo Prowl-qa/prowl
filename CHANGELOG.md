@@ -5,6 +5,7 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `prowlqa ci` command: run all hunts sequentially with combined pass/fail exit code, CI summary table, `ci-result.json` output, and `--include-tags`/`--exclude-tags` filtering (P2-001)
 - Test coverage: CLI output formatting tests for all 19 step types and `truncate()` edge cases (P1.7-004)
 - Test coverage: Reporter content validation — markdown content sections, JSON structure, and edge cases (P1.7-005)
 - Test coverage: Browser lifecycle tests — engine selection, storage state, trace, HAR, viewport, timeouts (P1.7-002)
