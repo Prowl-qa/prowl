@@ -26,6 +26,7 @@ export type Config = {
     screenshots: "on-failure" | "all";
     networkHar: boolean;
     console: boolean;
+    junit: boolean;
   };
   assertions: {
     noConsoleErrors: boolean;
@@ -135,6 +136,7 @@ export type RunArtifacts = {
   console?: string;
   trace?: string;
   networkHar?: string;
+  junit?: string;
 };
 
 export type RunResult = {

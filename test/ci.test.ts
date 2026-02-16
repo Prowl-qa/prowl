@@ -257,6 +257,21 @@ describe("ci command", () => {
     );
   });
 
+  it("passes --junit flag to each runHunt call", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--junit"]);
+
+    for (const call of mockRunHunt.mock.calls) {
+      expect(call[0]).toMatchObject({ junit: true });
+    }
+  });
+
   it("outputs valid JSON with --json flag", async () => {
     mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);

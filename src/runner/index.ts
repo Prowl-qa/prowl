@@ -20,6 +20,7 @@ export type RunOptions = {
   browser?: "chromium" | "firefox" | "webkit";
   channel?: BrowserChannel;
   viewport?: string;
+  junit?: boolean;
 };
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
@@ -211,7 +212,7 @@ async function executeHuntAttempt(
       artifacts
     });
 
-    result = writeReports(runDir, runResult);
+    result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
   } finally {
     await closeBrowser(session);
   }

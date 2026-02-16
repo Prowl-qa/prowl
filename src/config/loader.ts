@@ -20,7 +20,8 @@ const DEFAULT_CONFIG: Config = {
   artifacts: {
     screenshots: "on-failure",
     networkHar: false,
-    console: true
+    console: true,
+    junit: false
   },
   assertions: {
     noConsoleErrors: true,
@@ -92,7 +93,8 @@ function mergeConfig(partial: Partial<Config>): Config {
     artifacts: {
       screenshots: partial.artifacts?.screenshots ?? DEFAULT_CONFIG.artifacts.screenshots,
       networkHar: partial.artifacts?.networkHar ?? DEFAULT_CONFIG.artifacts.networkHar,
-      console: partial.artifacts?.console ?? DEFAULT_CONFIG.artifacts.console
+      console: partial.artifacts?.console ?? DEFAULT_CONFIG.artifacts.console,
+      junit: partial.artifacts?.junit ?? DEFAULT_CONFIG.artifacts.junit
     },
     assertions: {
       noConsoleErrors:

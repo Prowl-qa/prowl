@@ -5,6 +5,7 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- JUnit XML report: `artifacts.junit: true` config option and `--junit` CLI flag generate `junit.xml` per hunt run, compatible with GitHub Actions, Jenkins, and GitLab CI (P2-004)
 - Library API: public programmatic exports (`runHunt`, `listHunts`, `loadHunt`, `loadConfig`, schemas) for Node.js integration (P2-010)
 - `prowlqa run --json`: machine-readable JSON output for agent and CI consumption (P2-011)
 - `prowlqa ci --json`: machine-readable JSON output of CI results (P2-009)

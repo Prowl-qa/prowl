@@ -52,7 +52,7 @@ function defaultConfig() {
   return {
     target: { url: "http://localhost:3000" },
     browser: { headless: true, slowMo: 0, timeout: 30000, engine: "chromium", viewport: { width: 1280, height: 720 } },
-    artifacts: { screenshots: "on-failure", networkHar: false, console: true },
+    artifacts: { screenshots: "on-failure", networkHar: false, console: true, junit: false },
     assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000, networkIgnorePatterns: [] },
     guardrails: { maxSteps: 50, allowedDomains: ["localhost"], forbiddenSelectors: [] },
     auth: { storageStatePath: ".prowlqa/auth-state.json" }
@@ -287,6 +287,32 @@ describe("runHunt", () => {
 
     expect(mockExecuteSteps).toHaveBeenCalledWith(
       expect.objectContaining({ onStep })
+    );
+  });
+
+  it("uses config junit setting when options.junit is undefined", async () => {
+    const { config } = setupMocks();
+    config.artifacts.junit = true;
+
+    await runHunt({ huntName: "test-hunt" });
+
+    expect(mockWriteReports).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.objectContaining({ junit: true })
+    );
+  });
+
+  it("uses explicit options.junit false instead of config junit true", async () => {
+    const { config } = setupMocks();
+    config.artifacts.junit = true;
+
+    await runHunt({ huntName: "test-hunt", junit: false });
+
+    expect(mockWriteReports).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.objectContaining({ junit: false })
     );
   });
 });

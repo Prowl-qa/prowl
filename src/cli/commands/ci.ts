@@ -20,6 +20,7 @@ export function buildCiCommand(): Command {
     .option("--browser <engine>", "Browser engine: chromium, firefox, or webkit")
     .option("--channel <name>", "Browser channel: chrome, msedge, chrome-beta, etc.")
     .option("--viewport <size>", "Viewport size: WxH (e.g. 1920x1080) or preset (mobile, tablet, desktop)")
+    .option("--junit", "Generate JUnit XML reports")
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
     .option("--json", "Output results as JSON")
@@ -96,6 +97,7 @@ export function buildCiCommand(): Command {
             browser: options.browser,
             channel: options.channel,
             viewport: options.viewport,
+            junit: Boolean(options.junit),
             configPath: options.config,
             onStep: options.json
               ? undefined

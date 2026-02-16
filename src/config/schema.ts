@@ -29,7 +29,8 @@ export const configSchema = z
       .object({
         screenshots: z.enum(["on-failure", "all"]).optional(),
         networkHar: z.boolean().optional(),
-        console: z.boolean().optional()
+        console: z.boolean().optional(),
+        junit: z.boolean().optional()
       })
       .optional(),
     assertions: z
