@@ -17,6 +17,7 @@ export function buildRunCommand(): Command {
     .option("--viewport <size>", "Viewport size: WxH (e.g. 1920x1080) or preset (mobile, tablet, desktop)")
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
+    .option("--junit", "Generate JUnit XML report")
     .option("--config <path>", "Custom config path")
     .option("--json", "Output results as JSON")
     .action(async (huntName, options) => {
@@ -62,6 +63,7 @@ export function buildRunCommand(): Command {
           browser: options.browser,
           channel: options.channel,
           viewport: options.viewport,
+          junit: Boolean(options.junit),
           configPath: options.config,
           onStep: options.json
             ? undefined

@@ -226,3 +226,21 @@ describe("configSchema browser options", () => {
     ).toThrow();
   });
 });
+
+describe("configSchema artifacts options", () => {
+  it("accepts artifacts.junit boolean", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      artifacts: { junit: true }
+    });
+    expect(parsed.artifacts?.junit).toBe(true);
+  });
+
+  it("accepts artifacts.junit as false", () => {
+    const parsed = configSchema.parse({
+      target: { url: "http://localhost" },
+      artifacts: { junit: false }
+    });
+    expect(parsed.artifacts?.junit).toBe(false);
+  });
+});
