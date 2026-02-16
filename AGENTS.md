@@ -36,8 +36,6 @@ Steps:
 3. When prompted for a commit message, enter a concise description of what was added/removed/updated.
 4. Ensure the push to the current branch succeeds.
 
-Keep commits atomic: commit only the files you touched and list each path explicitly. For tracked files run `git commit -m "<scoped message>" -- path/to/file1 path/to/file2`. For brand-new files, use the one-liner `git restore --staged :/ && git add "path/to/file1" "path/to/file2" && git commit -m "<scoped message>" -- path/to/file1 path/to/file2`
-
 ## Quality Gates (Before Each Commit)
 - Run linting.
 - Create unit tests for each piece of functionality you build.
