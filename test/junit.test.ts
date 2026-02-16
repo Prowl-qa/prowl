@@ -129,6 +129,46 @@ describe("writeJunit", () => {
     }
   });
 
+  it("includes fallback failure text for failed step without error", () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    try {
+      const result = makeResult({
+        status: "fail",
+        exitCode: 1,
+        steps: [
+          { type: "click <bad>", status: "fail", durationMs: 50 }
+        ]
+      });
+      writeJunit(runDir, result);
+      const content = fs.readFileSync(path.join(runDir, "junit.xml"), "utf-8");
+
+      expect(content).toContain("Step click &lt;bad&gt; failed with no error provided");
+      expect(content).toContain('type="step"');
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("includes fallback failure text for failed assertion without error", () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    try {
+      const result = makeResult({
+        status: "fail",
+        exitCode: 1,
+        assertions: [
+          { type: "urlIncludes <bad>", value: "/dashboard", status: "fail" }
+        ]
+      });
+      writeJunit(runDir, result);
+      const content = fs.readFileSync(path.join(runDir, "junit.xml"), "utf-8");
+
+      expect(content).toContain("Assertion urlIncludes &lt;bad&gt; failed with no error provided");
+      expect(content).toContain('type="assertion"');
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
   it("computes correct tests, failures, and time attributes", () => {
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
     try {

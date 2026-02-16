@@ -31,9 +31,11 @@ export function writeJunit(runDir: string, result: RunResult): string {
     const stepTime = (step.durationMs / 1000).toFixed(3);
     const caseName = escapeXml(`step ${i + 1}: ${step.type}`);
 
-    if (step.status === "fail" && step.error) {
+    if (step.status === "fail") {
+      const failureText = step.error ?? `Step ${step.type} failed with no error provided`;
+      const escapedFailureText = escapeXml(failureText);
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="${stepTime}">`);
-      lines.push(`      <failure message="${escapeXml(step.error)}" type="step">${escapeXml(step.error)}</failure>`);
+      lines.push(`      <failure message="${escapedFailureText}" type="step">${escapedFailureText}</failure>`);
       lines.push("    </testcase>");
     } else {
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="${stepTime}"/>`);
@@ -43,9 +45,11 @@ export function writeJunit(runDir: string, result: RunResult): string {
   for (const assertion of result.assertions) {
     const caseName = escapeXml(`assertion: ${assertion.type}`);
 
-    if (assertion.status === "fail" && assertion.error) {
+    if (assertion.status === "fail") {
+      const failureText = assertion.error ?? `Assertion ${assertion.type} failed with no error provided`;
+      const escapedFailureText = escapeXml(failureText);
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="0">`);
-      lines.push(`      <failure message="${escapeXml(assertion.error)}" type="assertion">${escapeXml(assertion.error)}</failure>`);
+      lines.push(`      <failure message="${escapedFailureText}" type="assertion">${escapedFailureText}</failure>`);
       lines.push("    </testcase>");
     } else {
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="0"/>`);

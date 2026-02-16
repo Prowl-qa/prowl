@@ -212,7 +212,7 @@ async function executeHuntAttempt(
       artifacts
     });
 
-    result = writeReports(runDir, runResult, { junit: options.junit || config.artifacts.junit });
+    result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
   } finally {
     await closeBrowser(session);
   }
