@@ -7,11 +7,11 @@
   "author": "Prowl Tools",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prowltools/prowl.git"
+    "url": "https://github.com/Prowl-qa/prowl.git"
   },
-  "homepage": "https://github.com/prowltools/prowl#readme",
+  "homepage": "https://prowlqa.dev",
   "bugs": {
-    "url": "https://github.com/prowltools/prowl/issues"
+    "url": "https://github.com/Prowl-qa/prowl/issues"
   },
   "keywords": [
     "testing",
