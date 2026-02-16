@@ -41,6 +41,10 @@ Work is not considered complete until all four items are done.
 - **prowl-web** is the marketing site — update feature descriptions when major features ship
 - **prowl-hub** has its own CLAUDE.md with strict read-only security rules for agents
 
+## Git Commit Policy
+
+Keep commits atomic: commit only the files you touched and list each path explicitly. For tracked files run `git commit -m "<scoped message>" -- path/to/file1 path/to/file2`. For brand-new files, use the one-liner `git restore --staged :/ && git add "path/to/file1" "path/to/file2" && git commit -m "<scoped message>" -- path/to/file1 path/to/file2`
+
 ## Access Policy
 
 Infrastructure credentials and host details are not stored in this repository.
