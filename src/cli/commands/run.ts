@@ -18,6 +18,7 @@ export function buildRunCommand(): Command {
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
     .option("--config <path>", "Custom config path")
+    .option("--json", "Output results as JSON")
     .action(async (huntName, options) => {
       try {
         if (options.includeTags || options.excludeTags) {
@@ -31,16 +32,26 @@ export function buildRunCommand(): Command {
             : undefined;
 
           if (includeTags && !includeTags.some((t: string) => tags.includes(t))) {
-            console.log(chalk.yellow(`  Skipped "${huntName}" — no matching include tags`));
+            if (options.json) {
+              console.log(JSON.stringify({ status: "skipped", hunt: huntName, reason: "no matching include tags" }));
+            } else {
+              console.log(chalk.yellow(`  Skipped "${huntName}" — no matching include tags`));
+            }
             return;
           }
           if (excludeTags && excludeTags.some((t: string) => tags.includes(t))) {
-            console.log(chalk.yellow(`  Skipped "${huntName}" — matched exclude tags`));
+            if (options.json) {
+              console.log(JSON.stringify({ status: "skipped", hunt: huntName, reason: "matched exclude tags" }));
+            } else {
+              console.log(chalk.yellow(`  Skipped "${huntName}" — matched exclude tags`));
+            }
             return;
           }
         }
 
-        printHuntHeader(huntName);
+        if (!options.json) {
+          printHuntHeader(huntName);
+        }
 
         const { result, runDir } = await runHunt({
           huntName,
@@ -52,18 +63,28 @@ export function buildRunCommand(): Command {
           channel: options.channel,
           viewport: options.viewport,
           configPath: options.config,
-          onStep(stepResult, step, index) {
-            printStepResult(stepResult, step, index);
-          }
+          onStep: options.json
+            ? undefined
+            : (stepResult, step, index) => {
+                printStepResult(stepResult, step, index);
+              }
         });
 
-        console.log(resultMascot(result.status, huntName));
-        printHuntSummary(result, runDir);
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          console.log(resultMascot(result.status, huntName));
+          printHuntSummary(result, runDir);
+        }
         process.exitCode = result.exitCode;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Run failed";
-        console.log(resultMascot("fail", huntName));
-        console.error(`\n  Error: ${message}\n`);
+        if (options.json) {
+          console.log(JSON.stringify({ status: "fail", exitCode: 1, hunt: huntName, error: message }));
+        } else {
+          console.log(resultMascot("fail", huntName));
+          console.error(`\n  Error: ${message}\n`);
+        }
         process.exitCode = 1;
       }
     });

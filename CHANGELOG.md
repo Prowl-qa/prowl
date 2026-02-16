@@ -5,6 +5,9 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Library API: public programmatic exports (`runHunt`, `listHunts`, `loadHunt`, `loadConfig`, schemas) for Node.js integration (P2-010)
+- `prowlqa run --json`: machine-readable JSON output for agent and CI consumption (P2-011)
+- `prowlqa ci --json`: machine-readable JSON output of CI results (P2-009)
 - `prowlqa ci` command: run all hunts sequentially with combined pass/fail exit code, CI summary table, `ci-result.json` output, and `--include-tags`/`--exclude-tags` filtering (P2-001)
 - CI status semantics: exit code 0 (pass), 1 (fail), 2 (no hunts found or all hunts skipped by tag filters); `ci-result.json` status field distinguishes `"pass"`, `"fail"`, `"no-hunts"`, and `"all-skipped"` (P2-001)
 - Test coverage: CLI output formatting tests for all 19 step types and `truncate()` edge cases (P1.7-004)

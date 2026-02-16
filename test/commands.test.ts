@@ -158,6 +158,108 @@ describe("run command", () => {
 
     expect(process.exitCode).toBe(1);
   });
+
+  it("outputs valid JSON with --json flag", async () => {
+    const runResult = {
+      status: "pass" as const,
+      exitCode: 0 as const,
+      hunt: "homepage",
+      startedAt: "2026-02-15T10:00:00.000Z",
+      durationMs: 500,
+      targetUrl: "http://localhost:3000",
+      steps: [{ type: "navigate", status: "pass" as const, durationMs: 200 }],
+      assertions: [],
+      artifacts: {}
+    };
+    mockRunHunt.mockResolvedValue({
+      result: runResult,
+      runDir: "/tmp/prowlqa/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--json"]);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const output = logSpy.mock.calls[0][0];
+    const parsed = JSON.parse(output);
+    expect(parsed.status).toBe("pass");
+    expect(parsed.hunt).toBe("homepage");
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("outputs JSON error on failure with --json flag", async () => {
+    mockRunHunt.mockRejectedValue(new Error("Config not found"));
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--json"]);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const output = logSpy.mock.calls[0][0];
+    const parsed = JSON.parse(output);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.exitCode).toBe(1);
+    expect(parsed.hunt).toBe("homepage");
+    expect(parsed.error).toBe("Config not found");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("outputs JSON when hunt is skipped by include-tags with --json flag", async () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
+    mockLoadHuntTags.mockReturnValue(["smoke"]);
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--include-tags", "regression", "--json"]);
+
+    expect(mockRunHunt).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
+    expect(parsed.status).toBe("skipped");
+    expect(parsed.hunt).toBe("homepage");
+    expect(parsed.reason).toBe("no matching include tags");
+  });
+
+  it("outputs JSON when hunt is skipped by exclude-tags with --json flag", async () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowlqa" });
+    mockLoadHuntTags.mockReturnValue(["slow"]);
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--exclude-tags", "slow", "--json"]);
+
+    expect(mockRunHunt).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
+    expect(parsed.status).toBe("skipped");
+    expect(parsed.hunt).toBe("homepage");
+    expect(parsed.reason).toBe("matched exclude tags");
+  });
+
+  it("suppresses formatted output with --json flag", async () => {
+    const { printHuntHeader, printStepResult, printHuntSummary } = await import("../src/cli/output.js");
+    const { resultMascot } = await import("../src/cli/mascot.js");
+
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        startedAt: "2026-02-15T10:00:00.000Z",
+        durationMs: 500,
+        targetUrl: "http://localhost:3000",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowlqa/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync(["node", "prowlqa", "homepage", "--json"]);
+
+    expect(printHuntHeader).not.toHaveBeenCalled();
+    expect(printStepResult).not.toHaveBeenCalled();
+    expect(printHuntSummary).not.toHaveBeenCalled();
+    expect(resultMascot).not.toHaveBeenCalled();
+  });
 });
 
 describe("list command", () => {

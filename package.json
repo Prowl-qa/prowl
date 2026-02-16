@@ -24,6 +24,21 @@
     "web-testing",
     "cli"
   ],
+  "main": "dist/lib.cjs",
+  "module": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/lib.d.ts",
+        "default": "./dist/lib.js"
+      },
+      "require": {
+        "types": "./dist/lib.d.cts",
+        "default": "./dist/lib.cjs"
+      }
+    }
+  },
   "bin": {
     "prowlqa": "dist/index.js"
   },
@@ -36,7 +51,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "tsup src/cli/index.ts --format esm,cjs --sourcemap --out-dir dist",
+    "build": "tsup",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
