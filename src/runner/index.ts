@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AssertionResult, RunResult, Step, StepResult } from "../types/index.js";
+import type { AssertionResult, BrowserChannel, RunResult, Step, StepResult } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { launchBrowser, closeBrowser } from "../browser/controller.js";
@@ -18,7 +18,7 @@ export type RunOptions = {
   configPath?: string;
   onStep?: StepCallback;
   browser?: "chromium" | "firefox" | "webkit";
-  channel?: string;
+  channel?: BrowserChannel;
   viewport?: string;
 };
 

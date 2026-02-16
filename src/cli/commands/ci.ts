@@ -5,9 +5,9 @@ import { runHunt } from "../../runner/index.js";
 import { loadConfig, listHunts, loadHuntTags } from "../../config/loader.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 import { resultMascot } from "../mascot.js";
-import { printCiSummary, writeCiResult, resolveCiStatus } from "../../reporter/ci-summary.js";
+import { printCiSummary, writeCiResult, resolveCiStatus, countCiResults } from "../../reporter/ci-summary.js";
 import { timestamp } from "../../utils/timestamp.js";
-import type { CiHuntResult } from "../../types/index.js";
+import type { CiHuntResult, CiResult } from "../../types/index.js";
 
 export function buildCiCommand(): Command {
   const command = new Command("ci")
@@ -22,6 +22,7 @@ export function buildCiCommand(): Command {
     .option("--viewport <size>", "Viewport size: WxH (e.g. 1920x1080) or preset (mobile, tablet, desktop)")
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
+    .option("--json", "Output results as JSON")
     .action(async (options) => {
       const startedAt = new Date().toISOString();
       const startTime = Date.now();
@@ -30,7 +31,21 @@ export function buildCiCommand(): Command {
       const hunts = listHunts(configDir);
 
       if (hunts.length === 0) {
-        console.log(chalk.yellow("\n  No hunts found. Create hunts in .prowlqa/hunts/\n"));
+        if (options.json) {
+          const emptyResult: CiResult = {
+            status: "no-hunts",
+            startedAt,
+            durationMs: 0,
+            totalHunts: 0,
+            passed: 0,
+            failed: 0,
+            skipped: 0,
+            hunts: []
+          };
+          console.log(JSON.stringify(emptyResult, null, 2));
+        } else {
+          console.log(chalk.yellow("\n  No hunts found. Create hunts in .prowlqa/hunts/\n"));
+        }
         process.exitCode = 2;
         return;
       }
@@ -50,12 +65,16 @@ export function buildCiCommand(): Command {
           const tags = loadHuntTags(huntName, configDir);
 
           if (includeTags && !includeTags.some((t: string) => tags.includes(t))) {
-            console.log(chalk.yellow(`  ○ Skipped "${huntName}" — no matching include tags`));
+            if (!options.json) {
+              console.log(chalk.yellow(`  ○ Skipped "${huntName}" — no matching include tags`));
+            }
             results.push({ hunt: huntName, status: "skipped", durationMs: 0 });
             continue;
           }
           if (excludeTags && excludeTags.some((t: string) => tags.includes(t))) {
-            console.log(chalk.yellow(`  ○ Skipped "${huntName}" — matched exclude tags`));
+            if (!options.json) {
+              console.log(chalk.yellow(`  ○ Skipped "${huntName}" — matched exclude tags`));
+            }
             results.push({ hunt: huntName, status: "skipped", durationMs: 0 });
             continue;
           }
@@ -64,7 +83,9 @@ export function buildCiCommand(): Command {
         const huntStart = Date.now();
 
         try {
-          printHuntHeader(huntName);
+          if (!options.json) {
+            printHuntHeader(huntName);
+          }
 
           const { result, runDir } = await runHunt({
             huntName,
@@ -76,13 +97,17 @@ export function buildCiCommand(): Command {
             channel: options.channel,
             viewport: options.viewport,
             configPath: options.config,
-            onStep(stepResult, step, index) {
-              printStepResult(stepResult, step, index);
-            }
+            onStep: options.json
+              ? undefined
+              : (stepResult, step, index) => {
+                  printStepResult(stepResult, step, index);
+                }
           });
 
-          console.log(resultMascot(result.status, huntName));
-          printHuntSummary(result, runDir);
+          if (!options.json) {
+            console.log(resultMascot(result.status, huntName));
+            printHuntSummary(result, runDir);
+          }
 
           results.push({
             hunt: huntName,
@@ -93,8 +118,10 @@ export function buildCiCommand(): Command {
         } catch (error) {
           const durationMs = Date.now() - huntStart;
           const message = error instanceof Error ? error.message : "Run failed";
-          console.log(resultMascot("fail", huntName));
-          console.error(`\n  Error: ${message}\n`);
+          if (!options.json) {
+            console.log(resultMascot("fail", huntName));
+            console.error(`\n  Error: ${message}\n`);
+          }
           results.push({
             hunt: huntName,
             status: "fail",
@@ -106,18 +133,37 @@ export function buildCiCommand(): Command {
 
       const totalDurationMs = Date.now() - startTime;
 
-      printCiSummary(results, totalDurationMs);
-
-      // Write ci-result.json
+      // Write ci-result.json to disk
       const ciRunDir = path.join(configDir, "runs", timestamp("ci"));
       const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs);
-      console.log(`\n  CI Result: ${chalk.gray(resultPath)}\n`);
 
       const status = resolveCiStatus(results);
+
+      if (options.json) {
+        const { passed, failed, skipped } = countCiResults(results);
+        const ciResult: CiResult = {
+          status,
+          startedAt,
+          durationMs: totalDurationMs,
+          totalHunts: results.length,
+          passed,
+          failed,
+          skipped,
+          hunts: results
+        };
+        console.log(JSON.stringify(ciResult, null, 2));
+      } else {
+        printCiSummary(results, totalDurationMs);
+        console.log(`\n  CI Result: ${chalk.gray(resultPath)}\n`);
+
+        if (status === "all-skipped") {
+          console.log(chalk.yellow("  All hunts were skipped by tag filters.\n"));
+        }
+      }
+
       if (status === "fail") {
         process.exitCode = 1;
       } else if (status === "all-skipped") {
-        console.log(chalk.yellow("  All hunts were skipped by tag filters.\n"));
         process.exitCode = 2;
       } else {
         process.exitCode = 0;

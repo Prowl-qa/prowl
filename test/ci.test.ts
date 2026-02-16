@@ -256,6 +256,67 @@ describe("ci command", () => {
       expect.objectContaining({ viewport: "1920x1080" })
     );
   });
+
+  it("outputs valid JSON with --json flag", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+
+    // Find the JSON output call (the one with valid JSON)
+    const jsonCall = logSpy.mock.calls.find((call) => {
+      try { JSON.parse(call[0]); return true; } catch { return false; }
+    });
+    expect(jsonCall).toBeDefined();
+
+    const parsed: CiResult = JSON.parse(jsonCall![0]);
+    expect(parsed.status).toBe("pass");
+    expect(parsed.totalHunts).toBe(2);
+    expect(parsed.passed).toBe(2);
+    expect(parsed.failed).toBe(0);
+    expect(parsed.hunts).toHaveLength(2);
+    expect(parsed.hunts[0]).toMatchObject({ hunt: "homepage", status: "pass" });
+    expect(parsed.hunts[1]).toMatchObject({ hunt: "login-flow", status: "pass" });
+  });
+
+  it("outputs JSON with no-hunts status when no hunts found with --json", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue([]);
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+
+    const jsonCall = logSpy.mock.calls.find((call) => {
+      try { JSON.parse(call[0]); return true; } catch { return false; }
+    });
+    expect(jsonCall).toBeDefined();
+
+    const parsed: CiResult = JSON.parse(jsonCall![0]);
+    expect(parsed.status).toBe("no-hunts");
+    expect(parsed.totalHunts).toBe(0);
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("suppresses formatted output with --json flag", async () => {
+    const { printHuntHeader, printStepResult, printHuntSummary } = await import("../src/cli/output.js");
+    const { resultMascot } = await import("../src/cli/mascot.js");
+
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+
+    expect(printHuntHeader).not.toHaveBeenCalled();
+    expect(printStepResult).not.toHaveBeenCalled();
+    expect(printHuntSummary).not.toHaveBeenCalled();
+    expect(resultMascot).not.toHaveBeenCalled();
+  });
 });
 
 describe("countCiResults", () => {
