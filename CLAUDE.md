@@ -28,12 +28,16 @@ Work is not considered complete until all four items are done.
 
 **GitHub Org**: [Prowl-qa](https://github.com/Prowl-qa)
 
-| Repo | Purpose |
-|------|---------|
-| `Prowl-qa/prowl` | CLI tool (this repo) |
-| `Prowl-qa/prowl-docs` | Documentation site (Docusaurus) |
-| `Prowl-qa/prowl-web` | Marketing landing page (Next.js) |
-| `Prowl-qa/prowl-hub` | Community hunt templates |
+| Repo | Purpose | Local Path |
+|------|---------|------------|
+| `Prowl-qa/prowl` | CLI tool (this repo) | `~/Desktop/Current Projects/Prowl QA/Repositories/prowl` |
+| `Prowl-qa/prowl-docs` | Documentation site (Docusaurus) | `~/Desktop/Current Projects/Prowl QA/Repositories/prowl-docs` |
+| `Prowl-qa/prowl-web` | Marketing landing page (Next.js) | `~/Desktop/Current Projects/Prowl QA/Repositories/prowl-web` |
+| `Prowl-qa/prowl-hub` | Community hunt templates | `~/Desktop/Current Projects/Prowl QA/Repositories/prowl-hub` |
+| `prowltools/prowl-twitter-bot` | Twitter bot (@prowlqa) | `~/Desktop/Current Projects/Prowl QA/Repositories/prowl-twitter-bot` |
+
+**Backlogs**: `~/Desktop/Backlogs/projects/Prowl/`
+**Assets**: `~/Desktop/Current Projects/Prowl QA/Assets/`
 
 ### Cross-Repo Guidelines
 - **This repo** is the source of truth for all CLI features and step types
