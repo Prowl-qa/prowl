@@ -7,6 +7,7 @@ import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js
 import { resultMascot } from "../mascot.js";
 import { printCiSummary, writeCiResult, resolveCiStatus, countCiResults } from "../../reporter/ci-summary.js";
 import { timestamp } from "../../utils/timestamp.js";
+import { runWithConcurrency } from "../../utils/concurrency.js";
 import type { CiHuntResult, CiResult } from "../../types/index.js";
 
 export function buildCiCommand(): Command {
@@ -24,6 +25,13 @@ export function buildCiCommand(): Command {
     .option("--include-tags <tags>", "Only run hunts matching these tags (comma-separated)")
     .option("--exclude-tags <tags>", "Skip hunts matching these tags (comma-separated)")
     .option("--json", "Output results as JSON")
+    .option("--parallel <count>", "Run hunts in parallel with N workers", (value) => {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 1) {
+        throw new Error("--parallel must be a positive integer");
+      }
+      return n;
+    })
     .action(async (options) => {
       const startedAt = new Date().toISOString();
       const startTime = Date.now();
@@ -59,9 +67,12 @@ export function buildCiCommand(): Command {
         : undefined;
 
       const results: CiHuntResult[] = [];
+      const parallel = options.parallel as number | undefined;
+      const isParallel = parallel !== undefined && parallel > 1;
 
+      // Phase 1: Tag filtering (always sequential)
+      const huntsToRun: string[] = [];
       for (const huntName of hunts) {
-        // Tag filtering
         if (includeTags || excludeTags) {
           const tags = loadHuntTags(huntName, configDir);
 
@@ -80,11 +91,14 @@ export function buildCiCommand(): Command {
             continue;
           }
         }
+        huntsToRun.push(huntName);
+      }
 
+      // Phase 2: Build task functions for non-skipped hunts
+      const buildTask = (huntName: string) => async (): Promise<CiHuntResult> => {
         const huntStart = Date.now();
-
         try {
-          if (!options.json) {
+          if (!options.json && !isParallel) {
             printHuntHeader(huntName);
           }
 
@@ -99,37 +113,56 @@ export function buildCiCommand(): Command {
             viewport: options.viewport,
             junit: Boolean(options.junit),
             configPath: options.config,
-            onStep: options.json
+            onStep: options.json || isParallel
               ? undefined
               : (stepResult, step, index) => {
                   printStepResult(stepResult, step, index);
                 }
           });
 
-          if (!options.json) {
+          if (!options.json && !isParallel) {
             console.log(resultMascot(result.status, huntName));
             printHuntSummary(result, runDir);
           }
 
-          results.push({
+          return {
             hunt: huntName,
             status: result.status,
             durationMs: result.durationMs,
             runDir
-          });
+          };
         } catch (error) {
           const durationMs = Date.now() - huntStart;
           const message = error instanceof Error ? error.message : "Run failed";
-          if (!options.json) {
+          if (!options.json && !isParallel) {
             console.log(resultMascot("fail", huntName));
             console.error(`\n  Error: ${message}\n`);
           }
-          results.push({
+          return {
             hunt: huntName,
             status: "fail",
             durationMs,
             error: message
-          });
+          };
+        }
+      };
+
+      // Phase 3: Execute hunts
+      if (isParallel) {
+        const tasks = huntsToRun.map((name) => buildTask(name));
+        const parallelResults = await runWithConcurrency(tasks, parallel);
+        for (const pr of parallelResults) {
+          if (pr.status === "fulfilled") {
+            results.push(pr.value);
+          } else {
+            const message = pr.reason instanceof Error ? pr.reason.message : "Run failed";
+            results.push({ hunt: "unknown", status: "fail", durationMs: 0, error: message });
+          }
+        }
+      } else {
+        for (const huntName of huntsToRun) {
+          const huntResult = await buildTask(huntName)();
+          results.push(huntResult);
         }
       }
 

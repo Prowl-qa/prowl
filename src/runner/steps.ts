@@ -29,6 +29,7 @@ export type StepExecutionContext = {
   configDir: string;
   onStep?: StepCallback;
   huntStack?: string[];
+  activeMocks?: Map<string, () => Promise<void>>;
 };
 
 export type StepExecutionResult = {
@@ -115,6 +116,10 @@ function getStepType(step: Step): string {
   if ("scroll" in step) return "scroll";
   if ("scrollTo" in step) return "scrollTo";
   if ("screenshot" in step) return "screenshot";
+  if ("if" in step) return "if";
+  if ("repeat" in step) return "repeat";
+  if ("mockRoute" in step) return "mockRoute";
+  if ("unmockRoute" in step) return "unmockRoute";
   return "step";
 }
 
@@ -606,6 +611,161 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           screenshot: relative
+        };
+      } else if ("if" in step) {
+        const condition = step.if;
+        const selector = condition.visible ?? condition.notVisible!;
+        const count = await context.page.locator(selector).count();
+        const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
+
+        if (conditionMet) {
+          const subResult = await executeSteps({
+            ...context,
+            steps: condition.then,
+            redactedFillSteps: new Set()
+          });
+          for (const sr of subResult.results) {
+            results.push({ ...sr, type: `if > ${sr.type}` });
+          }
+          screenshots.push(...subResult.screenshots);
+          if (subResult.failed) {
+            return {
+              results,
+              screenshots,
+              failed: true,
+              error: subResult.error
+            };
+          }
+          stepResult = {
+            type: "if",
+            status: "pass",
+            durationMs: Date.now() - stepStart,
+            value: `condition met, executed ${condition.then.length} steps`
+          };
+        } else {
+          stepResult = {
+            type: "if",
+            status: "pass",
+            durationMs: Date.now() - stepStart,
+            value: "condition not met, skipped"
+          };
+        }
+      } else if ("repeat" in step) {
+        const repeat = step.repeat;
+        let totalSubSteps = 0;
+
+        if (repeat.times !== undefined) {
+          for (let i = 0; i < repeat.times; i++) {
+            totalSubSteps += repeat.steps.length;
+            if (totalSubSteps > context.maxSteps) {
+              throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
+            }
+            const subResult = await executeSteps({
+              ...context,
+              steps: repeat.steps,
+              redactedFillSteps: new Set()
+            });
+            for (const sr of subResult.results) {
+              results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
+            }
+            screenshots.push(...subResult.screenshots);
+            if (subResult.failed) {
+              return {
+                results,
+                screenshots,
+                failed: true,
+                error: subResult.error
+              };
+            }
+          }
+        } else if (repeat.while !== undefined) {
+          const maxIter = repeat.maxIterations!;
+          for (let i = 0; i < maxIter; i++) {
+            const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
+            const whileCount = await context.page.locator(whileSelector).count();
+            const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
+            if (!shouldContinue) break;
+
+            totalSubSteps += repeat.steps.length;
+            if (totalSubSteps > context.maxSteps) {
+              throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
+            }
+            const subResult = await executeSteps({
+              ...context,
+              steps: repeat.steps,
+              redactedFillSteps: new Set()
+            });
+            for (const sr of subResult.results) {
+              results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
+            }
+            screenshots.push(...subResult.screenshots);
+            if (subResult.failed) {
+              return {
+                results,
+                screenshots,
+                failed: true,
+                error: subResult.error
+              };
+            }
+          }
+        }
+
+        stepResult = {
+          type: "repeat",
+          status: "pass",
+          durationMs: Date.now() - stepStart
+        };
+      } else if ("mockRoute" in step) {
+        const mock = step.mockRoute;
+        const mocks = context.activeMocks ?? new Map<string, () => Promise<void>>();
+        context.activeMocks = mocks;
+
+        let responseBody: string;
+        if (mock.response.body !== undefined) {
+          responseBody = mock.response.body;
+        } else {
+          const filePath = path.isAbsolute(mock.response.file!)
+            ? mock.response.file!
+            : path.join(context.configDir, mock.response.file!);
+          responseBody = fs.readFileSync(filePath, "utf-8");
+        }
+
+        const contentType = mock.response.contentType ?? "application/json";
+        const status = mock.response.status;
+
+        await context.page.route(mock.url, (route) => {
+          route.fulfill({
+            status,
+            contentType,
+            body: responseBody
+          });
+        });
+
+        mocks.set(mock.url, async () => {
+          await context.page.unroute(mock.url);
+        });
+
+        stepResult = {
+          type: "mockRoute",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: mock.url
+        };
+      } else if ("unmockRoute" in step) {
+        const url = step.unmockRoute.url;
+        const mocks = context.activeMocks;
+        if (!mocks || !mocks.has(url)) {
+          throw new Error(`No active mock for URL: ${url}`);
+        }
+        const cleanup = mocks.get(url)!;
+        await cleanup();
+        mocks.delete(url);
+
+        stepResult = {
+          type: "unmockRoute",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: url
         };
       }
 

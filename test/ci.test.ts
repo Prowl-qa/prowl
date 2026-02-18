@@ -316,6 +316,49 @@ describe("ci command", () => {
     expect(process.exitCode).toBe(2);
   });
 
+  it("runs hunts in parallel with --parallel", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow", "checkout"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"))
+      .mockResolvedValueOnce(makeRunResult("checkout", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    expect(mockRunHunt).toHaveBeenCalledTimes(3);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("--parallel 1 is identical to default sequential", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "1"]);
+
+    expect(mockRunHunt).toHaveBeenCalledTimes(1);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("parallel mode suppresses per-step output", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    // Parallel mode passes undefined for onStep
+    for (const call of mockRunHunt.mock.calls) {
+      expect(call[0].onStep).toBeUndefined();
+    }
+  });
+
   it("suppresses formatted output with --json flag", async () => {
     const { printHuntHeader, printStepResult, printHuntSummary } = await import("../src/cli/output.js");
     const { resultMascot } = await import("../src/cli/mascot.js");

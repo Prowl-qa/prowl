@@ -83,6 +83,33 @@ export type HoverStep = { hover: { selector: string } };
 export type ScrollStep = { scroll: { direction: "up" | "down" | "left" | "right"; amount?: number } };
 export type ScrollToStep = { scrollTo: { selector: string } };
 export type ScreenshotStep = { screenshot: { name?: string } };
+export type IfStep = {
+  if: {
+    visible?: string;
+    notVisible?: string;
+    then: Step[];
+  };
+};
+export type RepeatStep = {
+  repeat: {
+    times?: number;
+    while?: { visible?: string; notVisible?: string };
+    maxIterations?: number;
+    steps: Step[];
+  };
+};
+export type MockRouteStep = {
+  mockRoute: {
+    url: string;
+    response: {
+      status: number;
+      contentType?: string;
+      body?: string;
+      file?: string;
+    };
+  };
+};
+export type UnmockRouteStep = { unmockRoute: { url: string } };
 
 export type Step =
   | NavigateStep
@@ -103,7 +130,11 @@ export type Step =
   | HoverStep
   | ScrollStep
   | ScrollToStep
-  | ScreenshotStep;
+  | ScreenshotStep
+  | IfStep
+  | RepeatStep
+  | MockRouteStep
+  | UnmockRouteStep;
 
 export type Assertion =
   | { selectorExists: string }

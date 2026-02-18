@@ -194,6 +194,69 @@ function interpolateStep(
   if ("screenshot" in step) {
     return { screenshot: { name: step.screenshot.name } };
   }
+  if ("if" in step) {
+    const condition = step.if;
+    const thenSteps = condition.then.map((s, i) => interpolateStep(s, vars, i, redacted));
+    return {
+      if: {
+        ...(condition.visible !== undefined
+          ? { visible: interpolateString(condition.visible, vars).value }
+          : {}),
+        ...(condition.notVisible !== undefined
+          ? { notVisible: interpolateString(condition.notVisible, vars).value }
+          : {}),
+        then: thenSteps
+      }
+    };
+  }
+  if ("repeat" in step) {
+    const repeat = step.repeat;
+    const subSteps = repeat.steps.map((s, i) => interpolateStep(s, vars, i, redacted));
+    return {
+      repeat: {
+        ...(repeat.times !== undefined ? { times: repeat.times } : {}),
+        ...(repeat.while !== undefined
+          ? {
+              while: {
+                ...(repeat.while.visible !== undefined
+                  ? { visible: interpolateString(repeat.while.visible, vars).value }
+                  : {}),
+                ...(repeat.while.notVisible !== undefined
+                  ? { notVisible: interpolateString(repeat.while.notVisible, vars).value }
+                  : {})
+              }
+            }
+          : {}),
+        ...(repeat.maxIterations !== undefined ? { maxIterations: repeat.maxIterations } : {}),
+        steps: subSteps
+      }
+    };
+  }
+  if ("mockRoute" in step) {
+    const mock = step.mockRoute;
+    return {
+      mockRoute: {
+        url: interpolateString(mock.url, vars).value,
+        response: {
+          status: mock.response.status,
+          ...(mock.response.contentType !== undefined
+            ? { contentType: interpolateString(mock.response.contentType, vars).value }
+            : {}),
+          ...(mock.response.body !== undefined
+            ? { body: interpolateString(mock.response.body, vars).value }
+            : {}),
+          ...(mock.response.file !== undefined
+            ? { file: interpolateString(mock.response.file, vars).value }
+            : {})
+        }
+      }
+    };
+  }
+  if ("unmockRoute" in step) {
+    return {
+      unmockRoute: { url: interpolateString(step.unmockRoute.url, vars).value }
+    };
+  }
   return step;
 }
 
