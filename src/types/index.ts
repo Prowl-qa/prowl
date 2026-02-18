@@ -40,7 +40,7 @@ export type Config = {
     forbiddenSelectors: string[];
   };
   auth: {
-    storageStatePath: string;
+    storageStatePath?: string;
   };
 };
 

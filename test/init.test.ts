@@ -29,7 +29,7 @@ describe("prowlqa init", () => {
 
     const prowlqaDir = path.join(tempDir, ".prowlqa");
     expect(fs.existsSync(path.join(prowlqaDir, "config.yml"))).toBe(true);
-    expect(fs.existsSync(path.join(prowlqaDir, "hunts", "homepage.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(prowlqaDir, "hunts", "hello.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlqaDir, ".gitignore"))).toBe(true);
   });
 

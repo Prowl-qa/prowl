@@ -33,7 +33,9 @@ export function buildLoginCommand(): Command {
       try {
         const { config, configDir } = loadConfig(options.config);
         const targetUrl = options.url ?? config.target.url;
-        const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
+        const storageStatePath = config.auth.storageStatePath
+          ? resolvePath(configDir, config.auth.storageStatePath)
+          : resolvePath(configDir, ".prowlqa/auth-state.json");
 
         browser = await chromium.launch({ headless: false });
         context = await browser.newContext();

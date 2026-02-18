@@ -82,7 +82,8 @@ export function buildInitCommand(): Command {
 
       console.log(welcomeBanner());
       console.log(chalk.green("  Initialized .prowlqa directory."));
-      console.log(chalk.gray("  Run ") + chalk.bold("prowlqa run homepage") + chalk.gray(" to get started.\n"));
+      console.log(chalk.gray("  Run ") + chalk.bold("prowlqa run hello") + chalk.gray(" to get started."));
+      console.log(chalk.gray("  Browse hunt templates at ") + chalk.cyan("https://hub.prowlqa.dev") + "\n");
     });
 
   return command;

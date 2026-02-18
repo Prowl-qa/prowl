@@ -50,9 +50,12 @@ All notable changes to ProwlQA will be documented in this file.
 - Auth state capture via `prowlqa login` for authenticated test flows
 
 ### Changed
+- `prowlqa init` now bundles a single minimal `hello.yml` starter hunt instead of 8 example hunts; example templates moved to the community hub at hub.prowlqa.dev
+- `prowlqa init` output now points users to the community hub for additional hunt templates
 - `init --force` preserves user-created files; only overwrites known template files (config.yml, example hunts, .gitignore) (P1.7-009)
 
 ### Fixed
+- Auth state warning: suppress misleading "Auth state file not found" warning when config does not include an `auth` section; `storageStatePath` now defaults to `undefined` instead of always resolving to `.prowlqa/auth-state.json` (BUG-007)
 - Screenshot path traversal: reject screenshot names containing `/`, `\`, or `..` (BUG-004)
 - `init` command: replace hardcoded path resolution with directory walk to find package root (BUG-002)
 - `package.json`: include `examples/` in `files` field so `prowlqa init` works after `npm install -g` (BUG-003)

@@ -1,0 +1,20 @@
+# Hello Hunt — Your First ProwlQA Test
+# ---
+# This minimal hunt verifies your target app is running and the page loads.
+# Customize the URL path and expected text to match your app.
+#
+# Run it:  prowlqa run hello
+#
+# Browse more hunt templates at https://hub.prowlqa.dev
+
+name: hello
+description: Verify the target app loads successfully
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+assertions:
+  - noConsoleErrors: true

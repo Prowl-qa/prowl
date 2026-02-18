@@ -89,7 +89,9 @@ async function executeHuntAttempt(
   const runDir = path.join(configDir, "runs", timestamp());
   fs.mkdirSync(runDir, { recursive: true });
 
-  const storageStatePath = resolvePath(configDir, config.auth.storageStatePath);
+  const storageStatePath = config.auth.storageStatePath
+    ? resolvePath(configDir, config.auth.storageStatePath)
+    : undefined;
 
   const engine = options.browser ?? config.browser.engine;
   const channel = options.channel ?? config.browser.channel;

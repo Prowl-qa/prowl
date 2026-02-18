@@ -114,7 +114,7 @@ function mergeConfig(partial: Partial<Config>): Config {
         partial.guardrails?.forbiddenSelectors ?? DEFAULT_CONFIG.guardrails.forbiddenSelectors
     },
     auth: {
-      storageStatePath: partial.auth?.storageStatePath ?? DEFAULT_CONFIG.auth.storageStatePath
+      storageStatePath: partial.auth?.storageStatePath ?? (partial.auth !== undefined ? DEFAULT_CONFIG.auth.storageStatePath : undefined)
     }
   };
 }
