@@ -4,7 +4,8 @@ export type {
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
   CiResult, CiHuntResult, CiStatus,
-  IfStep, RepeatStep, MockRouteStep, UnmockRouteStep
+  IfStep, RepeatStep, MockRouteStep, UnmockRouteStep,
+  EvalScriptStep, RunScriptStep, AssertScreenshotStep
 } from "./types/index.js";
 
 // Re-export runner
@@ -22,3 +23,11 @@ export { huntSchema, configSchema, stepSchema } from "./config/schema.js";
 
 // Re-export interpolation
 export { interpolateHunt } from "./config/interpolate.js";
+
+// Re-export analyzer
+export { analyzePage } from "./analyzer/index.js";
+export type { AnalysisResult, PageElement, PageForm, PageLink } from "./analyzer/index.js";
+
+// Re-export generator
+export { generateHunt } from "./generator/index.js";
+export type { GenerateOptions } from "./generator/index.js";

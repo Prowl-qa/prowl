@@ -207,4 +207,46 @@ describe("interpolateHunt", () => {
     };
     expect(step.mockRoute.response.file).toBe("fixtures/orders.json");
   });
+
+  it("interpolates evalScript shorthand expression", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".items" },
+      steps: [{ evalScript: "document.querySelectorAll('{{SELECTOR}}').length" }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { evalScript: string };
+    expect(step.evalScript).toBe("document.querySelectorAll('.items').length");
+  });
+
+  it("interpolates evalScript object expression", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".items" },
+      steps: [{ evalScript: { expression: "document.querySelectorAll('{{SELECTOR}}').length", as: "COUNT" } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { evalScript: { expression: string; as: string } };
+    expect(step.evalScript.expression).toBe("document.querySelectorAll('.items').length");
+    expect(step.evalScript.as).toBe("COUNT");
+  });
+
+  it("interpolates runScript file path", () => {
+    const hunt: Hunt = {
+      vars: { SCRIPT: "scripts/setup.js" },
+      steps: [{ runScript: { file: "{{SCRIPT}}" } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { runScript: { file: string } };
+    expect(step.runScript.file).toBe("scripts/setup.js");
+  });
+
+  it("interpolates assertScreenshot name", () => {
+    const hunt: Hunt = {
+      vars: { PAGE: "homepage" },
+      steps: [{ assertScreenshot: { name: "{{PAGE}}", threshold: 0.05 } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { assertScreenshot: { name: string; threshold: number } };
+    expect(step.assertScreenshot.name).toBe("homepage");
+    expect(step.assertScreenshot.threshold).toBe(0.05);
+  });
 });

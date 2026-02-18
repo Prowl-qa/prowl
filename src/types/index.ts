@@ -110,6 +110,18 @@ export type MockRouteStep = {
   };
 };
 export type UnmockRouteStep = { unmockRoute: { url: string } };
+export type EvalScriptStep = {
+  evalScript: string | { expression: string; as?: string };
+};
+export type RunScriptStep = {
+  runScript: { file: string };
+};
+export type AssertScreenshotStep = {
+  assertScreenshot: {
+    name: string;
+    threshold?: number;
+  };
+};
 
 export type Step =
   | NavigateStep
@@ -134,7 +146,10 @@ export type Step =
   | IfStep
   | RepeatStep
   | MockRouteStep
-  | UnmockRouteStep;
+  | UnmockRouteStep
+  | EvalScriptStep
+  | RunScriptStep
+  | AssertScreenshotStep;
 
 export type Assertion =
   | { selectorExists: string }

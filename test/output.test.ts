@@ -186,6 +186,36 @@ describe("describeStep", () => {
     const step: Step = { unmockRoute: { url: "**/api/users" } };
     expect(describeStep(step)).toBe('unmockRoute "**/api/users"');
   });
+
+  it("describes evalScript shorthand", () => {
+    const step: Step = { evalScript: "document.title" };
+    expect(describeStep(step)).toBe('evalScript "document.title"');
+  });
+
+  it("describes evalScript with as", () => {
+    const step: Step = { evalScript: { expression: "document.title", as: "TITLE" } };
+    expect(describeStep(step)).toBe('evalScript "document.title" as TITLE');
+  });
+
+  it("describes evalScript object without as", () => {
+    const step: Step = { evalScript: { expression: "document.title" } };
+    expect(describeStep(step)).toBe('evalScript "document.title"');
+  });
+
+  it("describes runScript step", () => {
+    const step: Step = { runScript: { file: "scripts/setup-data.js" } };
+    expect(describeStep(step)).toBe('runScript "scripts/setup-data.js"');
+  });
+
+  it("describes assertScreenshot step", () => {
+    const step: Step = { assertScreenshot: { name: "homepage", threshold: 0.1 } };
+    expect(describeStep(step)).toBe('assertScreenshot "homepage" (threshold: 0.1)');
+  });
+
+  it("describes assertScreenshot step without threshold", () => {
+    const step: Step = { assertScreenshot: { name: "checkout" } };
+    expect(describeStep(step)).toBe('assertScreenshot "checkout"');
+  });
 });
 
 describe("truncate", () => {

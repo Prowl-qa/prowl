@@ -1467,6 +1467,125 @@ describe("executeSteps", () => {
     fs.rmSync(configDir, { recursive: true, force: true });
   });
 
+  it("executes evalScript shorthand expression", async () => {
+    const page = createMockPage();
+    page.evaluate.mockResolvedValueOnce("My Page Title");
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ evalScript: "document.title" }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("evalScript");
+    expect(result.results[0].value).toBe("My Page Title");
+    expect(page.evaluate).toHaveBeenCalledWith("document.title");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes evalScript with as and stores runtime var", async () => {
+    const page = createMockPage();
+    page.evaluate.mockResolvedValueOnce(42);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { evalScript: { expression: "document.querySelectorAll('tr').length", as: "ROW_COUNT" } }
+    ];
+
+    const context = {
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure" as const,
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set<number>(),
+      configDir: runDir
+    };
+
+    const result = await executeSteps(context);
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("evalScript");
+    expect(result.results[0].value).toBe("42");
+    expect(context.runtimeVars?.get("ROW_COUNT")).toBe("42");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("runtime vars substitute in subsequent steps", async () => {
+    const page = createMockPage();
+    page.evaluate.mockResolvedValueOnce("Dashboard");
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { evalScript: { expression: "document.title", as: "TITLE" } },
+      { assert: { visible: "{{TITLE}}" } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("evalScript");
+    expect(result.results[1].type).toBe("assert");
+    // The assert step should have used "Dashboard" as the visible text
+    expect(page.locator).toHaveBeenCalledWith('text="Dashboard"');
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes runScript step by reading and evaluating file", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runscript-"));
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "setup.js"), "window.testSetup = true;");
+
+    const steps: Step[] = [{ runScript: { file: "setup.js" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("runScript");
+    expect(result.results[0].value).toBe("setup.js");
+    expect(page.evaluate).toHaveBeenCalledWith("window.testSetup = true;");
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
   it("fails runHunt when sub-hunt exceeds maxSteps", async () => {
     const page = createMockPage();
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-maxsteps-"));

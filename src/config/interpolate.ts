@@ -257,6 +257,32 @@ function interpolateStep(
       unmockRoute: { url: interpolateString(step.unmockRoute.url, vars).value }
     };
   }
+  if ("evalScript" in step) {
+    if (typeof step.evalScript === "string") {
+      return { evalScript: interpolateString(step.evalScript, vars).value };
+    }
+    return {
+      evalScript: {
+        expression: interpolateString(step.evalScript.expression, vars).value,
+        ...(step.evalScript.as !== undefined ? { as: step.evalScript.as } : {})
+      }
+    };
+  }
+  if ("runScript" in step) {
+    return {
+      runScript: { file: interpolateString(step.runScript.file, vars).value }
+    };
+  }
+  if ("assertScreenshot" in step) {
+    return {
+      assertScreenshot: {
+        name: interpolateString(step.assertScreenshot.name, vars).value,
+        ...(step.assertScreenshot.threshold !== undefined
+          ? { threshold: step.assertScreenshot.threshold }
+          : {})
+      }
+    };
+  }
   return step;
 }
 

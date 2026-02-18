@@ -30,6 +30,7 @@ export type StepExecutionContext = {
   onStep?: StepCallback;
   huntStack?: string[];
   activeMocks?: Map<string, () => Promise<void>>;
+  runtimeVars?: Map<string, string>;
 };
 
 export type StepExecutionResult = {
@@ -120,7 +121,71 @@ function getStepType(step: Step): string {
   if ("repeat" in step) return "repeat";
   if ("mockRoute" in step) return "mockRoute";
   if ("unmockRoute" in step) return "unmockRoute";
+  if ("evalScript" in step) return "evalScript";
+  if ("runScript" in step) return "runScript";
+  if ("assertScreenshot" in step) return "assertScreenshot";
   return "step";
+}
+
+const RUNTIME_VAR_PATTERN = /\{\{([A-Z0-9_]+)\}\}/g;
+
+function substituteRuntimeVars(input: string, vars: Map<string, string>): string {
+  return input.replace(RUNTIME_VAR_PATTERN, (match, name: string) => {
+    const value = vars.get(name);
+    return value !== undefined ? value : match;
+  });
+}
+
+function applyRuntimeVars(step: Step, vars: Map<string, string>): Step {
+  const sub = (s: string) => substituteRuntimeVars(s, vars);
+
+  if ("navigate" in step) return { navigate: sub(step.navigate) };
+  if ("click" in step) {
+    if (typeof step.click === "string") return { click: sub(step.click) };
+    return { click: { selector: sub(step.click.selector) } };
+  }
+  if ("fill" in step) {
+    if ("selector" in step.fill && "value" in step.fill) {
+      const f = step.fill as { selector: string; value: string };
+      return { fill: { selector: sub(f.selector), value: sub(f.value) } };
+    }
+    const [key, value] = Object.entries(step.fill)[0];
+    return { fill: { [sub(key)]: sub(value) } };
+  }
+  if ("type" in step) return { type: sub(step.type) };
+  if ("assert" in step) {
+    const a = step.assert;
+    if (a.visible !== undefined) return { assert: { visible: sub(a.visible) } };
+    if (a.notVisible !== undefined) return { assert: { notVisible: sub(a.notVisible) } };
+    if (a.urlIncludes !== undefined) return { assert: { urlIncludes: sub(a.urlIncludes) } };
+    if (a.urlEquals !== undefined) return { assert: { urlEquals: sub(a.urlEquals) } };
+    return step;
+  }
+  if ("wait" in step) {
+    if (typeof step.wait === "string") return { wait: sub(step.wait) };
+    return { wait: { for: sub(step.wait.for), timeout: step.wait.timeout } };
+  }
+  if ("waitForSelector" in step) {
+    return { waitForSelector: { selector: sub(step.waitForSelector.selector), timeout: step.waitForSelector.timeout } };
+  }
+  if ("evalScript" in step) {
+    if (typeof step.evalScript === "string") return { evalScript: sub(step.evalScript) };
+    return {
+      evalScript: {
+        expression: sub(step.evalScript.expression),
+        ...(step.evalScript.as !== undefined ? { as: step.evalScript.as } : {})
+      }
+    };
+  }
+  if ("assertScreenshot" in step) {
+    return {
+      assertScreenshot: {
+        name: sub(step.assertScreenshot.name),
+        ...(step.assertScreenshot.threshold !== undefined ? { threshold: step.assertScreenshot.threshold } : {})
+      }
+    };
+  }
+  return step;
 }
 
 function isExplicitFillStep(
@@ -340,7 +405,13 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       return { results, screenshots, failed: true, error: "Max total time exceeded" };
     }
 
-    const step = context.steps[index];
+    const runtimeVars = context.runtimeVars ?? new Map<string, string>();
+    context.runtimeVars = runtimeVars;
+
+    let step = context.steps[index];
+    if (runtimeVars.size > 0) {
+      step = applyRuntimeVars(step, runtimeVars);
+    }
     const stepStart = Date.now();
     const stepType = getStepType(step);
     let stepResult: StepResult | null = null;
@@ -767,6 +838,69 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart,
           value: url
         };
+      } else if ("evalScript" in step) {
+        const expression = typeof step.evalScript === "string"
+          ? step.evalScript
+          : step.evalScript.expression;
+        const result = await context.page.evaluate(expression);
+        const resultStr = String(result);
+        if (typeof step.evalScript !== "string" && step.evalScript.as) {
+          runtimeVars.set(step.evalScript.as, resultStr);
+        }
+        stepResult = {
+          type: "evalScript",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: resultStr.length > 200 ? resultStr.slice(0, 200) + "\u2026" : resultStr
+        };
+      } else if ("runScript" in step) {
+        const filePath = path.isAbsolute(step.runScript.file)
+          ? step.runScript.file
+          : path.join(context.configDir, step.runScript.file);
+        const fileContents = fs.readFileSync(filePath, "utf-8");
+        await context.page.evaluate(fileContents);
+        stepResult = {
+          type: "runScript",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: step.runScript.file
+        };
+      } else if ("assertScreenshot" in step) {
+        const { compareScreenshots, ensureBaselineDir } = await import("./visual.js");
+        const name = step.assertScreenshot.name;
+        const threshold = step.assertScreenshot.threshold ?? 0.1;
+        const baselineDir = ensureBaselineDir(context.configDir);
+        const baselinePath = path.join(baselineDir, `${name}.png`);
+        const currentScreenshotPath = path.join(context.runDir, "screenshots", `${name}-current.png`);
+        fs.mkdirSync(path.dirname(currentScreenshotPath), { recursive: true });
+        await context.page.screenshot({ path: currentScreenshotPath, fullPage: true });
+        screenshots.push(path.join("screenshots", `${name}-current.png`));
+
+        if (!fs.existsSync(baselinePath)) {
+          fs.copyFileSync(currentScreenshotPath, baselinePath);
+          stepResult = {
+            type: "assertScreenshot",
+            status: "pass",
+            durationMs: Date.now() - stepStart,
+            value: "baseline created"
+          };
+        } else {
+          const diffPath = path.join(context.runDir, "screenshots", `${name}-diff.png`);
+          const comparison = await compareScreenshots(baselinePath, currentScreenshotPath, diffPath, threshold);
+          if (comparison.match) {
+            stepResult = {
+              type: "assertScreenshot",
+              status: "pass",
+              durationMs: Date.now() - stepStart,
+              value: `diff: ${(comparison.diffPercentage * 100).toFixed(2)}%`
+            };
+          } else {
+            screenshots.push(path.join("screenshots", `${name}-diff.png`));
+            throw new Error(
+              `Visual regression: ${(comparison.diffPercentage * 100).toFixed(2)}% diff exceeds threshold ${(threshold * 100).toFixed(0)}%`
+            );
+          }
+        }
       }
 
       if (!stepResult) {
