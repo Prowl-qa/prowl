@@ -63,6 +63,16 @@ export function describeStep(step: Step): string {
   }
   if ("mockRoute" in step) return `mockRoute "${step.mockRoute.url}"`;
   if ("unmockRoute" in step) return `unmockRoute "${step.unmockRoute.url}"`;
+  if ("evalScript" in step) {
+    if (typeof step.evalScript === "string") return `evalScript "${truncate(step.evalScript, 40)}"`;
+    const asLabel = step.evalScript.as ? ` as ${step.evalScript.as}` : "";
+    return `evalScript "${truncate(step.evalScript.expression, 40)}"${asLabel}`;
+  }
+  if ("runScript" in step) return `runScript "${step.runScript.file}"`;
+  if ("assertScreenshot" in step) {
+    const th = step.assertScreenshot.threshold !== undefined ? ` (threshold: ${step.assertScreenshot.threshold})` : "";
+    return `assertScreenshot "${step.assertScreenshot.name}"${th}`;
+  }
   return "unknown step";
 }
 

@@ -6,6 +6,9 @@ import { buildLoginCommand } from "./commands/login.js";
 import { buildListCommand } from "./commands/list.js";
 import { buildWatchCommand } from "./commands/watch.js";
 import { buildCiCommand } from "./commands/ci.js";
+import { buildUpdateBaselinesCommand } from "./commands/update-baselines.js";
+import { buildAnalyzeCommand } from "./commands/analyze.js";
+import { buildGenerateCommand } from "./commands/generate.js";
 
 const program = new Command();
 
@@ -20,6 +23,9 @@ program.addCommand(buildWatchCommand());
 program.addCommand(buildInitCommand());
 program.addCommand(buildLoginCommand());
 program.addCommand(buildListCommand());
+program.addCommand(buildUpdateBaselinesCommand());
+program.addCommand(buildAnalyzeCommand());
+program.addCommand(buildGenerateCommand());
 
 program.parseAsync(process.argv).catch((error) => {
   const message = error instanceof Error ? error.message : "Command failed";

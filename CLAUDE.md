@@ -45,6 +45,9 @@ Work is not considered complete until all four items are done.
 - **prowl-web** is the marketing site — update feature descriptions when major features ship
 - **prowl-hub** has its own CLAUDE.md with strict read-only security rules for agents
 
+### Hunt Authoring in Other Repos
+When asked to create hunts (`.prowlqa/` config and hunt YAML files) in another repo, create the YAML files and stop. Do NOT run `prowlqa ci`, `prowlqa run`, or any hunt execution commands. All hunts will be run by the user as an end user so they can experience the tool from a user's perspective.
+
 ## Access Policy
 
 Infrastructure credentials and host details are not stored in this repository.

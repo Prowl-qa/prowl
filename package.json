@@ -61,17 +61,20 @@
     "commander": "^12.1.0",
     "dotenv": "^16.6.1",
     "ora": "^8.1.1",
+    "pixelmatch": "^7.1.0",
     "playwright": "^1.50.1",
+    "pngjs": "^7.0.0",
     "yaml": "^2.6.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "@types/pngjs": "^6.0.5",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
-    "typescript": "^5.7.3",
     "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }
 }

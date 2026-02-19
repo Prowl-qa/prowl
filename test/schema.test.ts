@@ -436,11 +436,114 @@ describe("huntSchema mockRoute and unmockRoute", () => {
     ).toThrow();
   });
 
-  it("accepts unmockRoute", () => {
+  it("accepts unmockRoute object form", () => {
     const parsed = huntSchema.parse({
       steps: [{ unmockRoute: { url: "**/api/users" } }]
     });
     expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts unmockRoute string shorthand", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ unmockRoute: "**/api/users" }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+});
+
+describe("huntSchema evalScript step", () => {
+  it("accepts evalScript shorthand string", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ evalScript: "document.title" }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts evalScript object with expression", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ evalScript: { expression: "document.querySelectorAll('tr').length" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts evalScript object with expression and as", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ evalScript: { expression: "document.title", as: "PAGE_TITLE" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects evalScript with empty expression", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ evalScript: "" }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects evalScript object with empty expression", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ evalScript: { expression: "" } }]
+      })
+    ).toThrow();
+  });
+});
+
+describe("huntSchema runScript step", () => {
+  it("accepts runScript with file", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ runScript: { file: "scripts/setup-data.js" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects runScript with empty file", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ runScript: { file: "" } }]
+      })
+    ).toThrow();
+  });
+});
+
+describe("huntSchema assertScreenshot step", () => {
+  it("accepts assertScreenshot with name and threshold", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ assertScreenshot: { name: "homepage", threshold: 0.1 } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts assertScreenshot with name only", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ assertScreenshot: { name: "checkout-form" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects assertScreenshot with threshold > 1", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ assertScreenshot: { name: "test", threshold: 1.5 } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects assertScreenshot with threshold < 0", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ assertScreenshot: { name: "test", threshold: -0.1 } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects assertScreenshot with empty name", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ assertScreenshot: { name: "" } }]
+      })
+    ).toThrow();
   });
 });
 

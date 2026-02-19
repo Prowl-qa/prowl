@@ -4,7 +4,19 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+### Improved
+- `unmockRoute` accepts string shorthand (`unmockRoute: "**/api/users"`) in addition to object form
+- `assert visible` / `assert notVisible` now accept CSS selectors (e.g., `img[alt='Logo']`, `.card-grid`) in addition to plain text
+- `wait` step uses substring matching instead of exact match, so `wait: "Made for agents"` now matches elements containing that text
+
 ### Added
+- `evalScript` step type: evaluate JavaScript expressions in browser context, with optional variable capture via `as` (P4-003)
+- `runScript` step type: execute external JavaScript files in browser context (P4-003)
+- Runtime variables: `evalScript` with `as` stores results for `{{VAR}}` interpolation in subsequent steps (P4-003)
+- `assertScreenshot` step type: visual regression testing with pixel-level baseline comparison using configurable threshold (P6-006)
+- `prowlqa update-baselines` command: accept current screenshots as new visual regression baselines (P6-006)
+- `prowlqa analyze <url>` command: extract interactive elements and selectors from a page for agent-driven discovery (P5-002)
+- `prowlqa generate` command: AI-powered hunt generation from page analysis and intent description, supports Anthropic and OpenAI providers (P5-003)
 - `if` conditional step: execute sub-steps only when a selector is visible or not visible, enabling optional UI handling like cookie banners and modals (P4-002)
 - `repeat` step type: loop sub-steps a fixed number of times (`times`) or conditionally (`while` with `maxIterations`), with maxSteps guardrail enforcement across iterations (P4-001)
 - `mockRoute` / `unmockRoute` step types: intercept network requests with custom responses (inline body or file-based), enabling testing of error/loading/empty states (P4-005)
@@ -46,7 +58,7 @@ All notable changes to ProwlQA will be documented in this file.
 - Playwright integration with headless and headed modes
 - Configuration system (`.prowlqa/config.yml`) with Zod schema validation
 - Hunt file parsing (`.prowlqa/hunts/*.yml`) with variable interpolation (`{{VAR}}`)
-- 19 step types: `navigate`, `click`, `fill`, `type`, `press`, `selectOption`, `select`, `waitForSelector`, `waitForUrl`, `waitForNetworkIdle`, `wait`, `assert`, `onDialog`, `setInputFiles`, `runHunt`, `hover`, `scroll`, `scrollTo`, `screenshot`
+- 26 step types: `navigate`, `click`, `fill`, `type`, `press`, `selectOption`, `select`, `waitForSelector`, `waitForUrl`, `waitForNetworkIdle`, `wait`, `assert`, `onDialog`, `setInputFiles`, `runHunt`, `hover`, `scroll`, `scrollTo`, `screenshot`, `if`, `repeat`, `mockRoute`, `unmockRoute`, `evalScript`, `runScript`, `assertScreenshot`
 - 6 assertion types: `selectorExists`, `selectorNotExists`, `urlIncludes`, `urlEquals`, `noConsoleErrors`, `noNetworkErrors`
 - Guardrails: forbidden selectors, allowed domains, max steps, max total time
 - Artifact generation: screenshots (on-failure/all), console logs, network HAR, Playwright traces, JUnit XML

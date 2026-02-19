@@ -283,7 +283,41 @@ export const mockRouteStepSchema = z
 
 export const unmockRouteStepSchema = z
   .object({
-    unmockRoute: z.object({ url: z.string().min(1) }).strict()
+    unmockRoute: z.union([
+      z.string().min(1),
+      z.object({ url: z.string().min(1) }).strict()
+    ])
+  })
+  .strict();
+
+export const evalScriptStepSchema = z
+  .object({
+    evalScript: z.union([
+      z.string().min(1),
+      z
+        .object({
+          expression: z.string().min(1),
+          as: z.string().min(1).optional()
+        })
+        .strict()
+    ])
+  })
+  .strict();
+
+export const runScriptStepSchema = z
+  .object({
+    runScript: z.object({ file: z.string().min(1) }).strict()
+  })
+  .strict();
+
+export const assertScreenshotStepSchema = z
+  .object({
+    assertScreenshot: z
+      .object({
+        name: z.string().min(1),
+        threshold: z.number().min(0).max(1).optional()
+      })
+      .strict()
   })
   .strict();
 
@@ -310,7 +344,10 @@ export const stepSchema: z.ZodType<Step> = z.union([
   ifStepSchema,
   repeatStepSchema,
   mockRouteStepSchema,
-  unmockRouteStepSchema
+  unmockRouteStepSchema,
+  evalScriptStepSchema,
+  runScriptStepSchema,
+  assertScreenshotStepSchema
 ]);
 
 export const assertionSchema = z.union([
