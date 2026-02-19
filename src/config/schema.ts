@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Step } from "../types/index.js";
 import { isValidHuntName } from "./hunt-name.js";
 
 export const configSchema = z
@@ -286,7 +287,7 @@ export const unmockRouteStepSchema = z
   })
   .strict();
 
-export const stepSchema: z.ZodType<unknown> = z.union([
+export const stepSchema: z.ZodType<Step> = z.union([
   navigateStepSchema,
   clickStepSchema,
   fillStepSchema,

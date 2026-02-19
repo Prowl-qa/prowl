@@ -1722,6 +1722,85 @@ describe("executeSteps", () => {
     fs.rmSync(configDir, { recursive: true, force: true });
   });
 
+  it("fails mockRoute when file path traverses outside configDir", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-traversal-"));
+    const configDir = path.join(baseDir, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(baseDir, "outside.json"), '{"data": true}');
+
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, file: "../outside.json" }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("must resolve within config directory");
+    expect(page.route).not.toHaveBeenCalled();
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("fails mockRoute when absolute file path is outside configDir", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-abs-"));
+    const configDir = path.join(baseDir, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    const outsidePath = path.join(baseDir, "outside.json");
+    fs.writeFileSync(outsidePath, '{"data": true}');
+
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, file: outsidePath }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("must resolve within config directory");
+    expect(page.route).not.toHaveBeenCalled();
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
+
   it("fails mockRoute with clear error when response body and file are both missing", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);

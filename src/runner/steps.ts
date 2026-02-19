@@ -697,9 +697,6 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           }
           for (let i = 0; i < repeat.times; i++) {
             totalSubSteps += repeat.steps.length;
-            if (totalSubSteps > context.maxSteps) {
-              throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
-            }
             const subResult = await executeSteps({
               ...context,
               steps: repeat.steps,
@@ -769,10 +766,23 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           if (!responseFile) {
             throw new Error("mock.response must include either body or file");
           }
-          const filePath = path.isAbsolute(responseFile)
+          const candidateFilePath = path.isAbsolute(responseFile)
             ? responseFile
             : path.join(context.configDir, responseFile);
-          responseBody = await fs.promises.readFile(filePath, "utf-8");
+          const resolvedConfigDir = path.resolve(context.configDir);
+          const resolvedFilePath = path.resolve(candidateFilePath);
+          const relativePath = path.relative(resolvedConfigDir, resolvedFilePath);
+          const isWithinConfigDir =
+            relativePath === ""
+            || (
+              relativePath !== ".."
+              && !relativePath.startsWith(`..${path.sep}`)
+              && !path.isAbsolute(relativePath)
+            );
+          if (!isWithinConfigDir) {
+            throw new Error("mock.response.file must resolve within config directory");
+          }
+          responseBody = await fs.promises.readFile(resolvedFilePath, "utf-8");
         }
 
         const contentType = mock.response.contentType ?? "application/json";
