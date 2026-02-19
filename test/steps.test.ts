@@ -1151,6 +1151,39 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails if step when condition selector is forbidden", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".danger-banner": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".danger-banner",
+          then: [{ navigate: "/safe" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [".danger-banner"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("redacts sensitive type values inside if sub-steps", async () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 1 }
@@ -1301,6 +1334,40 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(false);
     const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
     expect(repeatSteps).toHaveLength(0);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails repeat while when condition selector is forbidden", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".danger-load-more": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          while: { visible: ".danger-load-more" },
+          maxIterations: 3,
+          steps: [{ navigate: "/next" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [".danger-load-more"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 

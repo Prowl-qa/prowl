@@ -395,6 +395,20 @@ describe("ci command", () => {
     }
   });
 
+  it("rejects --parallel 0", async () => {
+    const cmd = buildCiCommand();
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--parallel", "0"])
+    ).rejects.toThrow("--parallel must be a positive integer");
+  });
+
+  it("rejects non-integer --parallel values", async () => {
+    const cmd = buildCiCommand();
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--parallel", "1.5"])
+    ).rejects.toThrow("--parallel must be a positive integer");
+  });
+
   it("preserves hunt name when a parallel task is rejected", async () => {
     mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
     mockListHunts.mockReturnValue(["homepage"]);

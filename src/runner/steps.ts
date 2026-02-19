@@ -624,6 +624,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       } else if ("if" in step) {
         const condition = step.if;
         const selector = condition.visible ?? condition.notVisible!;
+        assertAllowedSelector(selector, context.forbiddenSelectors);
         const count = await context.page.locator(selector).count();
         const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
 
@@ -691,6 +692,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           const maxIter = repeat.maxIterations!;
           for (let i = 0; i < maxIter; i++) {
             const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
+            assertAllowedSelector(whileSelector, context.forbiddenSelectors);
             const whileCount = await context.page.locator(whileSelector).count();
             const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
             if (!shouldContinue) break;

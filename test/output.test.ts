@@ -177,7 +177,19 @@ describe("describeStep", () => {
     const step: Step = {
       repeat: { while: { visible: ".load-more" }, maxIterations: 10, steps: [{ click: ".btn" }] }
     };
-    expect(describeStep(step)).toBe('repeat while ".load-more"');
+    expect(describeStep(step)).toBe('repeat while visible ".load-more"');
+  });
+
+  it("describes repeat step with notVisible while condition", () => {
+    const step: Step = {
+      repeat: { while: { notVisible: ".spinner" }, maxIterations: 10, steps: [{ click: ".btn" }] }
+    };
+    expect(describeStep(step)).toBe('repeat while not visible ".spinner"');
+  });
+
+  it("falls back when repeat condition is unspecified", () => {
+    const step = { repeat: { steps: [{ click: ".btn" }] } } as unknown as Step;
+    expect(describeStep(step)).toBe("repeat while condition unspecified");
   });
 
   it("describes mockRoute step", () => {

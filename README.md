@@ -548,7 +548,17 @@ prowlqa init --force                      # Overwrite existing
 
 # List available hunts
 prowlqa list
+
+# CI mode — run all hunts with aggregate status
+prowlqa ci
+prowlqa ci --json                        # Machine-readable CI output
+prowlqa ci --parallel 4                 # Run hunts with 4 workers
 ```
+
+`--parallel <count>` details:
+- Runs hunts in parallel with `count` workers.
+- Must be a positive integer (`>= 1`).
+- Invalid values (for example `0` or `1.5`) fail fast with an argument error.
 
 ---
 

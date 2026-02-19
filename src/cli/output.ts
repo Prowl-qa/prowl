@@ -53,8 +53,13 @@ export function describeStep(step: Step): string {
   }
   if ("repeat" in step) {
     if (step.repeat.times !== undefined) return `repeat ${step.repeat.times} times`;
-    const sel = step.repeat.while?.visible ?? step.repeat.while?.notVisible;
-    return `repeat while "${sel}"`;
+    if (step.repeat.while?.visible !== undefined) {
+      return `repeat while visible "${step.repeat.while.visible}"`;
+    }
+    if (step.repeat.while?.notVisible !== undefined) {
+      return `repeat while not visible "${step.repeat.while.notVisible}"`;
+    }
+    return "repeat while condition unspecified";
   }
   if ("mockRoute" in step) return `mockRoute "${step.mockRoute.url}"`;
   if ("unmockRoute" in step) return `unmockRoute "${step.unmockRoute.url}"`;
