@@ -2,7 +2,7 @@ import type { Assertion, Hunt, Step } from "../types/index.js";
 
 export type InterpolatedHunt = {
   hunt: Hunt;
-  redactedFillSteps: Set<number>;
+  redactedFillSteps: Set<string>;
 };
 
 export type InterpolationResult = {
@@ -31,8 +31,8 @@ export function interpolateString(
 function interpolateStep(
   step: Step,
   vars: Record<string, string>,
-  index: number,
-  redacted: Set<number>
+  stepPath: string,
+  redacted: Set<string>
 ): Step {
   const isExplicitFill = (
     value: { selector: string; value: string } | Record<string, string>
@@ -67,7 +67,7 @@ function interpolateStep(
       const selectorResult = interpolateString(step.fill.selector, vars);
       const valueResult = interpolateString(step.fill.value, vars);
       if (valueResult.usedVars.length > 0) {
-        redacted.add(index);
+        redacted.add(stepPath);
       }
       return { fill: { selector: selectorResult.value, value: valueResult.value } };
     }
@@ -78,7 +78,7 @@ function interpolateStep(
     const labelResult = interpolateString(rawLabel, vars);
     const valueResult = interpolateString(rawValue, vars);
     if (valueResult.usedVars.length > 0) {
-      redacted.add(index);
+      redacted.add(stepPath);
     }
     return {
       fill: {
@@ -89,7 +89,7 @@ function interpolateStep(
   if ("type" in step) {
     const valueResult = interpolateString(step.type, vars);
     if (valueResult.usedVars.length > 0) {
-      redacted.add(index);
+      redacted.add(stepPath);
     }
     return { type: valueResult.value };
   }
@@ -196,7 +196,9 @@ function interpolateStep(
   }
   if ("if" in step) {
     const condition = step.if;
-    const thenSteps = condition.then.map((s, i) => interpolateStep(s, vars, i, redacted));
+    const thenSteps = condition.then.map((s, i) =>
+      interpolateStep(s, vars, `${stepPath}.if.then.${i}`, redacted)
+    );
     return {
       if: {
         ...(condition.visible !== undefined
@@ -211,7 +213,9 @@ function interpolateStep(
   }
   if ("repeat" in step) {
     const repeat = step.repeat;
-    const subSteps = repeat.steps.map((s, i) => interpolateStep(s, vars, i, redacted));
+    const subSteps = repeat.steps.map((s, i) =>
+      interpolateStep(s, vars, `${stepPath}.repeat.steps.${i}`, redacted)
+    );
     return {
       repeat: {
         ...(repeat.times !== undefined ? { times: repeat.times } : {}),
@@ -283,7 +287,7 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
 }
 
 export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
-  const redactedFillSteps = new Set<number>();
+  const redactedFillSteps = new Set<string>();
 
   const envVars = Object.fromEntries(
     Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
@@ -295,7 +299,9 @@ export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): Interpolate
   }
 
   const vars = { ...envVars, ...resolvedHuntVars };
-  const steps = hunt.steps.map((step, index) => interpolateStep(step, vars, index, redactedFillSteps));
+  const steps = hunt.steps.map((step, index) =>
+    interpolateStep(step, vars, `${index}`, redactedFillSteps)
+  );
   const assertions = hunt.assertions?.map((assertion) => interpolateAssertion(assertion, vars));
   return {
     hunt: {

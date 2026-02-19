@@ -25,11 +25,13 @@ export type StepExecutionContext = {
   allowedDomains: string[];
   maxSteps: number;
   maxTotalTimeMs: number;
-  redactedFillSteps: Set<number>;
+  redactedFillSteps: Set<string>;
   configDir: string;
   onStep?: StepCallback;
   huntStack?: string[];
   activeMocks?: Map<string, () => Promise<void>>;
+  runStartedAtMs?: number;
+  stepPathPrefix?: string;
 };
 
 export type StepExecutionResult = {
@@ -302,6 +304,10 @@ function screenshotPath(screenshotsDir: string, fileName: string): string {
   return path.join(screenshotsDir, fileName);
 }
 
+function stepPath(prefix: string | undefined, index: number): string {
+  return prefix ? `${prefix}.${index}` : `${index}`;
+}
+
 async function captureScreenshot(page: Page, filePath: string): Promise<void> {
   try {
     await page.screenshot({ path: filePath, fullPage: true });
@@ -319,7 +325,8 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
 
   const results: StepResult[] = [];
   const screenshots: string[] = [];
-  const startTime = Date.now();
+  const runStartedAtMs = context.runStartedAtMs ?? Date.now();
+  context.runStartedAtMs = runStartedAtMs;
 
   const addScreenshot = async (fileName: string): Promise<string> => {
     const fullPath = screenshotPath(screenshotsDir, fileName);
@@ -330,7 +337,8 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
   };
 
   for (let index = 0; index < context.steps.length; index += 1) {
-    if (Date.now() - startTime > context.maxTotalTimeMs) {
+    const currentStepPath = stepPath(context.stepPathPrefix, index);
+    if (Date.now() - runStartedAtMs > context.maxTotalTimeMs) {
       results.push({
         type: "timeout",
         status: "fail",
@@ -396,7 +404,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           selector,
-          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : value
+          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : value
         };
       } else if ("type" in step) {
         assertAllowedSelector(":focus", context.forbiddenSelectors);
@@ -407,7 +415,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           selector: ":focus",
-          value: context.redactedFillSteps.has(index) ? "[REDACTED]" : step.type
+          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : step.type
         };
       } else if ("selectOption" in step) {
         assertAllowedSelector(step.selectOption.selector, context.forbiddenSelectors);
@@ -482,6 +490,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           ...context,
           steps: interpolatedSubHunt.steps,
           redactedFillSteps: subRedacted,
+          stepPathPrefix: undefined,
           huntStack: [...stack, huntName],
           onStep: context.onStep
         });
@@ -622,7 +631,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           const subResult = await executeSteps({
             ...context,
             steps: condition.then,
-            redactedFillSteps: new Set()
+            stepPathPrefix: `${currentStepPath}.if.then`
           });
           for (const sr of subResult.results) {
             results.push({ ...sr, type: `if > ${sr.type}` });
@@ -663,7 +672,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             const subResult = await executeSteps({
               ...context,
               steps: repeat.steps,
-              redactedFillSteps: new Set()
+              stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
             for (const sr of subResult.results) {
               results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
@@ -693,7 +702,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             const subResult = await executeSteps({
               ...context,
               steps: repeat.steps,
-              redactedFillSteps: new Set()
+              stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
             for (const sr of subResult.results) {
               results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });

@@ -271,7 +271,7 @@ describe("executeSteps", () => {
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       maxSteps: 50,
-      redactedFillSteps: new Set([0]),
+      redactedFillSteps: new Set(["0"]),
       configDir: runDir
     });
 
@@ -1151,6 +1151,40 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("redacts sensitive type values inside if sub-steps", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ type: "nested-secret" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.if.then.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedType = result.results.find((r) => r.type === "if > type");
+    expect(nestedType?.value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("executes repeat step with fixed count", async () => {
     const page = createMockPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
@@ -1334,6 +1368,84 @@ describe("executeSteps", () => {
     const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
     expect(repeatSteps.length).toBeLessThan(5);
     fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("redacts sensitive fill values inside repeat sub-steps", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 2,
+          steps: [{ fill: { selector: "#password", value: "nested-secret" } }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.repeat.steps.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedFill = result.results.filter((r) => r.type.startsWith("repeat[") && r.type.endsWith("fill"));
+    expect(nestedFill).toHaveLength(2);
+    expect(nestedFill[0].value).toBe("[REDACTED]");
+    expect(nestedFill[1].value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("enforces maxTotalTimeMs across repeat iterations", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 2,
+          steps: [{ navigate: "/page" }]
+        }
+      }
+    ] as Step[];
+
+    const values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let cursor = 0;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => {
+      const value = values[cursor] ?? values[values.length - 1] + (cursor - values.length + 1);
+      cursor += 1;
+      return value;
+    });
+
+    try {
+      const result = await executeSteps({
+        page: page as unknown as Page,
+        steps,
+        targetUrl: "http://localhost",
+        runDir,
+        screenshotsMode: "on-failure",
+        forbiddenSelectors: [],
+        allowedDomains: ["localhost"],
+        maxTotalTimeMs: 5,
+        maxSteps: 50,
+        redactedFillSteps: new Set(),
+        configDir: runDir
+      });
+
+      expect(result.failed).toBe(true);
+      expect(result.error).toContain("Max total time exceeded");
+      expect(result.results.some((r) => r.type.includes("timeout"))).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
   });
 
   it("executes mockRoute step", async () => {

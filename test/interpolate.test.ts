@@ -51,7 +51,7 @@ describe("interpolateHunt", () => {
         value: "secret"
       }
     });
-    expect(redactedFillSteps.has(1)).toBe(true);
+    expect(redactedFillSteps.has("1")).toBe(true);
   });
 
   it("interpolates hunt vars that reference env vars", () => {
@@ -116,8 +116,33 @@ describe("interpolateHunt", () => {
     expect(interpolated.steps[3]).toEqual({ select: { State: "FL" } });
     expect(interpolated.steps[4]).toEqual({ wait: "Sign In" });
     expect(interpolated.steps[5]).toEqual({ assert: { visible: "Sign In" } });
-    expect(redactedFillSteps.has(1)).toBe(true);
-    expect(redactedFillSteps.has(2)).toBe(true);
+    expect(redactedFillSteps.has("1")).toBe(true);
+    expect(redactedFillSteps.has("2")).toBe(true);
+  });
+
+  it("tracks nested redaction using parent step paths", () => {
+    const hunt: Hunt = {
+      steps: [
+        { type: "public-value" },
+        {
+          if: {
+            visible: ".secret",
+            then: [{ type: "{{TEST_PASSWORD}}" }]
+          }
+        },
+        {
+          repeat: {
+            times: 2,
+            steps: [{ fill: { selector: "#password", value: "{{TEST_PASSWORD}}" } }]
+          }
+        }
+      ]
+    };
+
+    const { redactedFillSteps } = interpolateHunt(hunt, env);
+    expect(redactedFillSteps.has("0")).toBe(false);
+    expect(redactedFillSteps.has("1.if.then.0")).toBe(true);
+    expect(redactedFillSteps.has("2.repeat.steps.0")).toBe(true);
   });
 
   it("interpolates if step selector and sub-steps", () => {
