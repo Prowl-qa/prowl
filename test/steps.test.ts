@@ -543,7 +543,7 @@ describe("executeSteps", () => {
     });
 
     expect(result.failed).toBe(false);
-    expect(page.waitForSelector).toHaveBeenCalledWith('text="Welcome"', { timeout: undefined });
+    expect(page.waitForSelector).toHaveBeenCalledWith("text=Welcome", { timeout: undefined });
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
@@ -582,7 +582,7 @@ describe("executeSteps", () => {
       targetUrl: "http://localhost",
       runDir,
       screenshotsMode: "on-failure",
-      forbiddenSelectors: ['text="Welcome"'],
+      forbiddenSelectors: ["text=Welcome"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       maxSteps: 50,
@@ -597,7 +597,7 @@ describe("executeSteps", () => {
 
   it("fails inline assert visible when text is missing", async () => {
     const page = createMockPage({
-      locatorCounts: { 'text="Welcome back"': 0 }
+      locatorCounts: { "text=Welcome back": 0 }
     });
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
     const steps: Step[] = [{ assert: { visible: "Welcome back" } }];
@@ -632,7 +632,7 @@ describe("executeSteps", () => {
       targetUrl: "http://localhost",
       runDir,
       screenshotsMode: "on-failure",
-      forbiddenSelectors: ['text="Welcome back"'],
+      forbiddenSelectors: ["text=Welcome back"],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       maxSteps: 50,
@@ -1431,6 +1431,95 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("executes unmockRoute string shorthand after mockRoute", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    page.unroute = vi.fn(async () => undefined);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/users",
+          response: { status: 200, body: '{"users": []}' }
+        }
+      },
+      { unmockRoute: "**/api/users" }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[1].type).toBe("unmockRoute");
+    expect(page.unroute).toHaveBeenCalledWith("**/api/users");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("assert visible accepts CSS selectors", async () => {
+    const page = createMockPage({
+      locatorCounts: { "img[alt='Logo']": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ assert: { visible: "img[alt='Logo']" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("assert");
+    expect(page.locator).toHaveBeenCalledWith("img[alt='Logo']");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("assert notVisible accepts CSS selectors", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".error-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ assert: { notVisible: ".error-banner" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("assert");
+    expect(page.locator).toHaveBeenCalledWith(".error-banner");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("mockRoute reads file-based response from configDir", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
@@ -1551,8 +1640,8 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(false);
     expect(result.results[0].type).toBe("evalScript");
     expect(result.results[1].type).toBe("assert");
-    // The assert step should have used "Dashboard" as the visible text
-    expect(page.locator).toHaveBeenCalledWith('text="Dashboard"');
+    // The assert step should have used "Dashboard" as the visible text (substring match)
+    expect(page.locator).toHaveBeenCalledWith("text=Dashboard");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 

@@ -253,6 +253,9 @@ function interpolateStep(
     };
   }
   if ("unmockRoute" in step) {
+    if (typeof step.unmockRoute === "string") {
+      return { unmockRoute: interpolateString(step.unmockRoute, vars).value };
+    }
     return {
       unmockRoute: { url: interpolateString(step.unmockRoute.url, vars).value }
     };

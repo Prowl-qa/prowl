@@ -4,6 +4,11 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+### Improved
+- `unmockRoute` accepts string shorthand (`unmockRoute: "**/api/users"`) in addition to object form
+- `assert visible` / `assert notVisible` now accept CSS selectors (e.g., `img[alt='Logo']`, `.card-grid`) in addition to plain text
+- `wait` step uses substring matching instead of exact match, so `wait: "Made for agents"` now matches elements containing that text
+
 ### Added
 - `evalScript` step type: evaluate JavaScript expressions in browser context, with optional variable capture via `as` (P4-003)
 - `runScript` step type: execute external JavaScript files in browser context (P4-003)

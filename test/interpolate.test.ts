@@ -189,6 +189,16 @@ describe("interpolateHunt", () => {
     expect(step.unmockRoute.url).toBe("**/api/users");
   });
 
+  it("interpolates unmockRoute string shorthand", () => {
+    const hunt: Hunt = {
+      vars: { API_URL: "**/api/users" },
+      steps: [{ unmockRoute: "{{API_URL}}" }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { unmockRoute: string };
+    expect(step.unmockRoute).toBe("**/api/users");
+  });
+
   it("interpolates mockRoute file path", () => {
     const hunt: Hunt = {
       vars: { FIXTURE: "fixtures/orders.json" },

@@ -314,6 +314,15 @@ async function selectByLabelOrFallback(
   throw new Error(`Could not resolve select shorthand for "${label}"`);
 }
 
+function looksLikeSelector(value: string): boolean {
+  return /[.#[\]>:=~|^$*@]/.test(value);
+}
+
+function toVisibilitySelector(value: string): string {
+  if (looksLikeSelector(value)) return value;
+  return `text=${escapeForText(value)}`;
+}
+
 async function runInlineAssert(
   page: Page,
   assertion: {
@@ -325,21 +334,21 @@ async function runInlineAssert(
   forbiddenSelectors: string[]
 ): Promise<string> {
   if (assertion.visible !== undefined) {
-    const selector = textSelector(assertion.visible);
+    const selector = toVisibilitySelector(assertion.visible);
     assertAllowedSelector(selector, forbiddenSelectors);
     const count = await page.locator(selector).count();
     if (count === 0) {
-      throw new Error(`Expected visible text: ${assertion.visible}`);
+      throw new Error(`Expected visible: ${assertion.visible}`);
     }
     return `visible:${assertion.visible}`;
   }
 
   if (assertion.notVisible !== undefined) {
-    const selector = textSelector(assertion.notVisible);
+    const selector = toVisibilitySelector(assertion.notVisible);
     assertAllowedSelector(selector, forbiddenSelectors);
     const count = await page.locator(selector).count();
     if (count > 0) {
-      throw new Error(`Expected text to be hidden: ${assertion.notVisible}`);
+      throw new Error(`Expected not visible: ${assertion.notVisible}`);
     }
     return `notVisible:${assertion.notVisible}`;
   }
@@ -593,8 +602,9 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value
         };
       } else if ("wait" in step) {
-        const selector = typeof step.wait === "string" ? textSelector(step.wait) : textSelector(step.wait.for);
+        const text = typeof step.wait === "string" ? step.wait : step.wait.for;
         const timeout = typeof step.wait === "string" ? undefined : step.wait.timeout;
+        const selector = `text=${escapeForText(text)}`;
         assertAllowedSelector(selector, context.forbiddenSelectors);
         await context.page.waitForSelector(selector, { timeout });
         stepResult = {
@@ -823,7 +833,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: mock.url
         };
       } else if ("unmockRoute" in step) {
-        const url = step.unmockRoute.url;
+        const url = typeof step.unmockRoute === "string" ? step.unmockRoute : step.unmockRoute.url;
         const mocks = context.activeMocks;
         if (!mocks || !mocks.has(url)) {
           throw new Error(`No active mock for URL: ${url}`);

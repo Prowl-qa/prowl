@@ -281,7 +281,10 @@ export const mockRouteStepSchema = z
 
 export const unmockRouteStepSchema = z
   .object({
-    unmockRoute: z.object({ url: z.string().min(1) }).strict()
+    unmockRoute: z.union([
+      z.string().min(1),
+      z.object({ url: z.string().min(1) }).strict()
+    ])
   })
   .strict();
 

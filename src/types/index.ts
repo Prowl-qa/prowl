@@ -109,7 +109,7 @@ export type MockRouteStep = {
     };
   };
 };
-export type UnmockRouteStep = { unmockRoute: { url: string } };
+export type UnmockRouteStep = { unmockRoute: string | { url: string } };
 export type EvalScriptStep = {
   evalScript: string | { expression: string; as?: string };
 };

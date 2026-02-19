@@ -410,9 +410,16 @@ describe("huntSchema mockRoute and unmockRoute", () => {
     ).toThrow("response requires exactly one of body or file");
   });
 
-  it("accepts unmockRoute", () => {
+  it("accepts unmockRoute object form", () => {
     const parsed = huntSchema.parse({
       steps: [{ unmockRoute: { url: "**/api/users" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts unmockRoute string shorthand", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ unmockRoute: "**/api/users" }]
     });
     expect(parsed.steps).toHaveLength(1);
   });
