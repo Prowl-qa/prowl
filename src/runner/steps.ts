@@ -653,18 +653,48 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             value: `condition met, executed ${condition.then.length} steps`
           };
         } else {
-          stepResult = {
-            type: "if",
-            status: "pass",
-            durationMs: Date.now() - stepStart,
-            value: "condition not met, skipped"
-          };
+          if (condition.else && condition.else.length > 0) {
+            const subResult = await executeSteps({
+              ...context,
+              steps: condition.else,
+              stepPathPrefix: `${currentStepPath}.if.else`
+            });
+            for (const sr of subResult.results) {
+              results.push({ ...sr, type: `if > ${sr.type}` });
+            }
+            screenshots.push(...subResult.screenshots);
+            if (subResult.failed) {
+              return {
+                results,
+                screenshots,
+                failed: true,
+                error: subResult.error
+              };
+            }
+            stepResult = {
+              type: "if",
+              status: "pass",
+              durationMs: Date.now() - stepStart,
+              value: `condition not met, executed ${condition.else.length} else steps`
+            };
+          } else {
+            stepResult = {
+              type: "if",
+              status: "pass",
+              durationMs: Date.now() - stepStart,
+              value: "condition not met, skipped"
+            };
+          }
         }
       } else if ("repeat" in step) {
         const repeat = step.repeat;
         let totalSubSteps = 0;
 
         if (repeat.times !== undefined) {
+          const totalPlanned = repeat.times * repeat.steps.length;
+          if (totalPlanned + totalSubSteps > context.maxSteps) {
+            throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
+          }
           for (let i = 0; i < repeat.times; i++) {
             totalSubSteps += repeat.steps.length;
             if (totalSubSteps > context.maxSteps) {

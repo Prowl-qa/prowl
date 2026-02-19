@@ -127,7 +127,8 @@ describe("interpolateHunt", () => {
         {
           if: {
             visible: ".secret",
-            then: [{ type: "{{TEST_PASSWORD}}" }]
+            then: [{ type: "{{TEST_PASSWORD}}" }],
+            else: [{ type: "{{TEST_PASSWORD}}" }]
           }
         },
         {
@@ -142,6 +143,7 @@ describe("interpolateHunt", () => {
     const { redactedFillSteps } = interpolateHunt(hunt, env);
     expect(redactedFillSteps.has("0")).toBe(false);
     expect(redactedFillSteps.has("1.if.then.0")).toBe(true);
+    expect(redactedFillSteps.has("1.if.else.0")).toBe(true);
     expect(redactedFillSteps.has("2.repeat.steps.0")).toBe(true);
   });
 
@@ -161,6 +163,28 @@ describe("interpolateHunt", () => {
     const step = interpolated.steps[0] as { if: { visible: string; then: Array<{ navigate: string }> } };
     expect(step.if.visible).toBe(".cookie-banner");
     expect(step.if.then[0].navigate).toBe("/accept");
+  });
+
+  it("interpolates if step else sub-steps", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".cookie-banner", THEN_PAGE: "/accept", ELSE_PAGE: "/fallback" },
+      steps: [
+        {
+          if: {
+            visible: "{{SELECTOR}}",
+            then: [{ navigate: "{{THEN_PAGE}}" }],
+            else: [{ navigate: "{{ELSE_PAGE}}" }]
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as {
+      if: { visible: string; then: Array<{ navigate: string }>; else: Array<{ navigate: string }> }
+    };
+    expect(step.if.visible).toBe(".cookie-banner");
+    expect(step.if.then[0].navigate).toBe("/accept");
+    expect(step.if.else[0].navigate).toBe("/fallback");
   });
 
   it("interpolates repeat step while selector and sub-steps", () => {

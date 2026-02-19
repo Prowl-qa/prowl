@@ -199,6 +199,9 @@ function interpolateStep(
     const thenSteps = condition.then.map((s, i) =>
       interpolateStep(s, vars, `${stepPath}.if.then.${i}`, redacted)
     );
+    const elseSteps = condition.else?.map((s, i) =>
+      interpolateStep(s, vars, `${stepPath}.if.else.${i}`, redacted)
+    );
     return {
       if: {
         ...(condition.visible !== undefined
@@ -207,7 +210,8 @@ function interpolateStep(
         ...(condition.notVisible !== undefined
           ? { notVisible: interpolateString(condition.notVisible, vars).value }
           : {}),
-        then: thenSteps
+        then: thenSteps,
+        ...(elseSteps !== undefined ? { else: elseSteps } : {})
       }
     };
   }

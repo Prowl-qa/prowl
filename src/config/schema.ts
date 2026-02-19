@@ -212,7 +212,8 @@ export const ifStepSchema = z
       .object({
         visible: z.string().min(1).optional(),
         notVisible: z.string().min(1).optional(),
-        then: z.lazy(() => z.array(stepSchema).min(1))
+        then: z.lazy(() => z.array(stepSchema).min(1)),
+        else: z.lazy(() => z.array(stepSchema).min(1)).optional()
       })
       .strict()
       .refine(

@@ -88,6 +88,7 @@ export type IfStep = {
     visible?: string;
     notVisible?: string;
     then: Step[];
+    else?: Step[];
   };
 };
 export type RepeatStep = {

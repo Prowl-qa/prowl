@@ -242,6 +242,19 @@ describe("huntSchema if step", () => {
     expect(parsed.steps).toHaveLength(1);
   });
 
+  it("accepts if with else block", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        if: {
+          visible: ".cookie-banner",
+          then: [{ click: ".accept" }],
+          else: [{ wait: "Welcome back" }]
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
   it("rejects if with both visible and notVisible", () => {
     expect(() =>
       huntSchema.parse({

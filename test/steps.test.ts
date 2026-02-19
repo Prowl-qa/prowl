@@ -1083,6 +1083,43 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("executes if else steps when condition is not met", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }],
+          else: [{ navigate: "/fallback" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const ifSubStep = result.results.find((r) => r.type === "if > navigate");
+    expect(ifSubStep).toBeDefined();
+    expect(result.results[result.results.length - 1].value).toBe("condition not met, executed 1 else steps");
+    expect(page.goto).toHaveBeenCalledWith("http://localhost/fallback");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("propagates sub-step failure from if step", async () => {
     const page = createMockPage({
       locatorCounts: { ".banner": 1, ".missing": 0 }
@@ -1209,6 +1246,41 @@ describe("executeSteps", () => {
       maxTotalTimeMs: 30000,
       maxSteps: 50,
       redactedFillSteps: new Set(["0.if.then.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedType = result.results.find((r) => r.type === "if > type");
+    expect(nestedType?.value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("redacts sensitive type values inside if else sub-steps", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }],
+          else: [{ type: "nested-secret" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.if.else.0"]),
       configDir: runDir
     });
 
@@ -1399,6 +1471,9 @@ describe("executeSteps", () => {
 
     expect(result.failed).toBe(true);
     expect(result.error).toContain("maxSteps");
+    const repeatSubSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSubSteps).toHaveLength(0);
+    expect(page.goto).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
