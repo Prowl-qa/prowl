@@ -1418,6 +1418,7 @@ describe("executeSteps", () => {
 
     const values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
     let cursor = 0;
+    // Advance Date.now deterministically so timeout assertions are stable across runs.
     const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => {
       const value = values[cursor] ?? values[values.length - 1] + (cursor - values.length + 1);
       cursor += 1;

@@ -47,8 +47,9 @@ export function describeStep(step: Step): string {
   if ("scrollTo" in step) return `scrollTo "${step.scrollTo.selector}"`;
   if ("screenshot" in step) return `screenshot "${step.screenshot.name ?? "auto"}"`;
   if ("if" in step) {
-    if (step.if.visible) return `if visible "${step.if.visible}"`;
-    return `if notVisible "${step.if.notVisible}"`;
+    if (step.if.visible !== undefined) return `if visible "${step.if.visible}"`;
+    if (step.if.notVisible !== undefined) return `if notVisible "${step.if.notVisible}"`;
+    return "if condition unspecified";
   }
   if ("repeat" in step) {
     if (step.repeat.times !== undefined) return `repeat ${step.repeat.times} times`;

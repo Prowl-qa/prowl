@@ -736,7 +736,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           const filePath = path.isAbsolute(mock.response.file!)
             ? mock.response.file!
             : path.join(context.configDir, mock.response.file!);
-          responseBody = fs.readFileSync(filePath, "utf-8");
+          responseBody = await fs.promises.readFile(filePath, "utf-8");
         }
 
         const contentType = mock.response.contentType ?? "application/json";

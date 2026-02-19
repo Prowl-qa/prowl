@@ -163,6 +163,11 @@ describe("describeStep", () => {
     expect(describeStep(step)).toBe('if notVisible ".modal"');
   });
 
+  it("falls back when if condition is unspecified", () => {
+    const step = { if: { then: [{ navigate: "/" }] } } as unknown as Step;
+    expect(describeStep(step)).toBe("if condition unspecified");
+  });
+
   it("describes repeat step with times", () => {
     const step: Step = { repeat: { times: 3, steps: [{ click: ".btn" }] } };
     expect(describeStep(step)).toBe("repeat 3 times");

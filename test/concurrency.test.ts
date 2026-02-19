@@ -73,4 +73,21 @@ describe("runWithConcurrency", () => {
     const results = await runWithConcurrency([], 3);
     expect(results).toEqual([]);
   });
+
+  it("normalizes non-positive concurrency to 1", async () => {
+    const order: number[] = [];
+    const tasks = [0, 1, 2].map((i) => async () => {
+      order.push(i);
+      return i;
+    });
+
+    const results = await runWithConcurrency(tasks, 0);
+
+    expect(order).toEqual([0, 1, 2]);
+    expect(results).toEqual([
+      { status: "fulfilled", value: 0 },
+      { status: "fulfilled", value: 1 },
+      { status: "fulfilled", value: 2 }
+    ]);
+  });
 });

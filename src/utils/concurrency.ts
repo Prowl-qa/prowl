@@ -6,6 +6,10 @@ export async function runWithConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   concurrency: number
 ): Promise<Array<ConcurrencyResult<T>>> {
+  const normalizedConcurrency =
+    Number.isFinite(concurrency) && concurrency > 0
+      ? Math.floor(concurrency)
+      : 1;
   const results: Array<ConcurrencyResult<T>> = new Array(tasks.length);
   let nextIndex = 0;
 
@@ -22,7 +26,10 @@ export async function runWithConcurrency<T>(
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  const workers = Array.from(
+    { length: Math.min(normalizedConcurrency, tasks.length) },
+    () => worker()
+  );
   await Promise.all(workers);
   return results;
 }

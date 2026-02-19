@@ -265,7 +265,7 @@ export const mockRouteStepSchema = z
           .object({
             status: z.number().int(),
             contentType: z.string().min(1).optional(),
-            body: z.string().optional(),
+            body: z.string().min(1).optional(),
             file: z.string().min(1).optional()
           })
           .strict()

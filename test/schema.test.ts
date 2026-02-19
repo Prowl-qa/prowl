@@ -410,6 +410,19 @@ describe("huntSchema mockRoute and unmockRoute", () => {
     ).toThrow("response requires exactly one of body or file");
   });
 
+  it("rejects mockRoute with empty body", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          mockRoute: {
+            url: "**/api/users",
+            response: { status: 200, body: "" }
+          }
+        }]
+      })
+    ).toThrow();
+  });
+
   it("accepts unmockRoute", () => {
     const parsed = huntSchema.parse({
       steps: [{ unmockRoute: { url: "**/api/users" } }]

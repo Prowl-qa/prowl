@@ -149,14 +149,23 @@ export function buildCiCommand(): Command {
 
       // Phase 3: Execute hunts
       if (isParallel) {
-        const tasks = huntsToRun.map((name) => buildTask(name));
-        const parallelResults = await runWithConcurrency(tasks, parallel);
-        for (const pr of parallelResults) {
+        const tasks = huntsToRun.map((name) => ({ name, task: buildTask(name) }));
+        const parallelResults = await runWithConcurrency(
+          tasks.map((entry) => entry.task),
+          parallel
+        );
+        for (let i = 0; i < parallelResults.length; i++) {
+          const pr = parallelResults[i];
           if (pr.status === "fulfilled") {
             results.push(pr.value);
           } else {
             const message = pr.reason instanceof Error ? pr.reason.message : "Run failed";
-            results.push({ hunt: "unknown", status: "fail", durationMs: 0, error: message });
+            results.push({
+              hunt: tasks[i]?.name ?? "unknown",
+              status: "fail",
+              durationMs: 0,
+              error: message
+            });
           }
         }
       } else {
