@@ -1647,6 +1647,39 @@ describe("executeSteps", () => {
     fs.rmSync(configDir, { recursive: true, force: true });
   });
 
+  it("fails mockRoute with clear error when response body and file are both missing", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-missing-response-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200 }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("mock.response must include either body or file");
+    expect(page.route).not.toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails runHunt when sub-hunt exceeds maxSteps", async () => {
     const page = createMockPage();
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-maxsteps-"));

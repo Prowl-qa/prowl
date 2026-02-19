@@ -690,9 +690,9 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           }
         } else if (repeat.while !== undefined) {
           const maxIter = repeat.maxIterations!;
+          const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
+          assertAllowedSelector(whileSelector, context.forbiddenSelectors);
           for (let i = 0; i < maxIter; i++) {
-            const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
-            assertAllowedSelector(whileSelector, context.forbiddenSelectors);
             const whileCount = await context.page.locator(whileSelector).count();
             const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
             if (!shouldContinue) break;
@@ -735,9 +735,13 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         if (mock.response.body !== undefined) {
           responseBody = mock.response.body;
         } else {
-          const filePath = path.isAbsolute(mock.response.file!)
-            ? mock.response.file!
-            : path.join(context.configDir, mock.response.file!);
+          const responseFile = mock.response.file;
+          if (!responseFile) {
+            throw new Error("mock.response must include either body or file");
+          }
+          const filePath = path.isAbsolute(responseFile)
+            ? responseFile
+            : path.join(context.configDir, responseFile);
           responseBody = await fs.promises.readFile(filePath, "utf-8");
         }
 
