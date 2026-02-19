@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Step } from "../types/index.js";
 import { isValidHuntName } from "./hunt-name.js";
 
 export const configSchema = z
@@ -205,7 +206,88 @@ export const screenshotStepSchema = z
   })
   .strict();
 
-export const stepSchema = z.union([
+// Recursive step schemas use z.lazy() to reference stepSchema before it's defined
+export const ifStepSchema = z
+  .object({
+    if: z
+      .object({
+        visible: z.string().min(1).optional(),
+        notVisible: z.string().min(1).optional(),
+        then: z.lazy(() => z.array(stepSchema).min(1)),
+        else: z.lazy(() => z.array(stepSchema).min(1)).optional()
+      })
+      .strict()
+      .refine(
+        (value) =>
+          [value.visible, value.notVisible].filter((v) => v !== undefined).length === 1,
+        { message: "if requires exactly one of visible or notVisible" }
+      )
+  })
+  .strict();
+
+export const repeatStepSchema = z
+  .object({
+    repeat: z
+      .object({
+        times: z.number().int().positive().optional(),
+        while: z
+          .object({
+            visible: z.string().min(1).optional(),
+            notVisible: z.string().min(1).optional()
+          })
+          .strict()
+          .refine(
+            (value) =>
+              [value.visible, value.notVisible].filter((v) => v !== undefined).length === 1,
+            { message: "while requires exactly one of visible or notVisible" }
+          )
+          .optional(),
+        maxIterations: z.number().int().positive().optional(),
+        steps: z.lazy(() => z.array(stepSchema).min(1))
+      })
+      .strict()
+      .refine((value) => !(value.times !== undefined && value.while !== undefined), {
+        message: "repeat requires either times or while, not both"
+      })
+      .refine((value) => value.times !== undefined || value.while !== undefined, {
+        message: "repeat requires either times or while"
+      })
+      .refine((value) => !(value.while !== undefined && value.maxIterations === undefined), {
+        message: "while requires maxIterations"
+      })
+  })
+  .strict();
+
+export const mockRouteStepSchema = z
+  .object({
+    mockRoute: z
+      .object({
+        url: z.string().min(1),
+        response: z
+          .object({
+            status: z.number().int(),
+            contentType: z.string().min(1).optional(),
+            body: z.string().min(1).optional(),
+            file: z.string().min(1).optional()
+          })
+          .strict()
+          .refine(
+            (value) =>
+              [value.body, value.file].filter((v) => v !== undefined).length === 1,
+            { message: "response requires exactly one of body or file" }
+          )
+      })
+      .strict()
+  })
+  .strict();
+
+export const unmockRouteStepSchema = z
+  .object({
+    unmockRoute: z.object({ url: z.string().min(1) }).strict()
+  })
+  .strict();
+
+export const stepSchema: z.ZodType<Step> = z.union([
   navigateStepSchema,
   clickStepSchema,
   fillStepSchema,
@@ -224,7 +306,11 @@ export const stepSchema = z.union([
   hoverStepSchema,
   scrollStepSchema,
   scrollToStepSchema,
-  screenshotStepSchema
+  screenshotStepSchema,
+  ifStepSchema,
+  repeatStepSchema,
+  mockRouteStepSchema,
+  unmockRouteStepSchema
 ]);
 
 export const assertionSchema = z.union([

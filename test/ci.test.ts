@@ -7,6 +7,7 @@ const mockRunHunt = vi.fn();
 const mockLoadConfig = vi.fn();
 const mockListHunts = vi.fn();
 const mockLoadHuntTags = vi.fn();
+const mockRunWithConcurrency = vi.fn();
 
 vi.mock("../src/runner/index.js", () => ({
   runHunt: (...args: unknown[]) => mockRunHunt(...args)
@@ -26,6 +27,10 @@ vi.mock("../src/cli/output.js", () => ({
 
 vi.mock("../src/cli/mascot.js", () => ({
   resultMascot: vi.fn(() => "")
+}));
+
+vi.mock("../src/utils/concurrency.js", () => ({
+  runWithConcurrency: (...args: unknown[]) => mockRunWithConcurrency(...args)
 }));
 
 import { buildCiCommand } from "../src/cli/commands/ci.js";
@@ -55,6 +60,37 @@ describe("ci command", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRunWithConcurrency.mockImplementation(
+      async (tasks: Array<() => Promise<unknown>>, concurrency: number) => {
+        const normalizedConcurrency =
+          Number.isFinite(concurrency) && concurrency > 0
+            ? Math.floor(concurrency)
+            : 1;
+        const results: Array<{ status: "fulfilled"; value: unknown } | { status: "rejected"; reason: unknown }> =
+          new Array(tasks.length);
+        let nextIndex = 0;
+
+        async function worker() {
+          while (nextIndex < tasks.length) {
+            const index = nextIndex;
+            nextIndex += 1;
+            try {
+              const value = await tasks[index]();
+              results[index] = { status: "fulfilled", value };
+            } catch (reason) {
+              results[index] = { status: "rejected", reason };
+            }
+          }
+        }
+
+        const workers = Array.from(
+          { length: Math.min(normalizedConcurrency, tasks.length) },
+          () => worker()
+        );
+        await Promise.all(workers);
+        return results;
+      }
+    );
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     process.exitCode = undefined;
@@ -314,6 +350,85 @@ describe("ci command", () => {
     expect(parsed.status).toBe("no-hunts");
     expect(parsed.totalHunts).toBe(0);
     expect(process.exitCode).toBe(2);
+  });
+
+  it("runs hunts in parallel with --parallel", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow", "checkout"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"))
+      .mockResolvedValueOnce(makeRunResult("checkout", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    expect(mockRunHunt).toHaveBeenCalledTimes(3);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("--parallel 1 is identical to default sequential", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "1"]);
+
+    expect(mockRunHunt).toHaveBeenCalledTimes(1);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("parallel mode suppresses per-step output", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "login-flow"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    // Parallel mode passes undefined for onStep
+    for (const call of mockRunHunt.mock.calls) {
+      expect(call[0].onStep).toBeUndefined();
+    }
+  });
+
+  it("rejects --parallel 0", async () => {
+    const cmd = buildCiCommand();
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--parallel", "0"])
+    ).rejects.toThrow("--parallel must be a positive integer");
+  });
+
+  it("rejects non-integer --parallel values", async () => {
+    const cmd = buildCiCommand();
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--parallel", "1.5"])
+    ).rejects.toThrow("--parallel must be a positive integer");
+  });
+
+  it("preserves hunt name when a parallel task is rejected", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage"]);
+    mockRunWithConcurrency.mockResolvedValueOnce([
+      { status: "rejected", reason: new Error("Task crashed") }
+    ]);
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2", "--json"]);
+
+    const jsonCall = logSpy.mock.calls.find((call) => {
+      try { JSON.parse(call[0]); return true; } catch { return false; }
+    });
+    expect(jsonCall).toBeDefined();
+    const parsed: CiResult = JSON.parse(jsonCall![0]);
+    expect(parsed.hunts[0]).toMatchObject({
+      hunt: "homepage",
+      status: "fail",
+      error: "Task crashed"
+    });
   });
 
   it("suppresses formatted output with --json flag", async () => {

@@ -3,7 +3,8 @@ export type {
   Config, Hunt, Step, Assertion,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
-  CiResult, CiHuntResult, CiStatus
+  CiResult, CiHuntResult, CiStatus,
+  IfStep, RepeatStep, MockRouteStep, UnmockRouteStep
 } from "./types/index.js";
 
 // Re-export runner

@@ -271,7 +271,7 @@ describe("executeSteps", () => {
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       maxSteps: 50,
-      redactedFillSteps: new Set([0]),
+      redactedFillSteps: new Set(["0"]),
       configDir: runDir
     });
 
@@ -1010,6 +1010,827 @@ describe("executeSteps", () => {
 
     expect(result.failed).toBe(true);
     expect(result.results[0].error).toContain("Invalid screenshot name");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes if step when condition is met", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const ifSubStep = result.results.find((r) => r.type === "if > navigate");
+    expect(ifSubStep).toBeDefined();
+    expect(ifSubStep?.status).toBe("pass");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("skips if step when condition is not met", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].type).toBe("if");
+    expect(result.results[0].value).toBe("condition not met, skipped");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes if else steps when condition is not met", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }],
+          else: [{ navigate: "/fallback" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const ifSubStep = result.results.find((r) => r.type === "if > navigate");
+    expect(ifSubStep).toBeDefined();
+    expect(result.results[result.results.length - 1].value).toBe("condition not met, executed 1 else steps");
+    expect(page.goto).toHaveBeenCalledWith("http://localhost/fallback");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("propagates sub-step failure from if step", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".banner": 1, ".missing": 0 }
+    });
+    // Make page.goto throw for the sub-step
+    page.goto.mockRejectedValueOnce(new Error("Navigation failed"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".banner",
+          then: [{ navigate: "/bad" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes if step with notVisible condition when element is absent", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".welcome-modal": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          notVisible: ".welcome-modal",
+          then: [{ navigate: "/onboarding" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const ifSubStep = result.results.find((r) => r.type === "if > navigate");
+    expect(ifSubStep).toBeDefined();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails if step when condition selector is forbidden", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".danger-banner": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".danger-banner",
+          then: [{ navigate: "/safe" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [".danger-banner"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("redacts sensitive type values inside if sub-steps", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ type: "nested-secret" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.if.then.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedType = result.results.find((r) => r.type === "if > type");
+    expect(nestedType?.value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("redacts sensitive type values inside if else sub-steps", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".cookie-banner": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: ".cookie-banner",
+          then: [{ navigate: "/accept" }],
+          else: [{ type: "nested-secret" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.if.else.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedType = result.results.find((r) => r.type === "if > type");
+    expect(nestedType?.value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes repeat step with fixed count", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 3,
+          steps: [{ navigate: "/page" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSteps).toHaveLength(3);
+    expect(repeatSteps[0].type).toBe("repeat[0] > navigate");
+    expect(repeatSteps[1].type).toBe("repeat[1] > navigate");
+    expect(repeatSteps[2].type).toBe("repeat[2] > navigate");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes repeat step with while condition", async () => {
+    let callCount = 0;
+    const page = createMockPage();
+    // Override locator to return decreasing counts
+    page.locator.mockImplementation(() => ({
+      count: vi.fn(async () => {
+        callCount++;
+        return callCount <= 2 ? 1 : 0;
+      }),
+      first: vi.fn().mockReturnThis(),
+      click: vi.fn(async () => undefined),
+      fill: vi.fn(async () => undefined),
+      press: vi.fn(async () => undefined),
+      selectOption: vi.fn(async () => undefined),
+      setInputFiles: vi.fn(async () => undefined),
+      hover: vi.fn(async () => undefined),
+      scrollIntoViewIfNeeded: vi.fn(async () => undefined)
+    }));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          while: { visible: ".load-more" },
+          maxIterations: 10,
+          steps: [{ navigate: "/next" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSteps).toHaveLength(2);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("repeat stops immediately when while condition is false initially", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".load-more": 0 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          while: { visible: ".load-more" },
+          maxIterations: 10,
+          steps: [{ navigate: "/next" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSteps).toHaveLength(0);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails repeat while when condition selector is forbidden", async () => {
+    const page = createMockPage({
+      locatorCounts: { ".danger-load-more": 1 }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          while: { visible: ".danger-load-more" },
+          maxIterations: 3,
+          steps: [{ navigate: "/next" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [".danger-load-more"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("repeat enforces maxSteps guardrail", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 10,
+          steps: [{ navigate: "/page" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 3,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.error).toContain("maxSteps");
+    const repeatSubSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSubSteps).toHaveLength(0);
+    expect(page.goto).not.toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("repeat sub-step failure stops iteration", async () => {
+    const page = createMockPage();
+    page.goto
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Navigation failed"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 5,
+          steps: [{ navigate: "/page" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
+    expect(repeatSteps.length).toBeLessThan(5);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("redacts sensitive fill values inside repeat sub-steps", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 2,
+          steps: [{ fill: { selector: "#password", value: "nested-secret" } }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(["0.repeat.steps.0"]),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    const nestedFill = result.results.filter((r) => r.type.startsWith("repeat[") && r.type.endsWith("fill"));
+    expect(nestedFill).toHaveLength(2);
+    expect(nestedFill[0].value).toBe("[REDACTED]");
+    expect(nestedFill[1].value).toBe("[REDACTED]");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("enforces maxTotalTimeMs across repeat iterations", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        repeat: {
+          times: 2,
+          steps: [{ navigate: "/page" }]
+        }
+      }
+    ] as Step[];
+
+    const values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let cursor = 0;
+    // Advance Date.now deterministically so timeout assertions are stable across runs.
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => {
+      const value = values[cursor] ?? values[values.length - 1] + (cursor - values.length + 1);
+      cursor += 1;
+      return value;
+    });
+
+    try {
+      const result = await executeSteps({
+        page: page as unknown as Page,
+        steps,
+        targetUrl: "http://localhost",
+        runDir,
+        screenshotsMode: "on-failure",
+        forbiddenSelectors: [],
+        allowedDomains: ["localhost"],
+        maxTotalTimeMs: 5,
+        maxSteps: 50,
+        redactedFillSteps: new Set(),
+        configDir: runDir
+      });
+
+      expect(result.failed).toBe(true);
+      expect(result.error).toContain("Max total time exceeded");
+      expect(result.results.some((r) => r.type.includes("timeout"))).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("executes mockRoute step", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/users",
+          response: { status: 200, body: '{"users": []}' }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("mockRoute");
+    expect(result.results[0].value).toBe("**/api/users");
+    expect(page.route).toHaveBeenCalledWith("**/api/users", expect.any(Function));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("executes unmockRoute step after mockRoute", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    page.unroute = vi.fn(async () => undefined);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/users",
+          response: { status: 200, body: '{"users": []}' }
+        }
+      },
+      { unmockRoute: { url: "**/api/users" } }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[1].type).toBe("unmockRoute");
+    expect(page.unroute).toHaveBeenCalledWith("**/api/users");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails unmockRoute when no active mock exists", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps = [
+      { unmockRoute: { url: "**/api/users" } }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("No active mock");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("mockRoute reads file-based response from configDir", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-file-"));
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "fixtures.json"), '{"data": true}');
+
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, file: "fixtures.json" }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(page.route).toHaveBeenCalledWith("**/api/data", expect.any(Function));
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("fails mockRoute when file path traverses outside configDir", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-traversal-"));
+    const configDir = path.join(baseDir, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(baseDir, "outside.json"), '{"data": true}');
+
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, file: "../outside.json" }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("must resolve within config directory");
+    expect(page.route).not.toHaveBeenCalled();
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("fails mockRoute when absolute file path is outside configDir", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-abs-"));
+    const configDir = path.join(baseDir, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+    const outsidePath = path.join(baseDir, "outside.json");
+    fs.writeFileSync(outsidePath, '{"data": true}');
+
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, file: outsidePath }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("must resolve within config directory");
+    expect(page.route).not.toHaveBeenCalled();
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("fails mockRoute with clear error when response body and file are both missing", async () => {
+    const page = createMockPage();
+    page.route = vi.fn(async () => undefined);
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-missing-response-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200 }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("mock.response must include either body or file");
+    expect(page.route).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 

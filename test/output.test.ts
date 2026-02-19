@@ -152,6 +152,57 @@ describe("describeStep", () => {
     const step: Step = { screenshot: {} };
     expect(describeStep(step)).toBe('screenshot "auto"');
   });
+
+  it("describes if step with visible", () => {
+    const step: Step = { if: { visible: ".banner", then: [{ click: ".accept" }] } };
+    expect(describeStep(step)).toBe('if visible ".banner"');
+  });
+
+  it("describes if step with notVisible", () => {
+    const step: Step = { if: { notVisible: ".modal", then: [{ navigate: "/" }] } };
+    expect(describeStep(step)).toBe('if notVisible ".modal"');
+  });
+
+  it("falls back when if condition is unspecified", () => {
+    const step = { if: { then: [{ navigate: "/" }] } } as unknown as Step;
+    expect(describeStep(step)).toBe("if condition unspecified");
+  });
+
+  it("describes repeat step with times", () => {
+    const step: Step = { repeat: { times: 3, steps: [{ click: ".btn" }] } };
+    expect(describeStep(step)).toBe("repeat 3 times");
+  });
+
+  it("describes repeat step with while", () => {
+    const step: Step = {
+      repeat: { while: { visible: ".load-more" }, maxIterations: 10, steps: [{ click: ".btn" }] }
+    };
+    expect(describeStep(step)).toBe('repeat while visible ".load-more"');
+  });
+
+  it("describes repeat step with notVisible while condition", () => {
+    const step: Step = {
+      repeat: { while: { notVisible: ".spinner" }, maxIterations: 10, steps: [{ click: ".btn" }] }
+    };
+    expect(describeStep(step)).toBe('repeat while not visible ".spinner"');
+  });
+
+  it("falls back when repeat condition is unspecified", () => {
+    const step = { repeat: { steps: [{ click: ".btn" }] } } as unknown as Step;
+    expect(describeStep(step)).toBe("repeat while condition unspecified");
+  });
+
+  it("describes mockRoute step", () => {
+    const step: Step = {
+      mockRoute: { url: "**/api/users", response: { status: 200, body: "{}" } }
+    };
+    expect(describeStep(step)).toBe('mockRoute "**/api/users"');
+  });
+
+  it("describes unmockRoute step", () => {
+    const step: Step = { unmockRoute: { url: "**/api/users" } };
+    expect(describeStep(step)).toBe('unmockRoute "**/api/users"');
+  });
 });
 
 describe("truncate", () => {

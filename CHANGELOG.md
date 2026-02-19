@@ -5,6 +5,11 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `if` conditional step: execute sub-steps only when a selector is visible or not visible, enabling optional UI handling like cookie banners and modals (P4-002)
+- `repeat` step type: loop sub-steps a fixed number of times (`times`) or conditionally (`while` with `maxIterations`), with maxSteps guardrail enforcement across iterations (P4-001)
+- `mockRoute` / `unmockRoute` step types: intercept network requests with custom responses (inline body or file-based), enabling testing of error/loading/empty states (P4-005)
+- `prowlqa ci --parallel <count>`: run hunts concurrently with N workers for faster CI suites; per-step output suppressed in parallel mode to prevent interleaving (P2-006)
+- Millisecond precision in run directory timestamps to prevent collisions during parallel execution
 - JUnit XML report: `artifacts.junit: true` config option and `--junit` CLI flag generate `junit.xml` per hunt run, compatible with GitHub Actions, Jenkins, and GitLab CI (P2-004)
 - Library API: public programmatic exports (`runHunt`, `listHunts`, `loadHunt`, `loadConfig`, schemas) for Node.js integration (P2-010)
 - `prowlqa run --json`: machine-readable JSON output for agent and CI consumption (P2-011)

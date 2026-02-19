@@ -227,6 +227,223 @@ describe("configSchema browser options", () => {
   });
 });
 
+describe("huntSchema if step", () => {
+  it("accepts if with visible and then", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ if: { visible: ".cookie-banner", then: [{ click: ".accept" }] } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts if with notVisible and then", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ if: { notVisible: ".welcome-modal", then: [{ navigate: "/onboarding" }] } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts if with else block", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        if: {
+          visible: ".cookie-banner",
+          then: [{ click: ".accept" }],
+          else: [{ wait: "Welcome back" }]
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects if with both visible and notVisible", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ if: { visible: ".a", notVisible: ".b", then: [{ navigate: "/" }] } }]
+      })
+    ).toThrow("if requires exactly one");
+  });
+
+  it("rejects if with neither visible nor notVisible", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ if: { then: [{ navigate: "/" }] } }]
+      })
+    ).toThrow("if requires exactly one");
+  });
+
+  it("rejects if with empty then", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ if: { visible: ".banner", then: [] } }]
+      })
+    ).toThrow();
+  });
+
+  it("accepts nested if", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        if: {
+          visible: ".outer",
+          then: [{
+            if: { visible: ".inner", then: [{ click: ".btn" }] }
+          }]
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+});
+
+describe("huntSchema repeat step", () => {
+  it("accepts repeat with times and steps", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ repeat: { times: 3, steps: [{ click: ".load-more" }] } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts repeat with while, maxIterations, and steps", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        repeat: {
+          while: { visible: ".load-more" },
+          maxIterations: 10,
+          steps: [{ click: ".load-more" }]
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects repeat with both times and while", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          repeat: {
+            times: 3,
+            while: { visible: ".btn" },
+            maxIterations: 5,
+            steps: [{ click: ".btn" }]
+          }
+        }]
+      })
+    ).toThrow("repeat requires either times or while, not both");
+  });
+
+  it("rejects repeat with neither times nor while", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ repeat: { steps: [{ click: ".btn" }] } }]
+      })
+    ).toThrow("repeat requires either times or while");
+  });
+
+  it("rejects while without maxIterations", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          repeat: {
+            while: { visible: ".btn" },
+            steps: [{ click: ".btn" }]
+          }
+        }]
+      })
+    ).toThrow("while requires maxIterations");
+  });
+
+  it("rejects repeat with empty steps", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ repeat: { times: 3, steps: [] } }]
+      })
+    ).toThrow();
+  });
+});
+
+describe("huntSchema mockRoute and unmockRoute", () => {
+  it("accepts mockRoute with body", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        mockRoute: {
+          url: "**/api/users",
+          response: { status: 200, body: '{"users": []}' }
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts mockRoute with file", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        mockRoute: {
+          url: "**/api/orders",
+          response: { status: 200, file: "fixtures/orders.json" }
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts mockRoute with contentType", () => {
+    const parsed = huntSchema.parse({
+      steps: [{
+        mockRoute: {
+          url: "**/api/data",
+          response: { status: 200, contentType: "text/plain", body: "hello" }
+        }
+      }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects mockRoute with both body and file", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          mockRoute: {
+            url: "**/api/users",
+            response: { status: 200, body: "{}", file: "data.json" }
+          }
+        }]
+      })
+    ).toThrow("response requires exactly one of body or file");
+  });
+
+  it("rejects mockRoute with neither body nor file", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          mockRoute: {
+            url: "**/api/users",
+            response: { status: 200 }
+          }
+        }]
+      })
+    ).toThrow("response requires exactly one of body or file");
+  });
+
+  it("rejects mockRoute with empty body", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{
+          mockRoute: {
+            url: "**/api/users",
+            response: { status: 200, body: "" }
+          }
+        }]
+      })
+    ).toThrow();
+  });
+
+  it("accepts unmockRoute", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ unmockRoute: { url: "**/api/users" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+});
+
 describe("configSchema artifacts options", () => {
   it("accepts artifacts.junit boolean", () => {
     const parsed = configSchema.parse({

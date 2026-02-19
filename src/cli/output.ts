@@ -46,6 +46,23 @@ export function describeStep(step: Step): string {
   if ("scroll" in step) return `scroll ${step.scroll.direction} ${step.scroll.amount ?? 500}px`;
   if ("scrollTo" in step) return `scrollTo "${step.scrollTo.selector}"`;
   if ("screenshot" in step) return `screenshot "${step.screenshot.name ?? "auto"}"`;
+  if ("if" in step) {
+    if (step.if.visible !== undefined) return `if visible "${step.if.visible}"`;
+    if (step.if.notVisible !== undefined) return `if notVisible "${step.if.notVisible}"`;
+    return "if condition unspecified";
+  }
+  if ("repeat" in step) {
+    if (step.repeat.times !== undefined) return `repeat ${step.repeat.times} times`;
+    if (step.repeat.while?.visible !== undefined) {
+      return `repeat while visible "${step.repeat.while.visible}"`;
+    }
+    if (step.repeat.while?.notVisible !== undefined) {
+      return `repeat while not visible "${step.repeat.while.notVisible}"`;
+    }
+    return "repeat while condition unspecified";
+  }
+  if ("mockRoute" in step) return `mockRoute "${step.mockRoute.url}"`;
+  if ("unmockRoute" in step) return `unmockRoute "${step.unmockRoute.url}"`;
   return "unknown step";
 }
 

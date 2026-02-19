@@ -203,6 +203,80 @@ Mid-flow assertions. Fails the hunt immediately if the assertion fails.
     urlEquals: "https://example.com/dashboard"
 ```
 
+### if
+
+Conditionally execute steps based on whether a selector is visible or not visible. This step is explicit-only.
+
+Key fields:
+- `visible` or `notVisible` (exactly one)
+- `then` (required array of steps)
+- `else` (optional array of steps)
+
+```yaml
+- if:
+    visible: ".cookie-banner"
+    then:
+      - click: ".accept"
+    else:
+      - wait: "Welcome back"
+```
+
+### repeat
+
+Repeat a block of steps either a fixed number of times or while a selector condition is true. This step is explicit-only.
+
+Key fields:
+- `times` (fixed count) or `while` (condition), exactly one
+- `while.visible` or `while.notVisible` (when using `while`)
+- `maxIterations` (required with `while`)
+- `steps` (required array of steps to execute each iteration)
+
+```yaml
+# Fixed count
+- repeat:
+    times: 3
+    steps:
+      - click: ".load-more"
+
+# Condition-based loop
+- repeat:
+    while:
+      visible: ".load-more"
+    maxIterations: 10
+    steps:
+      - click: ".load-more"
+```
+
+### mockRoute
+
+Mock network responses for a URL pattern. This step is explicit-only.
+
+Key fields:
+- `url` (Playwright route pattern, e.g. `**/api/users`)
+- `response.status`
+- exactly one of `response.body` or `response.file`
+- optional `response.contentType` (defaults to `application/json`)
+
+```yaml
+- mockRoute:
+    url: "**/api/users"
+    response:
+      status: 200
+      body: '{"users":[{"id":1}]}'
+```
+
+### unmockRoute
+
+Remove a previously registered route mock. This step is explicit-only.
+
+Key fields:
+- `url` (must match the mocked route URL pattern)
+
+```yaml
+- unmockRoute:
+    url: "**/api/users"
+```
+
 ### wait
 
 Wait for text to appear on the page. Shorthand for `waitForSelector` with text matching.
@@ -548,7 +622,17 @@ prowlqa init --force                      # Overwrite existing
 
 # List available hunts
 prowlqa list
+
+# CI mode — run all hunts with aggregate status
+prowlqa ci
+prowlqa ci --json                        # Machine-readable CI output
+prowlqa ci --parallel 4                 # Run hunts with 4 workers
 ```
+
+`--parallel <count>` details:
+- Runs hunts in parallel with `count` workers.
+- Must be a positive integer (`>= 1`).
+- Invalid values (for example `0` or `1.5`) fail fast with an argument error.
 
 ---
 

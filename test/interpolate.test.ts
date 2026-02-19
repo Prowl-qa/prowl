@@ -51,7 +51,7 @@ describe("interpolateHunt", () => {
         value: "secret"
       }
     });
-    expect(redactedFillSteps.has(1)).toBe(true);
+    expect(redactedFillSteps.has("1")).toBe(true);
   });
 
   it("interpolates hunt vars that reference env vars", () => {
@@ -116,7 +116,144 @@ describe("interpolateHunt", () => {
     expect(interpolated.steps[3]).toEqual({ select: { State: "FL" } });
     expect(interpolated.steps[4]).toEqual({ wait: "Sign In" });
     expect(interpolated.steps[5]).toEqual({ assert: { visible: "Sign In" } });
-    expect(redactedFillSteps.has(1)).toBe(true);
-    expect(redactedFillSteps.has(2)).toBe(true);
+    expect(redactedFillSteps.has("1")).toBe(true);
+    expect(redactedFillSteps.has("2")).toBe(true);
+  });
+
+  it("tracks nested redaction using parent step paths", () => {
+    const hunt: Hunt = {
+      steps: [
+        { type: "public-value" },
+        {
+          if: {
+            visible: ".secret",
+            then: [{ type: "{{TEST_PASSWORD}}" }],
+            else: [{ type: "{{TEST_PASSWORD}}" }]
+          }
+        },
+        {
+          repeat: {
+            times: 2,
+            steps: [{ fill: { selector: "#password", value: "{{TEST_PASSWORD}}" } }]
+          }
+        }
+      ]
+    };
+
+    const { redactedFillSteps } = interpolateHunt(hunt, env);
+    expect(redactedFillSteps.has("0")).toBe(false);
+    expect(redactedFillSteps.has("1.if.then.0")).toBe(true);
+    expect(redactedFillSteps.has("1.if.else.0")).toBe(true);
+    expect(redactedFillSteps.has("2.repeat.steps.0")).toBe(true);
+  });
+
+  it("interpolates if step selector and sub-steps", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".cookie-banner", PAGE: "/accept" },
+      steps: [
+        {
+          if: {
+            visible: "{{SELECTOR}}",
+            then: [{ navigate: "{{PAGE}}" }]
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { if: { visible: string; then: Array<{ navigate: string }> } };
+    expect(step.if.visible).toBe(".cookie-banner");
+    expect(step.if.then[0].navigate).toBe("/accept");
+  });
+
+  it("interpolates if step else sub-steps", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".cookie-banner", THEN_PAGE: "/accept", ELSE_PAGE: "/fallback" },
+      steps: [
+        {
+          if: {
+            visible: "{{SELECTOR}}",
+            then: [{ navigate: "{{THEN_PAGE}}" }],
+            else: [{ navigate: "{{ELSE_PAGE}}" }]
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as {
+      if: { visible: string; then: Array<{ navigate: string }>; else: Array<{ navigate: string }> }
+    };
+    expect(step.if.visible).toBe(".cookie-banner");
+    expect(step.if.then[0].navigate).toBe("/accept");
+    expect(step.if.else[0].navigate).toBe("/fallback");
+  });
+
+  it("interpolates repeat step while selector and sub-steps", () => {
+    const hunt: Hunt = {
+      vars: { SELECTOR: ".load-more", PAGE: "/next" },
+      steps: [
+        {
+          repeat: {
+            while: { visible: "{{SELECTOR}}" },
+            maxIterations: 5,
+            steps: [{ navigate: "{{PAGE}}" }]
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as {
+      repeat: { while: { visible: string }; maxIterations: number; steps: Array<{ navigate: string }> }
+    };
+    expect(step.repeat.while.visible).toBe(".load-more");
+    expect(step.repeat.steps[0].navigate).toBe("/next");
+  });
+
+  it("interpolates mockRoute url and body", () => {
+    const hunt: Hunt = {
+      vars: { API_URL: "**/api/users", BODY: '{"users": []}' },
+      steps: [
+        {
+          mockRoute: {
+            url: "{{API_URL}}",
+            response: { status: 200, body: "{{BODY}}" }
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as {
+      mockRoute: { url: string; response: { status: number; body: string } }
+    };
+    expect(step.mockRoute.url).toBe("**/api/users");
+    expect(step.mockRoute.response.body).toBe('{"users": []}');
+  });
+
+  it("interpolates unmockRoute url", () => {
+    const hunt: Hunt = {
+      vars: { API_URL: "**/api/users" },
+      steps: [{ unmockRoute: { url: "{{API_URL}}" } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { unmockRoute: { url: string } };
+    expect(step.unmockRoute.url).toBe("**/api/users");
+  });
+
+  it("interpolates mockRoute file path", () => {
+    const hunt: Hunt = {
+      vars: { FIXTURE: "fixtures/orders.json" },
+      steps: [
+        {
+          mockRoute: {
+            url: "**/api/orders",
+            response: { status: 200, file: "{{FIXTURE}}" }
+          }
+        }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as {
+      mockRoute: { url: string; response: { status: number; file: string } }
+    };
+    expect(step.mockRoute.response.file).toBe("fixtures/orders.json");
   });
 });
