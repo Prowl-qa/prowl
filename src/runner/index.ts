@@ -78,7 +78,7 @@ async function executeHuntAttempt(
   config: ReturnType<typeof loadConfig>["config"],
   configDir: string,
   interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
-  redactedFillSteps: Set<number>,
+  redactedFillSteps: Set<string>,
   targetUrl: string,
   allowedDomains: string[]
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
