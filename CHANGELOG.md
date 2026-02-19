@@ -4,6 +4,8 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-02-19
+
 ### Improved
 - `unmockRoute` accepts string shorthand (`unmockRoute: "**/api/users"`) in addition to object form
 - `assert visible` / `assert notVisible` now accept CSS selectors (e.g., `img[alt='Logo']`, `.card-grid`) in addition to plain text

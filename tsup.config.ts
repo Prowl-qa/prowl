@@ -8,5 +8,6 @@ export default defineConfig({
   format: ["esm", "cjs"],
   sourcemap: true,
   dts: { entry: { lib: "src/index.ts" } },
-  outDir: "dist"
+  outDir: "dist",
+  clean: true
 });
