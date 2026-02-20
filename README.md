@@ -42,6 +42,13 @@ steps:
 npm install -g prowlqa
 ```
 
+Or with Homebrew:
+
+```bash
+brew tap prowl-qa/tap
+brew install prowlqa
+```
+
 ProwlQA uses Playwright under the hood. Install the browser:
 
 ```bash
