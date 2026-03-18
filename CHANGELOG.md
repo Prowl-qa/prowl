@@ -4,7 +4,7 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-02-19
+## [0.1.0] - 2026-02-19
 
 ### Improved
 - `unmockRoute` accepts string shorthand (`unmockRoute: "**/api/users"`) in addition to object form
