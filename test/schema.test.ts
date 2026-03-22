@@ -547,6 +547,93 @@ describe("huntSchema assertScreenshot step", () => {
   });
 });
 
+describe("huntSchema copyText step", () => {
+  it("accepts copyText with selector and as", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ copyText: { selector: "[data-testid=heading]", as: "HEADING" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects copyText with empty selector", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ copyText: { selector: "", as: "VAR" } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects copyText with empty as", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ copyText: { selector: ".el", as: "" } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects copyText with extra fields", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ copyText: { selector: ".el", as: "VAR", extra: true } }]
+      })
+    ).toThrow();
+  });
+});
+
+describe("huntSchema waitForDownload step", () => {
+  it("accepts bare waitForDownload (null)", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ waitForDownload: null }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts waitForDownload with filename", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ waitForDownload: { filename: "report.pdf" } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts waitForDownload with timeout", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ waitForDownload: { timeout: 60000 } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("accepts waitForDownload with filename and timeout", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ waitForDownload: { filename: "data.csv", timeout: 5000 } }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects waitForDownload with empty filename", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ waitForDownload: { filename: "" } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects waitForDownload with negative timeout", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ waitForDownload: { timeout: -1 } }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects waitForDownload with extra fields", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ waitForDownload: { filename: "a.pdf", extra: true } }]
+      })
+    ).toThrow();
+  });
+});
+
 describe("configSchema artifacts options", () => {
   it("accepts artifacts.junit boolean", () => {
     const parsed = configSchema.parse({

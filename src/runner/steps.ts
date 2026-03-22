@@ -126,6 +126,8 @@ function getStepType(step: Step): string {
   if ("evalScript" in step) return "evalScript";
   if ("runScript" in step) return "runScript";
   if ("assertScreenshot" in step) return "assertScreenshot";
+  if ("copyText" in step) return "copyText";
+  if ("waitForDownload" in step) return "waitForDownload";
   return "step";
 }
 
@@ -184,6 +186,18 @@ function applyRuntimeVars(step: Step, vars: Map<string, string>): Step {
       assertScreenshot: {
         name: sub(step.assertScreenshot.name),
         ...(step.assertScreenshot.threshold !== undefined ? { threshold: step.assertScreenshot.threshold } : {})
+      }
+    };
+  }
+  if ("copyText" in step) {
+    return { copyText: { selector: sub(step.copyText.selector), as: step.copyText.as } };
+  }
+  if ("waitForDownload" in step) {
+    if (step.waitForDownload === null) return step;
+    return {
+      waitForDownload: {
+        ...(step.waitForDownload.filename !== undefined ? { filename: sub(step.waitForDownload.filename) } : {}),
+        ...(step.waitForDownload.timeout !== undefined ? { timeout: step.waitForDownload.timeout } : {})
       }
     };
   }
@@ -966,6 +980,38 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             );
           }
         }
+      } else if ("copyText" in step) {
+        assertAllowedSelector(step.copyText.selector, context.forbiddenSelectors);
+        const text = await context.page.locator(step.copyText.selector).textContent();
+        if (text === null) {
+          throw new Error(`No text content found for selector: ${step.copyText.selector}`);
+        }
+        runtimeVars.set(step.copyText.as, text);
+        stepResult = {
+          type: "copyText",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.copyText.selector,
+          value: text.length > 200 ? text.slice(0, 200) + "\u2026" : text
+        };
+      } else if ("waitForDownload" in step) {
+        const opts = step.waitForDownload;
+        const downloadPromise = context.page.waitForEvent("download", { timeout: opts?.timeout ?? 30000 });
+        const download = await downloadPromise;
+        const suggestedFilename = download.suggestedFilename();
+        if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {
+          throw new Error(
+            `Download filename mismatch: expected "${opts.filename}", got "${suggestedFilename}"`
+          );
+        }
+        const savePath = path.join(context.runDir, suggestedFilename);
+        await download.saveAs(savePath);
+        stepResult = {
+          type: "waitForDownload",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: suggestedFilename
+        };
       }
 
       if (!stepResult) {

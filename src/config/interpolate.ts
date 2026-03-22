@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Assertion, Hunt, Step } from "../types/index.js";
 
 export type InterpolatedHunt = {
@@ -26,6 +27,28 @@ export function interpolateString(
     return varValue;
   });
   return { value, usedVars };
+}
+
+const RANDOM_FIRST_NAMES = ["Alex", "Jordan", "Morgan", "Taylor", "Casey", "Riley", "Quinn", "Avery"];
+const RANDOM_LAST_NAMES = ["Smith", "Johnson", "Brown", "Davis", "Wilson", "Clark", "Hall", "Young"];
+
+export function generateRandomVars(): Record<string, string> {
+  const hex = crypto.randomBytes(4).toString("hex");
+  const firstIndex = Math.floor(Math.random() * RANDOM_FIRST_NAMES.length);
+  const lastIndex = Math.floor(Math.random() * RANDOM_LAST_NAMES.length);
+  const num = Math.floor(Math.random() * 9000) + 1000;
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let text = "";
+  for (let i = 0; i < 8; i++) {
+    text += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return {
+    RANDOM_EMAIL: `prowl_${hex}@test.com`,
+    RANDOM_NAME: `${RANDOM_FIRST_NAMES[firstIndex]} ${RANDOM_LAST_NAMES[lastIndex]}`,
+    RANDOM_NUMBER: String(num),
+    RANDOM_UUID: crypto.randomUUID(),
+    RANDOM_TEXT: text
+  };
 }
 
 function interpolateStep(
@@ -294,6 +317,29 @@ function interpolateStep(
       }
     };
   }
+  if ("copyText" in step) {
+    return {
+      copyText: {
+        selector: interpolateString(step.copyText.selector, vars).value,
+        as: step.copyText.as
+      }
+    };
+  }
+  if ("waitForDownload" in step) {
+    if (step.waitForDownload === null) {
+      return { waitForDownload: null };
+    }
+    return {
+      waitForDownload: {
+        ...(step.waitForDownload.filename !== undefined
+          ? { filename: interpolateString(step.waitForDownload.filename, vars).value }
+          : {}),
+        ...(step.waitForDownload.timeout !== undefined
+          ? { timeout: step.waitForDownload.timeout }
+          : {})
+      }
+    };
+  }
   return step;
 }
 
@@ -331,7 +377,8 @@ export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): Interpolate
     resolvedHuntVars[key] = interpolateString(value, envVars).value;
   }
 
-  const vars = { ...envVars, ...resolvedHuntVars };
+  const randomVars = generateRandomVars();
+  const vars = { ...randomVars, ...envVars, ...resolvedHuntVars };
   const steps = hunt.steps.map((step, index) =>
     interpolateStep(step, vars, `${index}`, redactedFillSteps)
   );

@@ -11,9 +11,11 @@ function createMockPage(options?: {
   roleCounts?: Record<string, number>;
   labelCounts?: Record<string, number>;
   locatorCounts?: Record<string, number>;
+  textContents?: Record<string, string | null>;
+  waitForEventResult?: unknown;
 }) {
   let currentUrl = "http://localhost";
-  const createLocator = (count: number) => {
+  const createLocator = (count: number, selector?: string) => {
     const locator = {
       count: vi.fn(async () => count),
       first: vi.fn(() => locator),
@@ -23,7 +25,12 @@ function createMockPage(options?: {
       selectOption: vi.fn(async () => undefined),
       setInputFiles: vi.fn(async () => undefined),
       hover: vi.fn(async () => undefined),
-      scrollIntoViewIfNeeded: vi.fn(async () => undefined)
+      scrollIntoViewIfNeeded: vi.fn(async () => undefined),
+      textContent: vi.fn(async () =>
+        selector && options?.textContents?.[selector] !== undefined
+          ? options.textContents[selector]
+          : "mock text"
+      )
     };
     return locator;
   };
@@ -33,7 +40,7 @@ function createMockPage(options?: {
       currentUrl = url;
     }),
     url: () => currentUrl,
-    locator: vi.fn((selector: string) => createLocator(options?.locatorCounts?.[selector] ?? 1)),
+    locator: vi.fn((selector: string) => createLocator(options?.locatorCounts?.[selector] ?? 1, selector)),
     getByRole: vi.fn((role: string, params?: { name?: string }) =>
       createLocator(options?.roleCounts?.[`${role}:${String(params?.name ?? "")}`] ?? 1)
     ),
@@ -42,6 +49,7 @@ function createMockPage(options?: {
     waitForSelector: vi.fn(async () => undefined),
     waitForURL: vi.fn(async () => undefined),
     waitForLoadState: vi.fn(async () => undefined),
+    waitForEvent: vi.fn(async () => options?.waitForEventResult ?? undefined),
     evaluate: vi.fn(async () => undefined),
     screenshot: vi.fn(async () => undefined)
   };
@@ -2076,5 +2084,209 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(true);
     expect(result.results[0].error).toContain("Max allowed is 1");
     fs.rmSync(configDir, { recursive: true, force: true });
+  });
+});
+
+describe("copyText step", () => {
+  it("extracts text and stores as runtime variable", async () => {
+    const page = createMockPage({
+      textContents: { "[data-testid=heading]": "Hello World" }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { copyText: { selector: "[data-testid=heading]", as: "HEADING" } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("copyText");
+    expect(result.results[0].selector).toBe("[data-testid=heading]");
+    expect(result.results[0].value).toBe("Hello World");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails when element has null text content", async () => {
+    const page = createMockPage({
+      textContents: { "[data-testid=empty]": null }
+    });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { copyText: { selector: "[data-testid=empty]", as: "EMPTY" } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("No text content found");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails on forbidden selector", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { copyText: { selector: "[data-danger]", as: "VAR" } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: ["[data-danger]"],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Forbidden selector");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+});
+
+describe("waitForDownload step", () => {
+  it("captures download and returns suggested filename", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "report.pdf",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ waitForDownload: null }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].type).toBe("waitForDownload");
+    expect(result.results[0].value).toBe("report.pdf");
+    expect(page.waitForEvent).toHaveBeenCalledWith("download", { timeout: 30000 });
+    expect(mockDownload.saveAs).toHaveBeenCalledWith(path.join(runDir, "report.pdf"));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("captures download with filename assertion pass", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "data.csv",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ waitForDownload: { filename: "data.csv" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].value).toBe("data.csv");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails when filename does not match", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "wrong.pdf",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ waitForDownload: { filename: "expected.pdf" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain("Download filename mismatch");
+    expect(result.results[0].error).toContain("expected.pdf");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("uses custom timeout", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "file.zip",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ waitForDownload: { timeout: 60000 } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(page.waitForEvent).toHaveBeenCalledWith("download", { timeout: 60000 });
+    fs.rmSync(runDir, { recursive: true, force: true });
   });
 });
