@@ -646,7 +646,6 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         );
         assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
         const subResult = await executeNestedSteps(context, {
-          ...context,
           steps: interpolatedSubHunt.steps,
           redactedFillSteps: subRedacted,
           randomVars,
