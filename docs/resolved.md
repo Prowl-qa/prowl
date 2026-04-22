@@ -1,5 +1,9 @@
 # Prowl (CLI) - Resolved Items
 
+### ~~GTM-001: Define Primary ICP~~
+**Resolved**: 2026-04-22
+**Description**: Defined ProwlQA's primary ICP as QA engineers on small teams working alongside AI-assisted developers. 1-pager captures persona, pains, alternatives, why ProwlQA wins, and secondary audiences. See `docs/research/primary-icp.md`.
+
 ### ~~P1.5-001: Shorthand Step Syntax~~
 **Resolved**: 2026-02-08 (commit 8f47788)
 **Description**: Added shorthand forms for `click`, `fill`, `type`, and `select` while preserving explicit selector-driven forms for precision.

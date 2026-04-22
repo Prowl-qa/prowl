@@ -1,0 +1,63 @@
+ProwlQA
+Copyright (c) 2026 Prowl Tools
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0.
+
+This product includes software developed by third parties. The following
+attributions are provided for the benefit of downstream users.
+
+-------------------------------------------------------------------------------
+Direct Runtime Dependencies
+-------------------------------------------------------------------------------
+
+chalk
+  License: MIT
+  https://github.com/chalk/chalk
+
+commander
+  License: MIT
+  Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>
+  https://github.com/tj/commander.js
+
+dotenv
+  License: BSD-2-Clause
+  Copyright (c) 2015, Scott Motte
+  https://github.com/motdotla/dotenv
+
+ora
+  License: MIT
+  Copyright (c) Sindre Sorhus <sindresorhus@gmail.com>
+  https://github.com/sindresorhus/ora
+
+pixelmatch
+  License: ISC
+  Copyright (c) 2019, Mapbox
+  https://github.com/mapbox/pixelmatch
+
+playwright
+  License: Apache-2.0
+  Copyright (c) Microsoft Corporation
+  https://github.com/microsoft/playwright
+
+pngjs
+  License: MIT
+  Copyright (c) 2015 Kuba Niegowski
+  https://github.com/pngjs/pngjs
+
+yaml
+  License: ISC
+  Copyright (c) Eemeli Aro <eemeli@gmail.com>
+  https://github.com/eemeli/yaml
+
+zod
+  License: MIT
+  Copyright (c) 2020 Colin McDonnell
+  https://github.com/colinhacks/zod
+
+-------------------------------------------------------------------------------
+
+For the full text of each dependency's license, see the corresponding package
+under node_modules/ after installation, or visit the project homepage listed
+above.
