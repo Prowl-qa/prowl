@@ -64,9 +64,9 @@
 **Acceptance Criteria**:
 - `prowlqa history <hunt-name>` shows last N runs with status, duration, and timestamp
 - `prowlqa history <hunt-name> --json` for programmatic access
-- Results stored in `.prowlqa/history.json` (append-only, one entry per run)
-- Configurable retention: `history.maxRuns` (default: 100)
-- History written automatically after every `prowlqa run` and `prowlqa ci`
+- Results stored in `.prowlqa/history.json` as one entry per run, with automatic truncation of the oldest entries when retention is exceeded
+- Configurable retention: `history.maxRuns` (default: 100) caps how many entries remain on disk per hunt after each write
+- History written automatically after every `prowlqa run` and `prowlqa ci`, with retention pruning applied immediately after the new run entry is appended
 - Foundation for flake detection, trend analysis, and dashboard features
 
 {PROWL-032} **P7-002: Flake Detection and Scoring**
@@ -164,7 +164,7 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 **Acceptance Criteria**:
 - Config option: `artifacts.video: true` (default: false)
 - CLI flag: `prowlqa run homepage --video`
-- Playwright: `context.newPage({ recordVideo: { dir: ... } })`
+- Playwright: `browser.newContext({ recordVideo: { dir: ... } })`, then `context.newPage()` for pages; `recordVideo` is a browser context option, not a page option
 - Video saved to run directory alongside screenshots
 - Useful for sharing failures with non-technical stakeholders
 
