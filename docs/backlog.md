@@ -83,13 +83,6 @@
 
 ## Medium Priority
 
-{PROWL-008} **BUG-005: Forbidden Selector Matching Uses Substring (Overly Permissive)**
-   `matchesForbiddenPattern()` in `src/runner/steps.ts` uses `includes()` for text matching. Forbidding `"delete"` also forbids `"undelete"` or `"Delete History"`. The same substring-based matching affects network ignore patterns in `src/runner/assertions.ts`. This could cause unexpected step failures or missed network errors.
-
-**Found during**: Code review (2026-02-10)
-**File**: `src/runner/steps.ts` (lines 57-69), `src/runner/assertions.ts` (lines 15-24)
-**Fix**: Document current substring behavior in README. Consider adding exact-match (`text-is`) and regex support as options in a future phase.
-
 {PROWL-011} **LEGAL-002: Add Dependency License Audit to CI**
    All direct dependencies are confirmed clean — MIT (commander, chalk, zod, ora), ISC (yaml), BSD-2-Clause (dotenv), Apache 2.0 (playwright, typescript). However, transitive dependencies can introduce GPL-licensed packages. Research shows 7.3% of npm packages have license incompatibilities through transitive deps.
 
@@ -253,19 +246,7 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - Include: hunt name, status, failure reason, link to artifacts
 - Unit tests for webhook payload formatting
 
-{PROWL-009} **BUG-006: `data:` and `about:` Protocols Bypass Domain Allowlist**
-   `ensureAllowedUrl()` in `src/runner/steps.ts` allows `about:` and `data:` protocols unconditionally, bypassing the allowed domains check. While `about:blank` is harmless, `data:` URIs could theoretically be used for unintended behavior. Risk is low for a local CLI tool.
-
-**Found during**: Code review (2026-02-10)
-**File**: `src/runner/steps.ts` (lines 127-131)
-**Fix**: Document as intentional behavior. Optionally restrict `data:` URIs behind a guardrails config flag in a future phase.
-
 ---
-
-{PROWL-012} **LEGAL-003: Create NOTICE File for Attribution**
-   MIT, BSD, and ISC licenses require preserving copyright notices when redistributing. A NOTICE file in the repo root aggregates these attribution notices in one place, which is standard practice for Apache 2.0 projects.
-
-**Action**: Generate a NOTICE file with copyright attributions for all direct dependencies.
 
 {PROWL-013} **LEGAL-004: Competitive Marketing Guidelines**
    Referencing Maestro and other competitors in documentation and marketing is legal when following FTC comparative advertising guidelines. All comparative claims must be truthful, non-deceptive, and verifiable.
