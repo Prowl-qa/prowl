@@ -117,6 +117,10 @@ export type EvalScriptStep = {
 export type RunScriptStep = {
   runScript: { file: string };
 };
+export type CopyTextStep = { copyText: { selector: string; as: string } };
+export type WaitForDownloadStep = {
+  waitForDownload: { filename?: string; timeout?: number } | null;
+};
 export type AssertScreenshotStep = {
   assertScreenshot: {
     name: string;
@@ -150,7 +154,9 @@ export type Step =
   | UnmockRouteStep
   | EvalScriptStep
   | RunScriptStep
-  | AssertScreenshotStep;
+  | AssertScreenshotStep
+  | CopyTextStep
+  | WaitForDownloadStep;
 
 export type Assertion =
   | { selectorExists: string }

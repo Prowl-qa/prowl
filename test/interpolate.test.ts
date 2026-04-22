@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { interpolateHunt, interpolateString } from "../src/config/interpolate.js";
+import { describe, expect, it, vi } from "vitest";
+import { generateRandomVars, interpolateHunt, interpolateString } from "../src/config/interpolate.js";
 import type { Hunt } from "../src/types/index.js";
 
 const env = {
@@ -307,5 +307,190 @@ describe("interpolateHunt", () => {
     const step = interpolated.steps[0] as { assertScreenshot: { name: string; threshold: number } };
     expect(step.assertScreenshot.name).toBe("homepage");
     expect(step.assertScreenshot.threshold).toBe(0.05);
+  });
+
+  it("interpolates copyText selector", () => {
+    const hunt: Hunt = {
+      vars: { SEL: "[data-testid=heading]" },
+      steps: [{ copyText: { selector: "{{SEL}}", as: "HEADING" } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { copyText: { selector: string; as: string } };
+    expect(step.copyText.selector).toBe("[data-testid=heading]");
+    expect(step.copyText.as).toBe("HEADING");
+  });
+
+  it("interpolates waitForDownload filename", () => {
+    const hunt: Hunt = {
+      vars: { FILE: "report.pdf" },
+      steps: [{ waitForDownload: { filename: "{{FILE}}", timeout: 5000 } }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { waitForDownload: { filename: string; timeout: number } };
+    expect(step.waitForDownload.filename).toBe("report.pdf");
+    expect(step.waitForDownload.timeout).toBe(5000);
+  });
+
+  it("passes through bare waitForDownload null", () => {
+    const hunt: Hunt = {
+      steps: [{ waitForDownload: null }]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, env);
+    const step = interpolated.steps[0] as { waitForDownload: null };
+    expect(step.waitForDownload).toBeNull();
+  });
+
+  it("resolves RANDOM vars inside hunt vars", () => {
+    const hunt: Hunt = {
+      vars: { EMAIL: "{{RANDOM_EMAIL}}" },
+      steps: [{ fill: { selector: "#a", value: "{{EMAIL}}" } }]
+    };
+
+    const { hunt: interpolated } = interpolateHunt(hunt, {});
+    const step = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    expect(step.fill.value).toMatch(/^prowl_[0-9a-f]{8}@test\.com$/);
+  });
+});
+
+describe("generateRandomVars", () => {
+  it("generates all expected random variables", () => {
+    const vars = generateRandomVars();
+    expect(vars).toHaveProperty("RANDOM_EMAIL");
+    expect(vars).toHaveProperty("RANDOM_NAME");
+    expect(vars).toHaveProperty("RANDOM_NUMBER");
+    expect(vars).toHaveProperty("RANDOM_UUID");
+    expect(vars).toHaveProperty("RANDOM_TEXT");
+  });
+
+  it("RANDOM_EMAIL has correct format", () => {
+    const vars = generateRandomVars();
+    expect(vars.RANDOM_EMAIL).toMatch(/^prowl_[0-9a-f]{8}@test\.com$/);
+  });
+
+  it("RANDOM_NAME has first and last name", () => {
+    const vars = generateRandomVars();
+    expect(vars.RANDOM_NAME).toMatch(/^\w+ \w+$/);
+  });
+
+  it("RANDOM_NUMBER is 4-digit integer", () => {
+    const vars = generateRandomVars();
+    const num = parseInt(vars.RANDOM_NUMBER, 10);
+    expect(num).toBeGreaterThanOrEqual(1000);
+    expect(num).toBeLessThanOrEqual(9999);
+  });
+
+  it("RANDOM_UUID has valid format", () => {
+    const vars = generateRandomVars();
+    expect(vars.RANDOM_UUID).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+  });
+
+  it("RANDOM_TEXT is 8 alphanumeric chars", () => {
+    const vars = generateRandomVars();
+    expect(vars.RANDOM_TEXT).toMatch(/^[a-z0-9]{8}$/);
+  });
+
+  it("generates deterministic values from the provided random source", () => {
+    const vars1 = generateRandomVars({
+      randomBytes: vi.fn(() => Buffer.from("12345678", "hex")),
+      randomUUID: vi.fn(() => "11111111-1111-1111-1111-111111111111"),
+      random: vi
+        .fn<() => number>()
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+    });
+    const vars2 = generateRandomVars({
+      randomBytes: vi.fn(() => Buffer.from("87654321", "hex")),
+      randomUUID: vi.fn(() => "22222222-2222-2222-2222-222222222222"),
+      random: vi
+        .fn<() => number>()
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.75)
+        .mockReturnValueOnce(0.999)
+        .mockReturnValueOnce(0.1)
+        .mockReturnValueOnce(0.2)
+        .mockReturnValueOnce(0.3)
+        .mockReturnValueOnce(0.4)
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.6)
+        .mockReturnValueOnce(0.7)
+        .mockReturnValueOnce(0.8)
+    });
+
+    expect(vars1).toEqual({
+      RANDOM_EMAIL: "prowl_12345678@test.com",
+      RANDOM_NAME: "Alex Smith",
+      RANDOM_NUMBER: "1000",
+      RANDOM_UUID: "11111111-1111-1111-1111-111111111111",
+      RANDOM_TEXT: "aaaaaaaa"
+    });
+    expect(vars2).toEqual({
+      RANDOM_EMAIL: "prowl_87654321@test.com",
+      RANDOM_NAME: "Casey Hall",
+      RANDOM_NUMBER: "9991",
+      RANDOM_UUID: "22222222-2222-2222-2222-222222222222",
+      RANDOM_TEXT: "dhkosvz2"
+    });
+  });
+});
+
+describe("random vars in interpolateHunt", () => {
+  it("resolves RANDOM_EMAIL in a step", () => {
+    const hunt: Hunt = {
+      steps: [
+        { fill: { selector: "[data-testid=email]", value: "{{RANDOM_EMAIL}}" } }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, {});
+    const step = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    expect(step.fill.value).toMatch(/^prowl_[0-9a-f]{8}@test\.com$/);
+  });
+
+  it("RANDOM vars are consistent within a single hunt", () => {
+    const hunt: Hunt = {
+      steps: [
+        { fill: { selector: "#a", value: "{{RANDOM_EMAIL}}" } },
+        { fill: { selector: "#b", value: "{{RANDOM_EMAIL}}" } }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, {});
+    const step1 = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    const step2 = interpolated.steps[1] as { fill: { selector: string; value: string } };
+    expect(step1.fill.value).toBe(step2.fill.value);
+  });
+
+  it("env vars override random vars", () => {
+    const hunt: Hunt = {
+      steps: [
+        { fill: { selector: "#a", value: "{{RANDOM_EMAIL}}" } }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, {
+      RANDOM_EMAIL: "override@example.com"
+    });
+    const step = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    expect(step.fill.value).toBe("override@example.com");
+  });
+
+  it("hunt vars override random vars", () => {
+    const hunt: Hunt = {
+      vars: { RANDOM_EMAIL: "hunt@example.com" },
+      steps: [
+        { fill: { selector: "#a", value: "{{RANDOM_EMAIL}}" } }
+      ]
+    };
+    const { hunt: interpolated } = interpolateHunt(hunt, {});
+    const step = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    expect(step.fill.value).toBe("hunt@example.com");
   });
 });

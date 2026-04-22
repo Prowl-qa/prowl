@@ -4,6 +4,11 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `copyText` step type: extract text content from an element and store as a runtime variable for use in subsequent steps (P4-004)
+- `waitForDownload` step type: wait for a file download event with optional filename assertion and custom timeout, saves downloaded file to run artifacts (P4-009)
+- Built-in `{{RANDOM_*}}` variables: `RANDOM_EMAIL`, `RANDOM_NAME`, `RANDOM_NUMBER`, `RANDOM_UUID`, `RANDOM_TEXT` generated once per hunt run for unique test data (P6-004)
+
 ## [0.1.0] - 2026-02-19
 
 ### Improved

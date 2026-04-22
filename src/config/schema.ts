@@ -321,6 +321,31 @@ export const assertScreenshotStepSchema = z
   })
   .strict();
 
+export const copyTextStepSchema = z
+  .object({
+    copyText: z
+      .object({
+        selector: z.string().min(1),
+        as: z.string().min(1)
+      })
+      .strict()
+  })
+  .strict();
+
+export const waitForDownloadStepSchema = z
+  .object({
+    waitForDownload: z.union([
+      z
+        .object({
+          filename: z.string().min(1).optional(),
+          timeout: z.number().int().positive().optional()
+        })
+        .strict(),
+      z.null()
+    ])
+  })
+  .strict();
+
 export const stepSchema: z.ZodType<Step> = z.union([
   navigateStepSchema,
   clickStepSchema,
@@ -347,7 +372,9 @@ export const stepSchema: z.ZodType<Step> = z.union([
   unmockRouteStepSchema,
   evalScriptStepSchema,
   runScriptStepSchema,
-  assertScreenshotStepSchema
+  assertScreenshotStepSchema,
+  copyTextStepSchema,
+  waitForDownloadStepSchema
 ]);
 
 export const assertionSchema = z.union([

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Page } from "playwright";
+import type { Download, Page } from "playwright";
 import {
   clickElement,
   fillElement,
@@ -31,6 +31,8 @@ export type StepExecutionContext = {
   huntStack?: string[];
   activeMocks?: Map<string, () => Promise<void>>;
   runtimeVars?: Map<string, string>;
+  randomVars?: Record<string, string>;
+  pendingDownload?: Promise<Download>;
   runStartedAtMs?: number;
   stepPathPrefix?: string;
 };
@@ -126,6 +128,8 @@ function getStepType(step: Step): string {
   if ("evalScript" in step) return "evalScript";
   if ("runScript" in step) return "runScript";
   if ("assertScreenshot" in step) return "assertScreenshot";
+  if ("copyText" in step) return "copyText";
+  if ("waitForDownload" in step) return "waitForDownload";
   return "step";
 }
 
@@ -184,6 +188,18 @@ function applyRuntimeVars(step: Step, vars: Map<string, string>): Step {
       assertScreenshot: {
         name: sub(step.assertScreenshot.name),
         ...(step.assertScreenshot.threshold !== undefined ? { threshold: step.assertScreenshot.threshold } : {})
+      }
+    };
+  }
+  if ("copyText" in step) {
+    return { copyText: { selector: sub(step.copyText.selector), as: step.copyText.as } };
+  }
+  if ("waitForDownload" in step) {
+    if (step.waitForDownload === null) return step;
+    return {
+      waitForDownload: {
+        ...(step.waitForDownload.filename !== undefined ? { filename: sub(step.waitForDownload.filename) } : {}),
+        ...(step.waitForDownload.timeout !== undefined ? { timeout: step.waitForDownload.timeout } : {})
       }
     };
   }
@@ -382,6 +398,36 @@ function stepPath(prefix: string | undefined, index: number): string {
   return prefix ? `${prefix}.${index}` : `${index}`;
 }
 
+function isWaitForDownloadStep(step: Step | undefined): step is Extract<Step, { waitForDownload: unknown }> {
+  return step !== undefined && "waitForDownload" in step;
+}
+
+function armDownloadListener(page: Page, timeout: number): Promise<Download> {
+  const downloadPromise = page.waitForEvent("download", { timeout });
+  void downloadPromise.catch(() => undefined);
+  return downloadPromise;
+}
+
+function validateDownloadFilename(suggestedFilename: string): string {
+  const safeFilename = suggestedFilename.trim();
+  const allowedFilenamePattern = /^[^<>:"/\\|?*]+$/;
+  const hasControlCharacter = Array.from(safeFilename).some((char) => char.charCodeAt(0) < 32);
+
+  if (
+    safeFilename.length === 0
+    || safeFilename !== suggestedFilename
+    || safeFilename !== path.basename(safeFilename)
+    || safeFilename.includes("..")
+    || /[/\\]/.test(safeFilename)
+    || hasControlCharacter
+    || !allowedFilenamePattern.test(safeFilename)
+  ) {
+    throw new Error(`Invalid download filename: "${suggestedFilename}"`);
+  }
+
+  return safeFilename;
+}
+
 async function captureScreenshot(page: Page, filePath: string): Promise<void> {
   try {
     await page.screenshot({ path: filePath, fullPage: true });
@@ -389,6 +435,23 @@ async function captureScreenshot(page: Page, filePath: string): Promise<void> {
     const message = error instanceof Error ? error.message : "Screenshot failed";
     throw new Error(`Failed to capture screenshot at ${filePath}: ${message}`);
   }
+}
+
+async function executeNestedSteps(
+  context: StepExecutionContext,
+  overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
+): Promise<StepExecutionResult> {
+  const nestedContext: StepExecutionContext = {
+    ...context,
+    ...overrides,
+    pendingDownload: context.pendingDownload
+  };
+  const result = await executeSteps(nestedContext);
+  context.pendingDownload = nestedContext.pendingDownload;
+  if (nestedContext.randomVars !== undefined) {
+    context.randomVars = nestedContext.randomVars;
+  }
+  return result;
 }
 
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
@@ -428,6 +491,17 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
     let step = context.steps[index];
     if (runtimeVars.size > 0) {
       step = applyRuntimeVars(step, runtimeVars);
+    }
+    const nextStep = context.steps[index + 1];
+    if (
+      !isWaitForDownloadStep(step)
+      && context.pendingDownload === undefined
+      && isWaitForDownloadStep(nextStep)
+    ) {
+      context.pendingDownload = armDownloadListener(
+        context.page,
+        nextStep.waitForDownload?.timeout ?? 30000
+      );
     }
     const stepStart = Date.now();
     const stepType = getStepType(step);
@@ -561,15 +635,20 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         if (overrideVars) {
           subHunt.vars = { ...subHunt.vars, ...overrideVars };
         }
-        const { hunt: interpolatedSubHunt, redactedFillSteps: subRedacted } = interpolateHunt(
+        const {
+          hunt: interpolatedSubHunt,
+          redactedFillSteps: subRedacted,
+          randomVars
+        } = interpolateHunt(
           subHunt,
-          process.env
+          process.env,
+          context.randomVars
         );
         assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
-        const subResult = await executeSteps({
-          ...context,
+        const subResult = await executeNestedSteps(context, {
           steps: interpolatedSubHunt.steps,
           redactedFillSteps: subRedacted,
+          randomVars,
           stepPathPrefix: undefined,
           huntStack: [...stack, huntName],
           onStep: context.onStep
@@ -710,8 +789,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
 
         if (conditionMet) {
-          const subResult = await executeSteps({
-            ...context,
+          const subResult = await executeNestedSteps(context, {
             steps: condition.then,
             stepPathPrefix: `${currentStepPath}.if.then`
           });
@@ -735,8 +813,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           };
         } else {
           if (condition.else && condition.else.length > 0) {
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: condition.else,
               stepPathPrefix: `${currentStepPath}.if.else`
             });
@@ -778,8 +855,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           }
           for (let i = 0; i < repeat.times; i++) {
             totalSubSteps += repeat.steps.length;
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: repeat.steps,
               stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
@@ -809,8 +885,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             if (totalSubSteps > context.maxSteps) {
               throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
             }
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: repeat.steps,
               stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
@@ -966,6 +1041,42 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             );
           }
         }
+      } else if ("copyText" in step) {
+        assertAllowedSelector(step.copyText.selector, context.forbiddenSelectors);
+        const text = await context.page.locator(step.copyText.selector).textContent();
+        if (text === null) {
+          throw new Error(`No text content found for selector: ${step.copyText.selector}`);
+        }
+        runtimeVars.set(step.copyText.as, text);
+        stepResult = {
+          type: "copyText",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          selector: step.copyText.selector,
+          value: "[REDACTED]"
+        };
+      } else if ("waitForDownload" in step) {
+        const opts = step.waitForDownload;
+        const downloadPromise = context.pendingDownload ?? armDownloadListener(
+          context.page,
+          opts?.timeout ?? 30000
+        );
+        context.pendingDownload = undefined;
+        const download = await downloadPromise;
+        const suggestedFilename = validateDownloadFilename(download.suggestedFilename());
+        if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {
+          throw new Error(
+            `Download filename mismatch: expected "${opts.filename}", got "${suggestedFilename}"`
+          );
+        }
+        const savePath = path.join(context.runDir, suggestedFilename);
+        await download.saveAs(savePath);
+        stepResult = {
+          type: "waitForDownload",
+          status: "pass",
+          durationMs: Date.now() - stepStart,
+          value: suggestedFilename
+        };
       }
 
       if (!stepResult) {

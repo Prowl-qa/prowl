@@ -1,8 +1,10 @@
+import crypto from "node:crypto";
 import type { Assertion, Hunt, Step } from "../types/index.js";
 
 export type InterpolatedHunt = {
   hunt: Hunt;
   redactedFillSteps: Set<string>;
+  randomVars: Record<string, string>;
 };
 
 export type InterpolationResult = {
@@ -26,6 +28,37 @@ export function interpolateString(
     return varValue;
   });
   return { value, usedVars };
+}
+
+const RANDOM_FIRST_NAMES = ["Alex", "Jordan", "Morgan", "Taylor", "Casey", "Riley", "Quinn", "Avery"];
+const RANDOM_LAST_NAMES = ["Smith", "Johnson", "Brown", "Davis", "Wilson", "Clark", "Hall", "Young"];
+
+type RandomSource = {
+  random: () => number;
+  randomBytes: (size: number) => Buffer;
+  randomUUID: () => string;
+};
+
+export function generateRandomVars(randomSource?: Partial<RandomSource>): Record<string, string> {
+  const random = randomSource?.random ?? Math.random;
+  const randomBytes = randomSource?.randomBytes ?? crypto.randomBytes;
+  const randomUUID = randomSource?.randomUUID ?? crypto.randomUUID;
+  const hex = randomBytes(4).toString("hex");
+  const firstIndex = Math.floor(random() * RANDOM_FIRST_NAMES.length);
+  const lastIndex = Math.floor(random() * RANDOM_LAST_NAMES.length);
+  const num = Math.floor(random() * 9000) + 1000;
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let text = "";
+  for (let i = 0; i < 8; i++) {
+    text += chars[Math.floor(random() * chars.length)];
+  }
+  return {
+    RANDOM_EMAIL: `prowl_${hex}@test.com`,
+    RANDOM_NAME: `${RANDOM_FIRST_NAMES[firstIndex]} ${RANDOM_LAST_NAMES[lastIndex]}`,
+    RANDOM_NUMBER: String(num),
+    RANDOM_UUID: randomUUID(),
+    RANDOM_TEXT: text
+  };
 }
 
 function interpolateStep(
@@ -294,6 +327,29 @@ function interpolateStep(
       }
     };
   }
+  if ("copyText" in step) {
+    return {
+      copyText: {
+        selector: interpolateString(step.copyText.selector, vars).value,
+        as: step.copyText.as
+      }
+    };
+  }
+  if ("waitForDownload" in step) {
+    if (step.waitForDownload === null) {
+      return { waitForDownload: null };
+    }
+    return {
+      waitForDownload: {
+        ...(step.waitForDownload.filename !== undefined
+          ? { filename: interpolateString(step.waitForDownload.filename, vars).value }
+          : {}),
+        ...(step.waitForDownload.timeout !== undefined
+          ? { timeout: step.waitForDownload.timeout }
+          : {})
+      }
+    };
+  }
   return step;
 }
 
@@ -319,19 +375,24 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
   return assertion;
 }
 
-export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
+export function interpolateHunt(
+  hunt: Hunt,
+  env: NodeJS.ProcessEnv,
+  randomVars: Record<string, string> = generateRandomVars()
+): InterpolatedHunt {
   const redactedFillSteps = new Set<string>();
 
   const envVars = Object.fromEntries(
     Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
   );
+  const baseVars = { ...randomVars, ...envVars };
 
   const resolvedHuntVars: Record<string, string> = {};
   for (const [key, value] of Object.entries(hunt.vars ?? {})) {
-    resolvedHuntVars[key] = interpolateString(value, envVars).value;
+    resolvedHuntVars[key] = interpolateString(value, baseVars).value;
   }
 
-  const vars = { ...envVars, ...resolvedHuntVars };
+  const vars = { ...baseVars, ...resolvedHuntVars };
   const steps = hunt.steps.map((step, index) =>
     interpolateStep(step, vars, `${index}`, redactedFillSteps)
   );
@@ -342,6 +403,7 @@ export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): Interpolate
       steps,
       assertions
     },
-    redactedFillSteps
+    redactedFillSteps,
+    randomVars
   };
 }
