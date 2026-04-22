@@ -32,6 +32,7 @@ export type StepExecutionContext = {
   activeMocks?: Map<string, () => Promise<void>>;
   runtimeVars?: Map<string, string>;
   randomVars?: Record<string, string>;
+  pendingDownload?: Promise<Download>;
   runStartedAtMs?: number;
   stepPathPrefix?: string;
 };
@@ -436,6 +437,20 @@ async function captureScreenshot(page: Page, filePath: string): Promise<void> {
   }
 }
 
+async function executeNestedSteps(
+  context: StepExecutionContext,
+  overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
+): Promise<StepExecutionResult> {
+  const nestedContext: StepExecutionContext = {
+    ...context,
+    ...overrides,
+    pendingDownload: context.pendingDownload
+  };
+  const result = await executeSteps(nestedContext);
+  context.pendingDownload = nestedContext.pendingDownload;
+  return result;
+}
+
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
   const screenshotsDir = path.join(context.runDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
@@ -446,7 +461,6 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
   const screenshots: string[] = [];
   const runStartedAtMs = context.runStartedAtMs ?? Date.now();
   context.runStartedAtMs = runStartedAtMs;
-  let pendingDownload: Promise<Download> | null = null;
 
   const addScreenshot = async (fileName: string): Promise<string> => {
     const fullPath = screenshotPath(screenshotsDir, fileName);
@@ -476,8 +490,15 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       step = applyRuntimeVars(step, runtimeVars);
     }
     const nextStep = context.steps[index + 1];
-    if (!isWaitForDownloadStep(step) && pendingDownload === null && isWaitForDownloadStep(nextStep)) {
-      pendingDownload = armDownloadListener(context.page, nextStep.waitForDownload?.timeout ?? 30000);
+    if (
+      !isWaitForDownloadStep(step)
+      && context.pendingDownload === undefined
+      && isWaitForDownloadStep(nextStep)
+    ) {
+      context.pendingDownload = armDownloadListener(
+        context.page,
+        nextStep.waitForDownload?.timeout ?? 30000
+      );
     }
     const stepStart = Date.now();
     const stepType = getStepType(step);
@@ -621,7 +642,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           context.randomVars
         );
         assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
-        const subResult = await executeSteps({
+        const subResult = await executeNestedSteps(context, {
           ...context,
           steps: interpolatedSubHunt.steps,
           redactedFillSteps: subRedacted,
@@ -766,8 +787,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
 
         if (conditionMet) {
-          const subResult = await executeSteps({
-            ...context,
+          const subResult = await executeNestedSteps(context, {
             steps: condition.then,
             stepPathPrefix: `${currentStepPath}.if.then`
           });
@@ -791,8 +811,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           };
         } else {
           if (condition.else && condition.else.length > 0) {
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: condition.else,
               stepPathPrefix: `${currentStepPath}.if.else`
             });
@@ -834,8 +853,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           }
           for (let i = 0; i < repeat.times; i++) {
             totalSubSteps += repeat.steps.length;
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: repeat.steps,
               stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
@@ -865,8 +883,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             if (totalSubSteps > context.maxSteps) {
               throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
             }
-            const subResult = await executeSteps({
-              ...context,
+            const subResult = await executeNestedSteps(context, {
               steps: repeat.steps,
               stepPathPrefix: `${currentStepPath}.repeat.steps`
             });
@@ -1038,11 +1055,11 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         };
       } else if ("waitForDownload" in step) {
         const opts = step.waitForDownload;
-        const downloadPromise = pendingDownload ?? armDownloadListener(
+        const downloadPromise = context.pendingDownload ?? armDownloadListener(
           context.page,
           opts?.timeout ?? 30000
         );
-        pendingDownload = null;
+        context.pendingDownload = undefined;
         const download = await downloadPromise;
         const suggestedFilename = validateDownloadFilename(download.suggestedFilename());
         if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {

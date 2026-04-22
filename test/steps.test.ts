@@ -2236,6 +2236,49 @@ describe("copyText step", () => {
 });
 
 describe("waitForDownload step", () => {
+  it("reuses the same listener across runHunt followed by waitForDownload", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "report.pdf",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-download-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = { steps: [{ click: { selector: "#download" } }] };
+    fs.writeFileSync(path.join(huntsDir, "login.yml"), yaml.stringify(subHunt));
+
+    const steps: Step[] = [
+      { runHunt: "login" },
+      { waitForDownload: { timeout: 5000 } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir,
+      huntStack: ["parent"]
+    });
+
+    expect(result.failed).toBe(false);
+    expect(page.waitForEvent).toHaveBeenCalledTimes(1);
+    expect(page.waitForEvent).toHaveBeenCalledWith("download", { timeout: 5000 });
+    expect(mockDownload.saveAs).toHaveBeenCalledTimes(1);
+    expect(mockDownload.saveAs).toHaveBeenCalledWith(path.join(runDir, "report.pdf"));
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
   it("arms the download listener before the triggering step runs", async () => {
     const mockDownload = {
       suggestedFilename: () => "report.pdf",
