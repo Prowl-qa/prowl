@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -904,6 +905,73 @@ describe("executeSteps", () => {
     expect(page.goto.mock.calls[0]?.[0]).toBe("http://localhost/shared123");
     expect(page.goto.mock.calls[1]?.[0]).toBe("http://localhost/shared123");
     fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("shares generated RANDOM vars across sibling runHunt steps", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-siblings-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = { steps: [{ navigate: "/{{RANDOM_TEXT}}" }] };
+    fs.writeFileSync(path.join(huntsDir, "first.yml"), yaml.stringify(subHunt));
+    fs.writeFileSync(path.join(huntsDir, "second.yml"), yaml.stringify(subHunt));
+
+    const randomSpy = vi
+      .spyOn(Math, "random")
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementationOnce(() => 0)
+      .mockImplementation(() => 0.5);
+    const randomBytesSpy = vi
+      .spyOn(crypto, "randomBytes")
+      .mockReturnValueOnce(Buffer.from("12345678", "hex"))
+      .mockReturnValue(Buffer.from("87654321", "hex"));
+    const randomUuidSpy = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValueOnce("11111111-1111-1111-1111-111111111111")
+      .mockReturnValue("22222222-2222-2222-2222-222222222222");
+
+    const context = {
+      page: page as unknown as Page,
+      steps: [{ runHunt: "first" }, { runHunt: "second" }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure" as const,
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set<string>(),
+      configDir,
+      huntStack: ["parent"]
+    };
+
+    try {
+      const result = await executeSteps(context);
+
+      expect(result.failed).toBe(false);
+      expect(page.goto.mock.calls[0]?.[0]).toBe("http://localhost/aaaaaaaa");
+      expect(page.goto.mock.calls[1]?.[0]).toBe("http://localhost/aaaaaaaa");
+      expect(context.randomVars?.RANDOM_TEXT).toBe("aaaaaaaa");
+      expect(randomBytesSpy).toHaveBeenCalledTimes(1);
+      expect(randomUuidSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      randomSpy.mockRestore();
+      randomBytesSpy.mockRestore();
+      randomUuidSpy.mockRestore();
+      fs.rmSync(configDir, { recursive: true, force: true });
+    }
   });
 
   it("executes hover step", async () => {
@@ -2175,7 +2243,7 @@ describe("copyText step", () => {
     expect(result.failed).toBe(false);
     expect(result.results[0].type).toBe("copyText");
     expect(result.results[0].selector).toBe("[data-testid=heading]");
-    expect(result.results[0].value).toBe("Hello World");
+    expect(result.results[0].value).toBe("[REDACTED]");
     expect(context.runtimeVars?.get("HEADING")).toBe("Hello World");
     fs.rmSync(runDir, { recursive: true, force: true });
   });

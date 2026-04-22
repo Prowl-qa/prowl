@@ -448,6 +448,9 @@ async function executeNestedSteps(
   };
   const result = await executeSteps(nestedContext);
   context.pendingDownload = nestedContext.pendingDownload;
+  if (nestedContext.randomVars !== undefined) {
+    context.randomVars = nestedContext.randomVars;
+  }
   return result;
 }
 
@@ -1051,7 +1054,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           selector: step.copyText.selector,
-          value: text.length > 200 ? text.slice(0, 200) + "\u2026" : text
+          value: "[REDACTED]"
         };
       } else if ("waitForDownload" in step) {
         const opts = step.waitForDownload;
