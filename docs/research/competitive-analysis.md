@@ -50,6 +50,7 @@ Do not compete on mobile. Go deep on web where Maestro is shallow.
 | Selector precision | Accessibility-based (simple but fragile) | Playwright engine (surgical precision) |
 | Safety guardrails | None | Forbidden selectors, allowed domains, max steps |
 | Credential protection | None | Automatic `{{VAR}}` redaction in reports |
+| Random data generation | Built-in generators for email, name, number, etc. | Built-in `RANDOM_*` interpolation vars (`RANDOM_EMAIL`, `RANDOM_NAME`, `RANDOM_NUMBER`, etc.) |
 | Contributor accessibility | Kotlin + Java 17 | TypeScript + Node.js |
 | AI integration approach | Chat sidebar (MaestroGPT) | MCP server (any AI agent can generate/run hunts) |
 | Artifact richness | Basic pass/fail | Screenshots every step, console logs, network errors, Playwright traces |

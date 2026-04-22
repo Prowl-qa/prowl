@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Page } from "playwright";
+import type { Download, Page } from "playwright";
 import {
   clickElement,
   fillElement,
@@ -396,6 +396,36 @@ function stepPath(prefix: string | undefined, index: number): string {
   return prefix ? `${prefix}.${index}` : `${index}`;
 }
 
+function isWaitForDownloadStep(step: Step | undefined): step is Extract<Step, { waitForDownload: unknown }> {
+  return step !== undefined && "waitForDownload" in step;
+}
+
+function armDownloadListener(page: Page, timeout: number): Promise<Download> {
+  const downloadPromise = page.waitForEvent("download", { timeout });
+  void downloadPromise.catch(() => undefined);
+  return downloadPromise;
+}
+
+function validateDownloadFilename(suggestedFilename: string): string {
+  const safeFilename = suggestedFilename.trim();
+  const allowedFilenamePattern = /^[^<>:"/\\|?*]+$/;
+  const hasControlCharacter = Array.from(safeFilename).some((char) => char.charCodeAt(0) < 32);
+
+  if (
+    safeFilename.length === 0
+    || safeFilename !== suggestedFilename
+    || safeFilename !== path.basename(safeFilename)
+    || safeFilename.includes("..")
+    || /[/\\]/.test(safeFilename)
+    || hasControlCharacter
+    || !allowedFilenamePattern.test(safeFilename)
+  ) {
+    throw new Error(`Invalid download filename: "${suggestedFilename}"`);
+  }
+
+  return safeFilename;
+}
+
 async function captureScreenshot(page: Page, filePath: string): Promise<void> {
   try {
     await page.screenshot({ path: filePath, fullPage: true });
@@ -415,6 +445,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
   const screenshots: string[] = [];
   const runStartedAtMs = context.runStartedAtMs ?? Date.now();
   context.runStartedAtMs = runStartedAtMs;
+  let pendingDownload: Promise<Download> | null = null;
 
   const addScreenshot = async (fileName: string): Promise<string> => {
     const fullPath = screenshotPath(screenshotsDir, fileName);
@@ -442,6 +473,10 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
     let step = context.steps[index];
     if (runtimeVars.size > 0) {
       step = applyRuntimeVars(step, runtimeVars);
+    }
+    const nextStep = context.steps[index + 1];
+    if (!isWaitForDownloadStep(step) && pendingDownload === null && isWaitForDownloadStep(nextStep)) {
+      pendingDownload = armDownloadListener(context.page, nextStep.waitForDownload?.timeout ?? 30000);
     }
     const stepStart = Date.now();
     const stepType = getStepType(step);
@@ -996,9 +1031,13 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         };
       } else if ("waitForDownload" in step) {
         const opts = step.waitForDownload;
-        const downloadPromise = context.page.waitForEvent("download", { timeout: opts?.timeout ?? 30000 });
+        const downloadPromise = pendingDownload ?? armDownloadListener(
+          context.page,
+          opts?.timeout ?? 30000
+        );
+        pendingDownload = null;
         const download = await downloadPromise;
-        const suggestedFilename = download.suggestedFilename();
+        const suggestedFilename = validateDownloadFilename(download.suggestedFilename());
         if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {
           throw new Error(
             `Download filename mismatch: expected "${opts.filename}", got "${suggestedFilename}"`

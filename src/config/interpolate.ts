@@ -32,21 +32,30 @@ export function interpolateString(
 const RANDOM_FIRST_NAMES = ["Alex", "Jordan", "Morgan", "Taylor", "Casey", "Riley", "Quinn", "Avery"];
 const RANDOM_LAST_NAMES = ["Smith", "Johnson", "Brown", "Davis", "Wilson", "Clark", "Hall", "Young"];
 
-export function generateRandomVars(): Record<string, string> {
-  const hex = crypto.randomBytes(4).toString("hex");
-  const firstIndex = Math.floor(Math.random() * RANDOM_FIRST_NAMES.length);
-  const lastIndex = Math.floor(Math.random() * RANDOM_LAST_NAMES.length);
-  const num = Math.floor(Math.random() * 9000) + 1000;
+type RandomSource = {
+  random: () => number;
+  randomBytes: (size: number) => Buffer;
+  randomUUID: () => string;
+};
+
+export function generateRandomVars(randomSource?: Partial<RandomSource>): Record<string, string> {
+  const random = randomSource?.random ?? Math.random;
+  const randomBytes = randomSource?.randomBytes ?? crypto.randomBytes;
+  const randomUUID = randomSource?.randomUUID ?? crypto.randomUUID;
+  const hex = randomBytes(4).toString("hex");
+  const firstIndex = Math.floor(random() * RANDOM_FIRST_NAMES.length);
+  const lastIndex = Math.floor(random() * RANDOM_LAST_NAMES.length);
+  const num = Math.floor(random() * 9000) + 1000;
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let text = "";
   for (let i = 0; i < 8; i++) {
-    text += chars[Math.floor(Math.random() * chars.length)];
+    text += chars[Math.floor(random() * chars.length)];
   }
   return {
     RANDOM_EMAIL: `prowl_${hex}@test.com`,
     RANDOM_NAME: `${RANDOM_FIRST_NAMES[firstIndex]} ${RANDOM_LAST_NAMES[lastIndex]}`,
     RANDOM_NUMBER: String(num),
-    RANDOM_UUID: crypto.randomUUID(),
+    RANDOM_UUID: randomUUID(),
     RANDOM_TEXT: text
   };
 }
@@ -371,14 +380,15 @@ export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): Interpolate
   const envVars = Object.fromEntries(
     Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
   );
+  const randomVars = generateRandomVars();
+  const baseVars = { ...randomVars, ...envVars };
 
   const resolvedHuntVars: Record<string, string> = {};
   for (const [key, value] of Object.entries(hunt.vars ?? {})) {
-    resolvedHuntVars[key] = interpolateString(value, envVars).value;
+    resolvedHuntVars[key] = interpolateString(value, baseVars).value;
   }
 
-  const randomVars = generateRandomVars();
-  const vars = { ...randomVars, ...envVars, ...resolvedHuntVars };
+  const vars = { ...baseVars, ...resolvedHuntVars };
   const steps = hunt.steps.map((step, index) =>
     interpolateStep(step, vars, `${index}`, redactedFillSteps)
   );

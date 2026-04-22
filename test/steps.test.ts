@@ -15,6 +15,7 @@ function createMockPage(options?: {
   waitForEventResult?: unknown;
 }) {
   let currentUrl = "http://localhost";
+  const locators = new Map<string, { click: ReturnType<typeof vi.fn> }>();
   const createLocator = (count: number, selector?: string) => {
     const locator = {
       count: vi.fn(async () => count),
@@ -40,7 +41,11 @@ function createMockPage(options?: {
       currentUrl = url;
     }),
     url: () => currentUrl,
-    locator: vi.fn((selector: string) => createLocator(options?.locatorCounts?.[selector] ?? 1, selector)),
+    locator: vi.fn((selector: string) => {
+      const locator = createLocator(options?.locatorCounts?.[selector] ?? 1, selector);
+      locators.set(selector, locator);
+      return locator;
+    }),
     getByRole: vi.fn((role: string, params?: { name?: string }) =>
       createLocator(options?.roleCounts?.[`${role}:${String(params?.name ?? "")}`] ?? 1)
     ),
@@ -51,7 +56,8 @@ function createMockPage(options?: {
     waitForLoadState: vi.fn(async () => undefined),
     waitForEvent: vi.fn(async () => options?.waitForEventResult ?? undefined),
     evaluate: vi.fn(async () => undefined),
-    screenshot: vi.fn(async () => undefined)
+    screenshot: vi.fn(async () => undefined),
+    __locators: locators
   };
 }
 
@@ -2174,6 +2180,46 @@ describe("copyText step", () => {
 });
 
 describe("waitForDownload step", () => {
+  it("arms the download listener before the triggering step runs", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "report.pdf",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [
+      { click: { selector: "#download" } },
+      { waitForDownload: { timeout: 5000 } }
+    ];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    const clickLocator = (page as typeof page & {
+      __locators: Map<string, { click: ReturnType<typeof vi.fn> }>;
+    }).__locators.get("#download");
+
+    expect(result.failed).toBe(false);
+    expect(page.waitForEvent).toHaveBeenCalledTimes(1);
+    expect(page.waitForEvent).toHaveBeenCalledWith("download", { timeout: 5000 });
+    expect(clickLocator).toBeDefined();
+    expect(page.waitForEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      clickLocator!.click.mock.invocationCallOrder[0]
+    );
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("captures download and returns suggested filename", async () => {
     const mockDownload = {
       suggestedFilename: () => "report.pdf",
@@ -2287,6 +2333,35 @@ describe("waitForDownload step", () => {
 
     expect(result.failed).toBe(false);
     expect(page.waitForEvent).toHaveBeenCalledWith("download", { timeout: 60000 });
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails when the suggested filename is unsafe", async () => {
+    const mockDownload = {
+      suggestedFilename: () => "../escape.txt",
+      saveAs: vi.fn(async () => undefined)
+    };
+    const page = createMockPage({ waitForEventResult: mockDownload });
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const steps: Step[] = [{ waitForDownload: null }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].error).toContain('Invalid download filename: "../escape.txt"');
+    expect(mockDownload.saveAs).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 });

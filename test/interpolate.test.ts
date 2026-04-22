@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { generateRandomVars, interpolateHunt, interpolateString } from "../src/config/interpolate.js";
 import type { Hunt } from "../src/types/index.js";
 
@@ -339,6 +339,17 @@ describe("interpolateHunt", () => {
     const step = interpolated.steps[0] as { waitForDownload: null };
     expect(step.waitForDownload).toBeNull();
   });
+
+  it("resolves RANDOM vars inside hunt vars", () => {
+    const hunt: Hunt = {
+      vars: { EMAIL: "{{RANDOM_EMAIL}}" },
+      steps: [{ fill: { selector: "#a", value: "{{EMAIL}}" } }]
+    };
+
+    const { hunt: interpolated } = interpolateHunt(hunt, {});
+    const step = interpolated.steps[0] as { fill: { selector: string; value: string } };
+    expect(step.fill.value).toMatch(/^prowl_[0-9a-f]{8}@test\.com$/);
+  });
 });
 
 describe("generateRandomVars", () => {
@@ -380,14 +391,56 @@ describe("generateRandomVars", () => {
     expect(vars.RANDOM_TEXT).toMatch(/^[a-z0-9]{8}$/);
   });
 
-  it("generates different values on each call", () => {
-    const vars1 = generateRandomVars();
-    const vars2 = generateRandomVars();
-    // At least one of them should differ (statistically near-certain)
-    const allSame = Object.keys(vars1).every(
-      (k) => vars1[k as keyof typeof vars1] === vars2[k as keyof typeof vars2]
-    );
-    expect(allSame).toBe(false);
+  it("generates deterministic values from the provided random source", () => {
+    const vars1 = generateRandomVars({
+      randomBytes: vi.fn(() => Buffer.from("12345678", "hex")),
+      randomUUID: vi.fn(() => "11111111-1111-1111-1111-111111111111"),
+      random: vi
+        .fn<() => number>()
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(0)
+    });
+    const vars2 = generateRandomVars({
+      randomBytes: vi.fn(() => Buffer.from("87654321", "hex")),
+      randomUUID: vi.fn(() => "22222222-2222-2222-2222-222222222222"),
+      random: vi
+        .fn<() => number>()
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.75)
+        .mockReturnValueOnce(0.999)
+        .mockReturnValueOnce(0.1)
+        .mockReturnValueOnce(0.2)
+        .mockReturnValueOnce(0.3)
+        .mockReturnValueOnce(0.4)
+        .mockReturnValueOnce(0.5)
+        .mockReturnValueOnce(0.6)
+        .mockReturnValueOnce(0.7)
+        .mockReturnValueOnce(0.8)
+    });
+
+    expect(vars1).toEqual({
+      RANDOM_EMAIL: "prowl_12345678@test.com",
+      RANDOM_NAME: "Alex Smith",
+      RANDOM_NUMBER: "1000",
+      RANDOM_UUID: "11111111-1111-1111-1111-111111111111",
+      RANDOM_TEXT: "aaaaaaaa"
+    });
+    expect(vars2).toEqual({
+      RANDOM_EMAIL: "prowl_87654321@test.com",
+      RANDOM_NAME: "Casey Hall",
+      RANDOM_NUMBER: "9991",
+      RANDOM_UUID: "22222222-2222-2222-2222-222222222222",
+      RANDOM_TEXT: "dhkosvz2"
+    });
   });
 });
 

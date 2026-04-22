@@ -113,7 +113,7 @@ url: http://localhost:3000/login
 | **async/await needed** | No | Yes, every line | No (chaining) | No |
 | **Selector knowledge** | Optional (uses labels) | Yes (locators API) | Yes (CSS selectors) | Yes (selectors) |
 | **Imports/boilerplate** | None | `import { test, expect }` | `describe/it` wrapping | None |
-| **Tokens for AI to generate** | ~200-400 | ~600-800 + config | ~500-700 + config | ~150-300 |
+| **Tokens for AI to generate** | ~200-400 (generation only / YAML definition) | ~600-800 + config | ~500-700 + config | ~150-300 |
 | **Can a non-dev write it?** | Yes | No | Unlikely | Mostly yes |
 
 ---
@@ -204,7 +204,7 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 - Native parallelism with workers and sharding
 - Multi-browser projects (Chrome, Firefox, WebKit, mobile emulation)
 - Codegen tool for recording interactions to code
-- 8 built-in reporters (list, dot, html, json, junit, blob, github)
+- 8 built-in reporters (list, dot, html, json, junit, blob, GitHub)
 - Tag/grep filtering and annotations (slow, skip, fixme)
 - Learning curve: 1-2 weeks for devs, 3-4 weeks for QA
 
@@ -230,7 +230,7 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 - Paid parallelism (requires Cypress Cloud)
 - No multi-tab support
 - No WebKit support
-- In-browser architecture (single tab limitation)
+- In-browser architecture (single-tab limitation)
 - Heavier dependency tree (160+ deps vs Playwright's minimal)
 - Execution speed: up to 4x slower than Playwright
 - CI cost: 40-60% higher than Playwright (linear scaling)
@@ -267,6 +267,7 @@ AI agents (Claude Code, Codex, Cursor, etc.) are increasingly writing and runnin
 | `prowlqa list --json` | ~50-200 |
 
 **Total for single test run**: ~1,050-3,150 tokens
+Includes the full execution cycle: prompts, responses, and parsing/result processing.
 
 ### Playwright Token Costs
 
