@@ -10,7 +10,7 @@
 
 ### ~~BUG-005: Forbidden Selector Matching Uses Substring (Overly Permissive)~~
 **Resolved**: 2026-04-22 (commit eac6b14)
-**Description**: Documented in the README guardrails section that `forbiddenSelectors` uses case-sensitive substring matching, meaning a pattern like `"delete"` also matches `".undelete-btn"` or `"Delete History"`. The same substring semantics apply to `assertions.networkIgnorePatterns`. Users are now guided to write patterns specifically enough to avoid unintended matches (e.g., `".delete-btn"` instead of `"delete"`).
+**Description**: Documented in the README guardrails section that `forbiddenSelectors` and `assertions.networkIgnorePatterns` use JavaScript `includes()` for case-sensitive substring matching. Patterns must match case exactly, so `"Delete"` matches `"Delete History"` while `"delete"` does not. Users are guided to write patterns specifically enough to avoid unintended matches (e.g., `".delete-btn"` instead of `"delete"`).
 
 ### ~~GTM-001: Define Primary ICP~~
 **Resolved**: 2026-04-22

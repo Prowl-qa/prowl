@@ -38,23 +38,23 @@
 **Maestro equivalent**: Maestro Workbench + Maestro Assistant
 
 **Acceptance Criteria**:
-- YAML syntax highlighting for `.prowl/hunts/*.yml` with Prowl schema awareness
+- YAML syntax highlighting for `.prowlqa/hunts/*.yml` with ProwlQA schema awareness
 - IntelliSense/autocomplete for step types, assertion types, config options
 - Run hunt from editor (right-click → "Run Hunt" or CodeLens above hunt name)
 - View results inline (pass/fail badges, screenshot previews in hover)
 - Go-to-definition for `runHunt` references
 - Publish to VS Code Marketplace
 
-{PROWL-025} **P6-002: `prowl studio` — Interactive Test Builder**
+{PROWL-025} **P6-002: `prowlqa studio` — Interactive Test Builder**
    Open a browser alongside a terminal UI. Click elements to generate YAML steps. See selectors on hover. Export to hunt file.
 
 **Maestro equivalent**: Maestro Studio Desktop
 
 **Acceptance Criteria**:
-- `prowl studio` opens target URL in headed browser with inspector overlay
+- `prowlqa studio` opens target URL in headed browser with inspector overlay
 - Clicking elements generates YAML step (click/fill/etc.) in terminal or output file
 - Hovering shows available selectors for each element
-- Export accumulated steps to `.prowl/hunts/<name>.yml`
+- Export accumulated steps to `.prowlqa/hunts/<name>.yml`
 - Support for recording fill values (prompt user for input)
 
 {PROWL-031} **P7-001: Run History and Trend Tracking**
@@ -149,13 +149,13 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - Library equivalent: `discoverHunts(url)` returns matching hunt metadata
 - Works with prowl-hub repository as template source
 
-{PROWL-026} **P6-003: `prowl doctor` — Environment Health Check**
-   Verify that the user's environment is correctly set up for Prowl.
+{PROWL-026} **P6-003: `prowlqa doctor` — Environment Health Check**
+   Verify that the user's environment is correctly set up for ProwlQA.
 
 **Acceptance Criteria**:
-- Checks: Node.js version (>=20), Playwright installed, Chromium available, `.prowl/` exists, `config.yml` valid
+- Checks: Node.js version (>=20), Playwright installed, Chromium available, `.prowlqa/` exists, `config.yml` valid
 - Actionable error messages for each failing check
-- `prowl doctor --fix` attempts auto-repair (install chromium, create `.prowl/`)
+- `prowlqa doctor --fix` attempts auto-repair (install chromium, create `.prowlqa/`)
 - Color-coded output (green check / red X)
 
 {PROWL-027} **P6-005: Video Recording**
@@ -163,7 +163,7 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 
 **Acceptance Criteria**:
 - Config option: `artifacts.video: true` (default: false)
-- CLI flag: `prowl run homepage --video`
+- CLI flag: `prowlqa run homepage --video`
 - Playwright: `context.newPage({ recordVideo: { dir: ... } })`
 - Video saved to run directory alongside screenshots
 - Useful for sharing failures with non-technical stakeholders
@@ -216,25 +216,25 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 
 ## Low Priority
 
-{PROWL-003} **P2-008: `prowl ci --fail-fast` Option**
-   Add a `--fail-fast` flag to `prowl ci` that exits on the first hunt failure instead of running all hunts. Useful in CI pipelines where fast feedback is preferred over completeness.
+{PROWL-003} **P2-008: `prowlqa ci --fail-fast` Option**
+   Add a `--fail-fast` flag to `prowlqa ci` that exits on the first hunt failure instead of running all hunts. Useful in CI pipelines where fast feedback is preferred over completeness.
 
 **Found during**: Code review of P2-001 (2026-02-15)
 **Acceptance Criteria**:
-- `prowl ci --fail-fast` stops after first failed hunt
+- `prowlqa ci --fail-fast` stops after first failed hunt
 - Summary still printed for completed + skipped hunts
 - `ci-result.json` reflects partial run
 - Remaining hunts marked as "skipped" in results
 
-{PROWL-004} **P2-009: `prowl ci --output` and `--json` Flags**
-   Add `--output <path>` flag to control where `ci-result.json` is written (for CI artifact upload), and `--json` flag for machine-readable stdout output (matching `prowl list --json` pattern).
+{PROWL-004} **P2-009: `prowlqa ci --output` and `--json` Flags**
+   Add `--output <path>` flag to control where `ci-result.json` is written (for CI artifact upload), and `--json` flag for machine-readable stdout output (matching `prowlqa list --json` pattern).
 
 **Found during**: Code review of P2-001 (2026-02-15)
 **Status**: Partially complete — `--json` done (library-api branch), `--output` deferred
 **Acceptance Criteria**:
-- ~~`prowl ci --json` emits the `CiResult` JSON to stdout instead of the formatted summary~~ ✓
+- ~~`prowlqa ci --json` emits the `CiResult` JSON to stdout instead of the formatted summary~~ ✓
 - ~~Unit tests for `--json`~~ ✓
-- `prowl ci --output ./results/` writes `ci-result.json` to specified directory (deferred)
+- `prowlqa ci --output ./results/` writes `ci-result.json` to specified directory (deferred)
 - Both flags can be combined (deferred)
 
 {PROWL-005} **P2-007: Slack/Webhook Notifications**
@@ -301,7 +301,7 @@ browser:
 ---
 
 {PROWL-030} **P6-007: Hunt Dependency Graph**
-   Define execution order dependencies between hunts for `prowl ci`.
+   Define execution order dependencies between hunts for `prowlqa ci`.
 
 ```yaml
 name: edit-order
@@ -312,7 +312,7 @@ steps:
 
 **Acceptance Criteria**:
 - `dependsOn` field in hunt YAML: string array of hunt names
-- `prowl ci` resolves dependency order (topological sort)
+- `prowlqa ci` resolves dependency order (topological sort)
 - If a dependency fails, skip dependent hunts (mark as "skipped" in report)
 - Circular dependency detection → error
 - Schema validation, unit tests
