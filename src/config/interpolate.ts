@@ -4,6 +4,7 @@ import type { Assertion, Hunt, Step } from "../types/index.js";
 export type InterpolatedHunt = {
   hunt: Hunt;
   redactedFillSteps: Set<string>;
+  randomVars: Record<string, string>;
 };
 
 export type InterpolationResult = {
@@ -374,13 +375,16 @@ function interpolateAssertion(assertion: Assertion, vars: Record<string, string>
   return assertion;
 }
 
-export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): InterpolatedHunt {
+export function interpolateHunt(
+  hunt: Hunt,
+  env: NodeJS.ProcessEnv,
+  randomVars: Record<string, string> = generateRandomVars()
+): InterpolatedHunt {
   const redactedFillSteps = new Set<string>();
 
   const envVars = Object.fromEntries(
     Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
   );
-  const randomVars = generateRandomVars();
   const baseVars = { ...randomVars, ...envVars };
 
   const resolvedHuntVars: Record<string, string> = {};
@@ -399,6 +403,7 @@ export function interpolateHunt(hunt: Hunt, env: NodeJS.ProcessEnv): Interpolate
       steps,
       assertions
     },
-    redactedFillSteps
+    redactedFillSteps,
+    randomVars
   };
 }

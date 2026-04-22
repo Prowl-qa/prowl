@@ -79,6 +79,7 @@ async function executeHuntAttempt(
   configDir: string,
   interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
   redactedFillSteps: Set<string>,
+  randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
   targetUrl: string,
   allowedDomains: string[]
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
@@ -150,6 +151,7 @@ async function executeHuntAttempt(
         maxSteps,
         maxTotalTimeMs: config.assertions.maxTotalTimeMs,
         redactedFillSteps,
+        randomVars,
         configDir,
         huntStack: [options.huntName],
         onStep: options.onStep
@@ -231,7 +233,10 @@ export async function runHunt(
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
   const { config, configDir } = loadConfig(options.configPath);
   const hunt = loadHunt(options.huntName, configDir);
-  const { hunt: interpolatedHunt, redactedFillSteps } = interpolateHunt(hunt, process.env);
+  const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(
+    hunt,
+    process.env
+  );
 
   const targetUrl = options.urlOverride ?? config.target.url;
   const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
@@ -257,6 +262,7 @@ export async function runHunt(
       configDir,
       interpolatedHunt,
       redactedFillSteps,
+      randomVars,
       targetUrl,
       allowedDomains
     );

@@ -4,6 +4,7 @@ import path from "node:path";
 import yaml from "yaml";
 import { describe, expect, it, vi } from "vitest";
 import { executeSteps } from "../src/runner/steps.js";
+import { interpolateHunt } from "../src/config/interpolate.js";
 import type { Page } from "playwright";
 import type { Step } from "../src/types/index.js";
 
@@ -850,6 +851,58 @@ describe("executeSteps", () => {
     const fillStep = result.results.find((r) => r.type === "login > fill");
     expect(fillStep).toBeDefined();
     expect(fillStep?.status).toBe("pass");
+    fs.rmSync(configDir, { recursive: true, force: true });
+  });
+
+  it("reuses RANDOM vars across parent and nested hunts", async () => {
+    const page = createMockPage();
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-random-"));
+    const huntsDir = path.join(configDir, "hunts");
+    fs.mkdirSync(huntsDir, { recursive: true });
+    const runDir = path.join(configDir, "runs", "test");
+    fs.mkdirSync(runDir, { recursive: true });
+
+    const subHunt = { steps: [{ navigate: "/{{RANDOM_TEXT}}" }] };
+    fs.writeFileSync(path.join(huntsDir, "login.yml"), yaml.stringify(subHunt));
+
+    const randomVars = {
+      RANDOM_EMAIL: "prowl_fixed@test.com",
+      RANDOM_NAME: "Alex Smith",
+      RANDOM_NUMBER: "1234",
+      RANDOM_UUID: "11111111-1111-1111-1111-111111111111",
+      RANDOM_TEXT: "shared123"
+    };
+    const parentHunt = {
+      steps: [
+        { navigate: "/{{RANDOM_TEXT}}" },
+        { runHunt: "login" }
+      ]
+    };
+    const { hunt: interpolatedParent, redactedFillSteps } = interpolateHunt(
+      parentHunt,
+      {},
+      randomVars
+    );
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps: interpolatedParent.steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps,
+      configDir,
+      huntStack: ["parent"],
+      randomVars
+    });
+
+    expect(result.failed).toBe(false);
+    expect(page.goto.mock.calls[0]?.[0]).toBe("http://localhost/shared123");
+    expect(page.goto.mock.calls[1]?.[0]).toBe("http://localhost/shared123");
     fs.rmSync(configDir, { recursive: true, force: true });
   });
 
@@ -2103,24 +2156,27 @@ describe("copyText step", () => {
       { copyText: { selector: "[data-testid=heading]", as: "HEADING" } }
     ];
 
-    const result = await executeSteps({
+    const context = {
       page: page as unknown as Page,
       steps,
       targetUrl: "http://localhost",
       runDir,
-      screenshotsMode: "on-failure",
+      screenshotsMode: "on-failure" as const,
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
       maxSteps: 50,
-      redactedFillSteps: new Set(),
+      redactedFillSteps: new Set<string>(),
       configDir: runDir
-    });
+    };
+
+    const result = await executeSteps(context);
 
     expect(result.failed).toBe(false);
     expect(result.results[0].type).toBe("copyText");
     expect(result.results[0].selector).toBe("[data-testid=heading]");
     expect(result.results[0].value).toBe("Hello World");
+    expect(context.runtimeVars?.get("HEADING")).toBe("Hello World");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 

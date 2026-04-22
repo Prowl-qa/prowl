@@ -31,6 +31,7 @@ export type StepExecutionContext = {
   huntStack?: string[];
   activeMocks?: Map<string, () => Promise<void>>;
   runtimeVars?: Map<string, string>;
+  randomVars?: Record<string, string>;
   runStartedAtMs?: number;
   stepPathPrefix?: string;
 };
@@ -610,15 +611,21 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         if (overrideVars) {
           subHunt.vars = { ...subHunt.vars, ...overrideVars };
         }
-        const { hunt: interpolatedSubHunt, redactedFillSteps: subRedacted } = interpolateHunt(
+        const {
+          hunt: interpolatedSubHunt,
+          redactedFillSteps: subRedacted,
+          randomVars
+        } = interpolateHunt(
           subHunt,
-          process.env
+          process.env,
+          context.randomVars
         );
         assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
         const subResult = await executeSteps({
           ...context,
           steps: interpolatedSubHunt.steps,
           redactedFillSteps: subRedacted,
+          randomVars,
           stepPathPrefix: undefined,
           huntStack: [...stack, huntName],
           onStep: context.onStep
