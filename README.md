@@ -458,6 +458,10 @@ guardrails:
 # Auth state from `prowlqa login`
 auth:
   storageStatePath: ".prowlqa/auth-state.json"
+
+# Run history retention
+history:
+  maxRuns: 100                         # keep last N runs per hunt
 ```
 
 ### Guardrails Matching Semantics
@@ -640,12 +644,34 @@ prowlqa list
 prowlqa ci
 prowlqa ci --json                        # Machine-readable CI output
 prowlqa ci --parallel 4                 # Run hunts with 4 workers
+
+# History — show past runs of a hunt
+prowlqa history <hunt-name>
+prowlqa history <hunt-name> --limit 50   # Show the last 50 runs (default: 20)
+prowlqa history <hunt-name> --json       # Machine-readable history output
 ```
 
 `--parallel <count>` details:
 - Runs hunts in parallel with `count` workers.
 - Must be a positive integer (`>= 1`).
 - Invalid values (for example `0` or `1.5`) fail fast with an argument error.
+
+### Run History
+
+Every `prowlqa run` and `prowlqa ci` appends an entry to `.prowlqa/history.json`
+with the hunt name, status, start time, duration, and run directory. Retention
+is capped per hunt by `history.maxRuns` (default 100) — once a hunt exceeds the
+cap, its oldest entries are dropped on the next write. Other hunts are not
+affected.
+
+```yaml
+# In .prowlqa/config.yml
+history:
+  maxRuns: 50  # keep the last 50 runs per hunt (default: 100)
+```
+
+Use `prowlqa history <hunt-name>` for a quick status/duration table, or
+`--json` to feed the entries into dashboards, flake detectors, or agents.
 
 ---
 

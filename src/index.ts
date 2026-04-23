@@ -5,12 +5,16 @@ export type {
   BrowserEngine, BrowserChannel, Viewport,
   CiResult, CiHuntResult, CiStatus,
   IfStep, RepeatStep, MockRouteStep, UnmockRouteStep,
-  EvalScriptStep, RunScriptStep, AssertScreenshotStep
+  EvalScriptStep, RunScriptStep, AssertScreenshotStep,
+  HistoryEntry, HistoryFile
 } from "./types/index.js";
 
 // Re-export runner
 export { runHunt } from "./runner/index.js";
 export type { RunOptions } from "./runner/index.js";
+
+// Re-export history
+export { readHistory, readHuntHistory } from "./runner/history.js";
 
 // Re-export config utilities
 export {

@@ -57,18 +57,6 @@
 - Export accumulated steps to `.prowlqa/hunts/<name>.yml`
 - Support for recording fill values (prompt user for input)
 
-{PROWL-031} **P7-001: Run History and Trend Tracking**
-   Persist run results beyond local filesystem ephemeral directories. Track pass/fail history over time per hunt. Foundation for all other reliability features.
-
-**Found during**: Gap analysis (2026-02-16)
-**Acceptance Criteria**:
-- `prowlqa history <hunt-name>` shows last N runs with status, duration, and timestamp
-- `prowlqa history <hunt-name> --json` for programmatic access
-- Results stored in `.prowlqa/history.json` as one entry per run, with automatic truncation of the oldest entries when retention is exceeded
-- Configurable retention: `history.maxRuns` (default: 100) caps how many entries remain on disk per hunt after each write
-- History written automatically after every `prowlqa run` and `prowlqa ci`, with retention pruning applied immediately after the new run entry is appended
-- Foundation for flake detection, trend analysis, and dashboard features
-
 {PROWL-032} **P7-002: Flake Detection and Scoring**
    Identify intermittently failing hunts by analyzing run history. Assign a flake score based on pass/fail oscillation frequency. Flaky hunts are the #1 reason teams lose trust in test suites.
 

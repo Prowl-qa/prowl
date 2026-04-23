@@ -53,6 +53,11 @@ export const configSchema = z
       .object({
         storageStatePath: z.string().optional()
       })
+      .optional(),
+    history: z
+      .object({
+        maxRuns: z.number().int().positive().optional()
+      })
       .optional()
   })
   .strict();

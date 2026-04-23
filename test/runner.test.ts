@@ -13,6 +13,7 @@ const mockLoadHunt = vi.fn();
 const mockEnsureAllowedDomain = vi.fn();
 const mockResolveViewport = vi.fn();
 const mockInterpolateHunt = vi.fn();
+const mockAppendHistoryEntry = vi.fn();
 
 vi.mock("../src/browser/controller.js", () => ({
   launchBrowser: (...args: unknown[]) => mockLaunchBrowser(...args),
@@ -43,6 +44,10 @@ vi.mock("../src/config/interpolate.js", () => ({
   interpolateHunt: (...args: unknown[]) => mockInterpolateHunt(...args)
 }));
 
+vi.mock("../src/runner/history.js", () => ({
+  appendEntry: (...args: unknown[]) => mockAppendHistoryEntry(...args)
+}));
+
 // Need to mock fs.mkdirSync and fs.writeFileSync for run directory creation
 const originalMkdirSync = fs.mkdirSync;
 
@@ -55,7 +60,8 @@ function defaultConfig() {
     artifacts: { screenshots: "on-failure", networkHar: false, console: true, junit: false },
     assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000, networkIgnorePatterns: [] },
     guardrails: { maxSteps: 50, allowedDomains: ["localhost"], forbiddenSelectors: [] },
-    auth: { storageStatePath: ".prowlqa/auth-state.json" }
+    auth: { storageStatePath: ".prowlqa/auth-state.json" },
+    history: { maxRuns: 100 }
   };
 }
 
@@ -314,5 +320,88 @@ describe("runHunt", () => {
       expect.any(Object),
       expect.objectContaining({ junit: false })
     );
+  });
+
+  it("writes a history entry after a successful run", async () => {
+    setupMocks();
+
+    await runHunt({ huntName: "test-hunt" });
+
+    expect(mockAppendHistoryEntry).toHaveBeenCalledTimes(1);
+    const [configDirArg, entry, maxRunsArg] = mockAppendHistoryEntry.mock.calls[0];
+    expect(configDirArg).toBe("/tmp/prowlqa-test-runner/.prowlqa");
+    expect(maxRunsArg).toBe(100);
+    expect(entry).toMatchObject({
+      hunt: "test-hunt",
+      status: "pass"
+    });
+    expect(typeof entry.durationMs).toBe("number");
+    expect(typeof entry.startedAt).toBe("string");
+  });
+
+  it("writes a history entry after a failed run", async () => {
+    setupMocks({
+      stepResults: [{ type: "click", status: "fail", durationMs: 50, error: "not found" }],
+      stepFailed: true
+    });
+
+    await runHunt({ huntName: "test-hunt" });
+
+    expect(mockAppendHistoryEntry).toHaveBeenCalledTimes(1);
+    const [, entry] = mockAppendHistoryEntry.mock.calls[0];
+    expect(entry.status).toBe("fail");
+  });
+
+  it("writes only one history entry even when retries succeed", async () => {
+    setupMocks({ huntRetry: { maxRetries: 1, delay: 0 } });
+
+    let callCount = 0;
+    mockExecuteSteps.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({
+          results: [{ type: "navigate", status: "fail", durationMs: 10, error: "timeout" }],
+          screenshots: [],
+          failed: true
+        });
+      }
+      return Promise.resolve({
+        results: [{ type: "navigate", status: "pass", durationMs: 10 }],
+        screenshots: [],
+        failed: false
+      });
+    });
+
+    await runHunt({ huntName: "test-hunt" });
+
+    expect(mockAppendHistoryEntry).toHaveBeenCalledTimes(1);
+    const [, entry] = mockAppendHistoryEntry.mock.calls[0];
+    expect(entry.status).toBe("pass");
+  });
+
+  it("writes only one history entry when all retries fail", async () => {
+    setupMocks({ huntRetry: { maxRetries: 2, delay: 0 } });
+    mockExecuteSteps.mockResolvedValue({
+      results: [{ type: "navigate", status: "fail", durationMs: 10, error: "timeout" }],
+      screenshots: [],
+      failed: true
+    });
+
+    await runHunt({ huntName: "test-hunt" });
+
+    expect(mockAppendHistoryEntry).toHaveBeenCalledTimes(1);
+    const [, entry] = mockAppendHistoryEntry.mock.calls[0];
+    expect(entry.status).toBe("fail");
+  });
+
+  it("does not let a history write failure break the run", async () => {
+    setupMocks();
+    mockAppendHistoryEntry.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+
+    await expect(runHunt({ huntName: "test-hunt" })).resolves.toMatchObject({
+      result: expect.objectContaining({ status: "pass" })
+    });
   });
 });
