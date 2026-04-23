@@ -1,5 +1,9 @@
 # Prowl (CLI) - Resolved Items
 
+### ~~P7-001: Run History and Trend Tracking~~
+**Resolved**: 2026-04-22 (branch history-trend-tracking)
+**Description**: Every `prowlqa run` and `prowlqa ci` now appends one entry per run to `.prowlqa/history.json` (hunt, status, startedAt, durationMs, runDir). Retention is configurable via `history.maxRuns` (default 100) and enforced per-hunt on every write so one chatty hunt cannot starve another. `prowlqa history <hunt-name>` prints a status/duration/timestamp table with `--limit <n>` (default 20) and `--json` for programmatic consumers. `readHistory`, `readHuntHistory`, and the `HistoryEntry` / `HistoryFile` types are exported from the library. History writes are error-isolated so a disk failure never breaks a run. Foundation for PROWL-032 (flake detection), PROWL-033 (retry diagnostics), PROWL-034 (failure clustering), and PROWL-035 (auto-quarantine).
+
 ### ~~LEGAL-003: Create NOTICE File for Attribution~~
 **Resolved**: 2026-04-22 (commit eac6b14)
 **Description**: Added a `NOTICE` file at the repo root aggregating attribution (license + copyright) for all direct runtime dependencies: chalk, commander, dotenv, ora, pixelmatch, playwright, pngjs, yaml, and zod. Standard practice for Apache 2.0 projects.
