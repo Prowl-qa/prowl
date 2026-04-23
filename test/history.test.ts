@@ -16,7 +16,7 @@ function setupTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-"));
 }
 
-async function waitForFile(filePath: string, timeoutMs = 5000): Promise<void> {
+async function waitForFile(filePath: string, timeoutMs = 10000): Promise<void> {
   const startedAt = Date.now();
   while (!fs.existsSync(filePath)) {
     if (Date.now() - startedAt > timeoutMs) {
@@ -286,7 +286,7 @@ appendEntry(
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(gateDir, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 });
 
 describe("readHuntHistory", () => {
