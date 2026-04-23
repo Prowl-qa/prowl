@@ -8,6 +8,7 @@ import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
+import { appendEntry as appendHistoryEntry } from "./history.js";
 
 export type RunOptions = {
   huntName: string;
@@ -272,6 +273,7 @@ export async function runHunt(
         lastResult.result.artifacts.summary =
           `Passed on attempt ${attempt + 1} of ${maxRetries + 1}`;
       }
+      recordHistory(configDir, lastResult, config.history.maxRuns);
       return lastResult;
     }
   }
@@ -281,5 +283,32 @@ export async function runHunt(
       `Failed after ${maxRetries + 1} attempts`;
   }
 
+  if (lastResult) {
+    recordHistory(configDir, lastResult, config.history.maxRuns);
+  }
+
   return lastResult!;
+}
+
+function recordHistory(
+  configDir: string,
+  outcome: { result: RunResult; runDir: string },
+  maxRuns: number
+): void {
+  try {
+    const relativeRunDir = path.relative(configDir, outcome.runDir);
+    appendHistoryEntry(
+      configDir,
+      {
+        hunt: outcome.result.hunt,
+        status: outcome.result.status,
+        durationMs: outcome.result.durationMs,
+        startedAt: outcome.result.startedAt,
+        runDir: relativeRunDir || undefined
+      },
+      maxRuns
+    );
+  } catch {
+    // History is observability only; a write failure must never break a run.
+  }
 }
