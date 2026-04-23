@@ -29,7 +29,9 @@ export function readHistory(configDir: string): HistoryFile {
       return { entries: (parsed as HistoryFile).entries };
     }
     return { entries: [] };
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Failed to read history file at ${filePath}: ${message}`);
     return { entries: [] };
   }
 }
@@ -96,6 +98,10 @@ function withHistoryLock<T>(configDir: string, fn: () => T): T {
       throw error;
     }
   }
+
+  throw new Error(
+    `Failed to acquire history lock before timeout (${LOCK_TIMEOUT_MS}ms): ${lockPath}; started waiting at ${new Date(startedAt).toISOString()}`
+  );
 }
 
 export function appendEntry(

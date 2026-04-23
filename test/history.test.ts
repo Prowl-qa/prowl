@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   appendEntry,
   pruneEntries,
@@ -80,10 +80,15 @@ describe("readHistory", () => {
 
   it("returns empty entries when history.json is malformed", () => {
     const dir = setupTempDir();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       fs.writeFileSync(path.join(dir, "history.json"), "{not json");
       expect(readHistory(dir)).toEqual({ entries: [] });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`Failed to read history file at ${path.join(dir, "history.json")}:`)
+      );
     } finally {
+      warnSpy.mockRestore();
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
