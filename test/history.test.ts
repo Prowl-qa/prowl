@@ -1,6 +1,8 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   appendEntry,
@@ -12,6 +14,48 @@ import type { HistoryEntry } from "../src/types/index.js";
 
 function setupTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-"));
+}
+
+async function waitForFile(filePath: string, timeoutMs = 5000): Promise<void> {
+  const startedAt = Date.now();
+  while (!fs.existsSync(filePath)) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error(`Timed out waiting for file: ${filePath}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+async function waitForChild(
+  child: ReturnType<typeof spawn>,
+  label: string
+): Promise<void> {
+  const stderrChunks: string[] = [];
+  child.stderr.on("data", (chunk) => {
+    stderrChunks.push(String(chunk));
+  });
+
+  if (child.exitCode !== null) {
+    if (child.exitCode === 0) {
+      return;
+    }
+    throw new Error(
+      `${label} failed with exit code ${child.exitCode}: ${stderrChunks.join("").trim()}`
+    );
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(`${label} failed with exit code ${code}: ${stderrChunks.join("").trim()}`)
+      );
+    });
+  });
 }
 
 function makeEntry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
@@ -151,6 +195,93 @@ describe("appendEntry", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("serializes concurrent writers so entries are not lost", async () => {
+    const dir = setupTempDir();
+    const gateDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-gate-"));
+    try {
+      fs.writeFileSync(path.join(dir, "history.json"), JSON.stringify({ entries: [] }));
+      const helperPath = path.join(gateDir, "append-helper.ts");
+      fs.writeFileSync(
+        helperPath,
+        `import fs from "node:fs";
+import path from "node:path";
+import { appendEntry } from ${JSON.stringify(pathToFileURL(path.resolve("src/runner/history.ts")).href)};
+
+const [configDir, gatePath, startedAt] = process.argv.slice(2);
+const historyFile = path.join(configDir, "history.json");
+const readyFile = path.join(gatePath, \`\${startedAt}.ready\`);
+const continueFile = path.join(gatePath, "continue");
+const originalReadFileSync = fs.readFileSync.bind(fs);
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
+let intercepted = false;
+
+function sleepSync(ms) {
+  Atomics.wait(sleepBuffer, 0, 0, ms);
+}
+
+fs.readFileSync = ((...args) => {
+  const filePath = args[0];
+  if (!intercepted && filePath === historyFile) {
+    intercepted = true;
+    fs.writeFileSync(readyFile, "");
+    while (!fs.existsSync(continueFile)) {
+      sleepSync(10);
+    }
+  }
+  return originalReadFileSync(...args);
+});
+
+appendEntry(
+  configDir,
+  {
+    hunt: "shared",
+    status: "pass",
+    durationMs: 10,
+    startedAt,
+    runDir: startedAt
+  },
+  100
+);
+`
+      );
+
+      const childOne = spawn(process.execPath, [
+        "--experimental-strip-types",
+        helperPath,
+        dir,
+        gateDir,
+        "2026-01-01T00:00:00.000Z"
+      ]);
+      await waitForFile(path.join(gateDir, "2026-01-01T00:00:00.000Z.ready"));
+
+      const childTwo = spawn(process.execPath, [
+        "--experimental-strip-types",
+        helperPath,
+        dir,
+        gateDir,
+        "2026-01-02T00:00:00.000Z"
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      fs.writeFileSync(path.join(gateDir, "continue"), "");
+
+      await Promise.all([
+        waitForChild(childOne, "first history writer"),
+        waitForChild(childTwo, "second history writer")
+      ]);
+
+      const { entries } = readHistory(dir);
+      expect(entries).toHaveLength(2);
+      expect(entries.map((entry) => entry.startedAt)).toEqual([
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-02T00:00:00.000Z"
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(gateDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("readHuntHistory", () => {
@@ -197,6 +328,20 @@ describe("pruneEntries", () => {
     ]);
     expect(bHistory.map((e) => e.startedAt)).toEqual([
       "2026-01-04T00:00:00.000Z"
+    ]);
+  });
+
+  it("preserves original chronological order after per-hunt pruning", () => {
+    const entries: HistoryEntry[] = [
+      makeEntry({ hunt: "a", startedAt: "2026-01-01T00:00:00.000Z" }),
+      makeEntry({ hunt: "b", startedAt: "2026-01-02T00:00:00.000Z" }),
+      makeEntry({ hunt: "a", startedAt: "2026-01-03T00:00:00.000Z" })
+    ];
+
+    const pruned = pruneEntries(entries, 1);
+    expect(pruned.map((entry) => `${entry.hunt}:${entry.startedAt}`)).toEqual([
+      "b:2026-01-02T00:00:00.000Z",
+      "a:2026-01-03T00:00:00.000Z"
     ]);
   });
 });
