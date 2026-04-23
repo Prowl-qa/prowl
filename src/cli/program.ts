@@ -9,6 +9,7 @@ import { buildCiCommand } from "./commands/ci.js";
 import { buildUpdateBaselinesCommand } from "./commands/update-baselines.js";
 import { buildAnalyzeCommand } from "./commands/analyze.js";
 import { buildGenerateCommand } from "./commands/generate.js";
+import { buildHistoryCommand } from "./commands/history.js";
 
 export const CLI_VERSION = pkg.version;
 
@@ -29,6 +30,7 @@ export function buildProgram(): Command {
   program.addCommand(buildUpdateBaselinesCommand());
   program.addCommand(buildAnalyzeCommand());
   program.addCommand(buildGenerateCommand());
+  program.addCommand(buildHistoryCommand());
 
   return program;
 }
