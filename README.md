@@ -460,6 +460,12 @@ auth:
   storageStatePath: ".prowlqa/auth-state.json"
 ```
 
+### Guardrails Matching Semantics
+
+- **`forbiddenSelectors`** and **`assertions.networkIgnorePatterns`** both use JavaScript `includes()` for case-sensitive substring matching. A pattern of `"Delete"` matches `"Delete History"`, but `"delete"` does not. Specific selectors like `".delete-btn"` also match `".undelete-btn"` because the substring is present, so prefer exact-enough patterns instead of broad fragments.
+- **`allowedDomains`** is enforced only for `http:` and `https:` navigations. The `about:` and `data:` protocols (for example, `about:blank`) bypass the allowlist by design so hunts can interact with browser-internal pages.
+- **Migration note:** If an older config relied on lowercase patterns like `"delete"` matching uppercase text such as `"Delete History"`, update the pattern to the exact case present in the selector or URL. Apply the same review to `forbiddenSelectors`, `assertions.networkIgnorePatterns`, and any `allowedDomains` assumptions about `about:` or `data:` URLs.
+
 <!-- ILLUSTRATION: Annotated diagram showing each config section's purpose and how it maps to runtime behavior -->
 
 ---

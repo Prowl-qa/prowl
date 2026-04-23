@@ -1,5 +1,21 @@
 # Prowl (CLI) - Resolved Items
 
+### ~~LEGAL-003: Create NOTICE File for Attribution~~
+**Resolved**: 2026-04-22 (commit eac6b14)
+**Description**: Added a `NOTICE` file at the repo root aggregating attribution (license + copyright) for all direct runtime dependencies: chalk, commander, dotenv, ora, pixelmatch, playwright, pngjs, yaml, and zod. Standard practice for Apache 2.0 projects.
+
+### ~~BUG-006: `data:` and `about:` Protocols Bypass Domain Allowlist~~
+**Resolved**: 2026-04-22 (commit eac6b14)
+**Description**: Documented in the README guardrails section that `allowedDomains` enforcement applies to `http:`/`https:` navigations only, and that `about:` and `data:` protocols (e.g., `about:blank`) bypass the allowlist by design so hunts can interact with browser-internal pages.
+
+### ~~BUG-005: Forbidden Selector Matching Uses Substring (Overly Permissive)~~
+**Resolved**: 2026-04-22 (commit eac6b14)
+**Description**: Documented in the README guardrails section that `forbiddenSelectors` and `assertions.networkIgnorePatterns` use JavaScript `includes()` for case-sensitive substring matching. Patterns must match case exactly, so `"Delete"` matches `"Delete History"` while `"delete"` does not. Users are guided to write patterns specifically enough to avoid unintended matches (e.g., `".delete-btn"` instead of `"delete"`).
+
+### ~~GTM-001: Define Primary ICP~~
+**Resolved**: 2026-04-22
+**Description**: Defined ProwlQA's primary ICP as QA engineers on small teams working alongside AI-assisted developers. 1-pager captures persona, pains, alternatives, why ProwlQA wins, and secondary audiences. See `docs/research/primary-icp.md`.
+
 ### ~~P1.5-001: Shorthand Step Syntax~~
 **Resolved**: 2026-02-08 (commit 8f47788)
 **Description**: Added shorthand forms for `click`, `fill`, `type`, and `select` while preserving explicit selector-driven forms for precision.

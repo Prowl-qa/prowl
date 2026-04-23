@@ -8,6 +8,10 @@ All notable changes to ProwlQA will be documented in this file.
 - `copyText` step type: extract text content from an element and store as a runtime variable for use in subsequent steps (P4-004)
 - `waitForDownload` step type: wait for a file download event with optional filename assertion and custom timeout, saves downloaded file to run artifacts (P4-009)
 - Built-in `{{RANDOM_*}}` variables: `RANDOM_EMAIL`, `RANDOM_NAME`, `RANDOM_NUMBER`, `RANDOM_UUID`, `RANDOM_TEXT` generated once per hunt run for unique test data (P6-004)
+- `NOTICE` file at repo root aggregating attribution for direct runtime dependencies (LEGAL-003)
+
+### Documentation
+- README guardrails section now documents substring-matching semantics for `forbiddenSelectors` and `networkIgnorePatterns`, and the intentional `about:`/`data:` protocol bypass in `allowedDomains` (BUG-005, BUG-006)
 
 ## [0.1.0] - 2026-02-19
 
