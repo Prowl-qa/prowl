@@ -92,3 +92,50 @@ describe("ensureAllowedDomain", () => {
     expect(allowed).toContain("example.com");
   });
 });
+
+describe("loadConfig history", () => {
+  it("defaults history.maxRuns to 100 when not set", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    process.chdir(project);
+
+    const { config } = loadConfig();
+    expect(config.history.maxRuns).toBe(100);
+
+    process.chdir(cwd);
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+
+  it("respects history.maxRuns override from config.yml", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    process.chdir(project);
+
+    fs.writeFileSync(
+      path.join(project, ".prowlqa", "config.yml"),
+      "target:\n  url: 'http://example.com'\nhistory:\n  maxRuns: 25\n"
+    );
+
+    const { config } = loadConfig();
+    expect(config.history.maxRuns).toBe(25);
+
+    process.chdir(cwd);
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+
+  it("rejects history.maxRuns that is not a positive integer", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    process.chdir(project);
+
+    fs.writeFileSync(
+      path.join(project, ".prowlqa", "config.yml"),
+      "target:\n  url: 'http://example.com'\nhistory:\n  maxRuns: 0\n"
+    );
+
+    expect(() => loadConfig()).toThrow();
+
+    process.chdir(cwd);
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+});

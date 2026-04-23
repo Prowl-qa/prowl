@@ -42,6 +42,21 @@ export type Config = {
   auth: {
     storageStatePath?: string;
   };
+  history: {
+    maxRuns: number;
+  };
+};
+
+export type HistoryEntry = {
+  hunt: string;
+  status: "pass" | "fail";
+  durationMs: number;
+  startedAt: string;
+  runDir?: string;
+};
+
+export type HistoryFile = {
+  entries: HistoryEntry[];
 };
 
 export type Hunt = {

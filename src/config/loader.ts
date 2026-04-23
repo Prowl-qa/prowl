@@ -36,6 +36,9 @@ const DEFAULT_CONFIG: Config = {
   },
   auth: {
     storageStatePath: ".prowlqa/auth-state.json"
+  },
+  history: {
+    maxRuns: 100
   }
 };
 
@@ -115,6 +118,9 @@ function mergeConfig(partial: Partial<Config>): Config {
     },
     auth: {
       storageStatePath: partial.auth?.storageStatePath ?? (partial.auth !== undefined ? DEFAULT_CONFIG.auth.storageStatePath : undefined)
+    },
+    history: {
+      maxRuns: partial.history?.maxRuns ?? DEFAULT_CONFIG.history.maxRuns
     }
   };
 }
