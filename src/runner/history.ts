@@ -12,6 +12,22 @@ function historyPath(configDir: string): string {
   return path.join(configDir, HISTORY_FILE);
 }
 
+function isHistoryEntry(value: unknown): value is HistoryEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.hunt === "string" &&
+    (entry.status === "pass" || entry.status === "fail") &&
+    typeof entry.durationMs === "number" &&
+    Number.isFinite(entry.durationMs) &&
+    typeof entry.startedAt === "string" &&
+    (entry.runDir === undefined || typeof entry.runDir === "string")
+  );
+}
+
 export function readHistory(configDir: string): HistoryFile {
   const filePath = historyPath(configDir);
   if (!fs.existsSync(filePath)) {
@@ -26,7 +42,8 @@ export function readHistory(configDir: string): HistoryFile {
       "entries" in parsed &&
       Array.isArray((parsed as { entries: unknown }).entries)
     ) {
-      return { entries: (parsed as HistoryFile).entries };
+      const validatedEntries = (parsed as { entries: unknown[] }).entries.filter(isHistoryEntry);
+      return { entries: validatedEntries };
     }
     return { entries: [] };
   } catch (error) {
@@ -68,34 +85,28 @@ function withHistoryLock<T>(configDir: string, fn: () => T): T {
   const lockPath = `${filePath}${LOCK_FILE_SUFFIX}`;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const startedAt = Date.now();
-  let acquired = false;
 
-  while (!acquired) {
-    let fd: number | undefined;
+  while (Date.now() - startedAt < LOCK_TIMEOUT_MS) {
+    let fd: number;
     try {
       fd = fs.openSync(lockPath, "wx");
-      acquired = true;
-      const result = fn();
-      fs.closeSync(fd);
-      fs.rmSync(lockPath, { force: true });
-      return result;
     } catch (error) {
-      if (fd !== undefined) {
-        try {
-          fs.closeSync(fd);
-        } catch {
-          // Ignore close failures during cleanup.
-        }
-        fs.rmSync(lockPath, { force: true });
-      }
       if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-        if (Date.now() - startedAt >= LOCK_TIMEOUT_MS) {
-          throw new Error(`Timed out waiting for history lock: ${lockPath}`);
-        }
         sleepSync(LOCK_RETRY_MS);
         continue;
       }
       throw error;
+    }
+
+    try {
+      return fn();
+    } finally {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // Ignore close failures during cleanup.
+      }
+      fs.rmSync(lockPath, { force: true });
     }
   }
 

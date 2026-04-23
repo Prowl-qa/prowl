@@ -12,47 +12,78 @@ import {
 } from "../src/runner/history.js";
 import type { HistoryEntry } from "../src/types/index.js";
 
+type SpawnedWriter = {
+  child: ReturnType<typeof spawn>;
+  stderrChunks: string[];
+};
+
 function setupTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-"));
 }
 
-async function waitForFile(filePath: string, timeoutMs = 10000): Promise<void> {
+function spawnHistoryWriter(
+  helperPath: string,
+  configDir: string,
+  gateDir: string,
+  startedAt: string
+): SpawnedWriter {
+  const stderrChunks: string[] = [];
+  const child = spawn(process.execPath, [
+    "--experimental-strip-types",
+    helperPath,
+    configDir,
+    gateDir,
+    startedAt
+  ]);
+  child.stderr.on("data", (chunk) => {
+    stderrChunks.push(String(chunk));
+  });
+  return { child, stderrChunks };
+}
+
+async function waitForFile(
+  filePath: string,
+  label: string,
+  handle?: SpawnedWriter,
+  timeoutMs = 10000
+): Promise<void> {
   const startedAt = Date.now();
   while (!fs.existsSync(filePath)) {
+    if (handle?.child.exitCode !== null) {
+      const stderr = handle.stderrChunks.join("").trim();
+      throw new Error(
+        `${label} exited before signaling readiness: ${stderr || `exit code ${handle.child.exitCode}`}`
+      );
+    }
     if (Date.now() - startedAt > timeoutMs) {
-      throw new Error(`Timed out waiting for file: ${filePath}`);
+      const stderr = handle ? handle.stderrChunks.join("").trim() : "";
+      throw new Error(
+        `Timed out waiting for file: ${filePath}${stderr ? `; child stderr: ${stderr}` : ""}`
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
-async function waitForChild(
-  child: ReturnType<typeof spawn>,
-  label: string
-): Promise<void> {
-  const stderrChunks: string[] = [];
-  child.stderr.on("data", (chunk) => {
-    stderrChunks.push(String(chunk));
-  });
-
-  if (child.exitCode !== null) {
-    if (child.exitCode === 0) {
+async function waitForChild(handle: SpawnedWriter, label: string): Promise<void> {
+  if (handle.child.exitCode !== null) {
+    if (handle.child.exitCode === 0) {
       return;
     }
     throw new Error(
-      `${label} failed with exit code ${child.exitCode}: ${stderrChunks.join("").trim()}`
+      `${label} failed with exit code ${handle.child.exitCode}: ${handle.stderrChunks.join("").trim()}`
     );
   }
 
   await new Promise<void>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code) => {
+    handle.child.once("error", reject);
+    handle.child.once("exit", (code) => {
       if (code === 0) {
         resolve();
         return;
       }
       reject(
-        new Error(`${label} failed with exit code ${code}: ${stderrChunks.join("").trim()}`)
+        new Error(`${label} failed with exit code ${code}: ${handle.stderrChunks.join("").trim()}`)
       );
     });
   });
@@ -98,6 +129,37 @@ describe("readHistory", () => {
     try {
       fs.writeFileSync(path.join(dir, "history.json"), JSON.stringify({ foo: 1 }));
       expect(readHistory(dir)).toEqual({ entries: [] });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters malformed entries from history.json", () => {
+    const dir = setupTempDir();
+    try {
+      fs.writeFileSync(
+        path.join(dir, "history.json"),
+        JSON.stringify({
+          entries: [
+            null,
+            { hunt: "missing-status", durationMs: 10, startedAt: "2026-01-01T00:00:00.000Z" },
+            { hunt: "wrong-duration", status: "pass", durationMs: "10", startedAt: "2026-01-01T00:00:00.000Z" },
+            { hunt: "valid", status: "fail", durationMs: 42, startedAt: "2026-01-02T00:00:00.000Z", runDir: "run-1" }
+          ]
+        })
+      );
+
+      expect(readHistory(dir)).toEqual({
+        entries: [
+          {
+            hunt: "valid",
+            status: "fail",
+            durationMs: 42,
+            startedAt: "2026-01-02T00:00:00.000Z",
+            runDir: "run-1"
+          }
+        ]
+      });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -206,12 +268,11 @@ describe("appendEntry", () => {
     const gateDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-gate-"));
     try {
       fs.writeFileSync(path.join(dir, "history.json"), JSON.stringify({ entries: [] }));
-      const helperPath = path.join(gateDir, "append-helper.ts");
+      const helperPath = path.join(gateDir, "append-helper.mjs");
       fs.writeFileSync(
         helperPath,
         `import fs from "node:fs";
 import path from "node:path";
-import { appendEntry } from ${JSON.stringify(pathToFileURL(path.resolve("src/runner/history.ts")).href)};
 
 const [configDir, gatePath, startedAt] = process.argv.slice(2);
 const historyFile = path.join(configDir, "history.json");
@@ -219,54 +280,67 @@ const readyFile = path.join(gatePath, \`\${startedAt}.ready\`);
 const continueFile = path.join(gatePath, "continue");
 const originalReadFileSync = fs.readFileSync.bind(fs);
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
-let intercepted = false;
+const historyModuleUrl = ${JSON.stringify(pathToFileURL(path.resolve("src/runner/history.ts")).href)};
 
 function sleepSync(ms) {
   Atomics.wait(sleepBuffer, 0, 0, ms);
 }
 
-fs.readFileSync = ((...args) => {
-  const filePath = args[0];
-  if (!intercepted && filePath === historyFile) {
-    intercepted = true;
-    fs.writeFileSync(readyFile, "");
-    while (!fs.existsSync(continueFile)) {
-      sleepSync(10);
+try {
+  let intercepted = false;
+  fs.readFileSync = ((...args) => {
+    const filePath = args[0];
+    if (!intercepted && filePath === historyFile) {
+      intercepted = true;
+      fs.writeFileSync(readyFile, "");
+      while (!fs.existsSync(continueFile)) {
+        sleepSync(10);
+      }
     }
-  }
-  return originalReadFileSync(...args);
-});
+    return originalReadFileSync(...args);
+  });
 
-appendEntry(
-  configDir,
-  {
-    hunt: "shared",
-    status: "pass",
-    durationMs: 10,
-    startedAt,
-    runDir: startedAt
-  },
-  100
-);
+  const { appendEntry } = await import(historyModuleUrl);
+  appendEntry(
+    configDir,
+    {
+      hunt: "shared",
+      status: "pass",
+      durationMs: 10,
+      startedAt,
+      runDir: startedAt
+    },
+    100
+  );
+} catch (error) {
+  console.error(
+    "Helper script error:",
+    error instanceof Error ? (error.stack ?? error.message) : String(error)
+  );
+  process.exit(1);
+}
 `
       );
 
-      const childOne = spawn(process.execPath, [
-        "--experimental-strip-types",
+      const childOne = spawnHistoryWriter(
         helperPath,
         dir,
         gateDir,
         "2026-01-01T00:00:00.000Z"
-      ]);
-      await waitForFile(path.join(gateDir, "2026-01-01T00:00:00.000Z.ready"));
+      );
+      await waitForFile(
+        path.join(gateDir, "2026-01-01T00:00:00.000Z.ready"),
+        "first history writer",
+        childOne,
+        15000
+      );
 
-      const childTwo = spawn(process.execPath, [
-        "--experimental-strip-types",
+      const childTwo = spawnHistoryWriter(
         helperPath,
         dir,
         gateDir,
         "2026-01-02T00:00:00.000Z"
-      ]);
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 50));
       fs.writeFileSync(path.join(gateDir, "continue"), "");
@@ -286,7 +360,7 @@ appendEntry(
       fs.rmSync(dir, { recursive: true, force: true });
       fs.rmSync(gateDir, { recursive: true, force: true });
     }
-  }, 15000);
+  }, 20000);
 });
 
 describe("readHuntHistory", () => {
