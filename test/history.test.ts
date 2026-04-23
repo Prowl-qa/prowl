@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendEntry,
@@ -28,13 +27,8 @@ function spawnHistoryWriter(
   startedAt: string
 ): SpawnedWriter {
   const stderrChunks: string[] = [];
-  const child = spawn(process.execPath, [
-    "--experimental-strip-types",
-    helperPath,
-    configDir,
-    gateDir,
-    startedAt
-  ]);
+  const viteNodePath = path.resolve(process.cwd(), "node_modules/vite-node/vite-node.mjs");
+  const child = spawn(process.execPath, [viteNodePath, helperPath, configDir, gateDir, startedAt]);
   child.stderr.on("data", (chunk) => {
     stderrChunks.push(String(chunk));
   });
@@ -268,7 +262,7 @@ describe("appendEntry", () => {
     const gateDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-gate-"));
     try {
       fs.writeFileSync(path.join(dir, "history.json"), JSON.stringify({ entries: [] }));
-      const helperPath = path.join(gateDir, "append-helper.mjs");
+      const helperPath = path.join(gateDir, "append-helper.ts");
       fs.writeFileSync(
         helperPath,
         `import fs from "node:fs";
@@ -280,7 +274,7 @@ const readyFile = path.join(gatePath, \`\${startedAt}.ready\`);
 const continueFile = path.join(gatePath, "continue");
 const originalReadFileSync = fs.readFileSync.bind(fs);
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
-const historyModuleUrl = ${JSON.stringify(pathToFileURL(path.resolve("src/runner/history.ts")).href)};
+const historyModulePath = ${JSON.stringify(path.resolve("src/runner/history.ts"))};
 
 function sleepSync(ms) {
   Atomics.wait(sleepBuffer, 0, 0, ms);
@@ -300,7 +294,7 @@ try {
     return originalReadFileSync(...args);
   });
 
-  const { appendEntry } = await import(historyModuleUrl);
+  const { appendEntry } = await import(historyModulePath);
   appendEntry(
     configDir,
     {
