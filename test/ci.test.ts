@@ -50,8 +50,21 @@ function makeRunResult(huntName: string, status: "pass" | "fail"): { result: Run
       assertions: [],
       artifacts: {}
     },
-    runDir: `/tmp/prowlqa/runs/${huntName}`
+    runDir: `prowlqa/runs/${huntName}`
   };
+}
+
+function makeFailedRunResult(huntName: string, message: string): { result: RunResult; runDir: string } {
+  const run = makeRunResult(huntName, "fail");
+  run.result.steps = [
+    {
+      type: "click",
+      status: "fail",
+      durationMs: 12,
+      error: message
+    }
+  ];
+  return run;
 }
 
 describe("ci command", () => {
@@ -172,6 +185,22 @@ describe("ci command", () => {
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "homepage" }));
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "checkout" }));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Skipped"));
+  });
+
+  it("rejects empty --include-tags values", async () => {
+    const cmd = buildCiCommand();
+
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--include-tags", " , "])
+    ).rejects.toThrow("--include-tags requires at least one non-empty tag");
+  });
+
+  it("rejects empty --exclude-tags values", async () => {
+    const cmd = buildCiCommand();
+
+    await expect(
+      cmd.parseAsync(["node", "prowlqa", "--exclude-tags", " , "])
+    ).rejects.toThrow("--exclude-tags requires at least one non-empty tag");
   });
 
   it("filters hunts with --exclude-tags", async () => {
@@ -393,6 +422,32 @@ describe("ci command", () => {
     for (const call of mockRunHunt.mock.calls) {
       expect(call[0].onStep).toBeUndefined();
     }
+  });
+
+  it("prints failure reasons after a parallel run", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["homepage", "checkout"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
+      .mockRejectedValueOnce(new Error("checkout timed out"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("checkout timed out"));
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("prints returned failure details after a parallel run", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockListHunts.mockReturnValue(["checkout"]);
+    mockRunHunt.mockResolvedValueOnce(makeFailedRunResult("checkout", "button was not visible"));
+
+    const cmd = buildCiCommand();
+    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("button was not visible"));
+    expect(process.exitCode).toBe(1);
   });
 
   it("rejects --parallel 0", async () => {

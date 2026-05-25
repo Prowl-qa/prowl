@@ -333,19 +333,7 @@ steps:
 
 ## Agent QA / MCP Server (Epic)
 
-Lets external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 → P5-009 → P5-001**. The epic is complete only when all three are done.
-
-{PROWL-040} **P5-008: Extract `runSuite()` Library Function**
-   *As a developer integrating ProwlQA, I want suite orchestration as an importable function, so the MCP server (and other callers) can run all hunts without spawning the CLI.*
-   Today the "run all hunts" logic lives only inside the CLI handler (`src/cli/commands/ci.ts`), tangled with `process.exitCode` and console output. Extract a side-effect-free `runSuite()`.
-
-**Found during**: MCP design session (2026-05-24)
-**Acceptance Criteria**:
-- New `runSuite(options)` in `src/runner/` returns a `CiResult`, no console output / no `process.exit`
-- Runs hunts sequentially in `listHunts` order (alphabetical by hunt path)
-- `prowlqa ci` refactored to call `runSuite`; existing `ci` behavior and tests unchanged
-- Exported from `src/index.ts` (public library API) alongside `runHunt`
-- Unit tests, CHANGELOG entry
+Let's external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done — see `resolved.md`) → P5-009 → P5-001**. The epic is complete only when all three are done.
 
 {PROWL-041} **P5-009: Automated Bug-Logging to `docs/backlog.md`**
    *As a developer, I want failing hunts logged as deduplicated, developer-ready bug tickets in my project backlog, so I can pick them up with full context and track regressions.*

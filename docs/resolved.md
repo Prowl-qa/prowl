@@ -1,5 +1,9 @@
 # Prowl (CLI) - Resolved Items
 
+## ~~P5-008: Extract `runSuite()` Library Function~~
+**Resolved**: 2026-05-25 (branch extract-run-suite, commit d043ffd)
+**Description**: Extracted the "run all hunts" orchestration out of the `ci` command handler into `runSuite()` in `src/runner/suite.ts`. It handles tag filtering, sequential/parallel execution, `CiResult` aggregation, and writing the suite-level `ci-result.json` artifact. It has no console output or process-exit side effects: callers receive a `RunSuiteResult` and use `RunSuiteHooks` for presentation. `prowlqa ci` now delegates to it with behavior unchanged, and `runSuite` plus `RunSuiteOptions`/`RunSuiteResult`/`RunSuiteHooks` are exported from the library API so the upcoming MCP server (P5-001) can run suites without the CLI. Foundation for the Agent QA / MCP Server epic.
+
 ### ~~P7-001: Run History and Trend Tracking~~
 **Resolved**: 2026-04-22 (branch history-trend-tracking)
 **Description**: Every `prowlqa run` and `prowlqa ci` now appends one entry per run to `.prowlqa/history.json` (hunt, status, startedAt, durationMs, runDir). Retention is configurable via `history.maxRuns` (default 100) and enforced per-hunt on every write so one chatty hunt cannot starve another. `prowlqa history <hunt-name>` prints a status/duration/timestamp table with `--limit <n>` (default 20) and `--json` for programmatic consumers. `readHistory`, `readHuntHistory`, and the `HistoryEntry` / `HistoryFile` types are exported from the library. History writes are error-isolated so a disk failure never breaks a run. Foundation for PROWL-032 (flake detection), PROWL-033 (retry diagnostics), PROWL-034 (failure clustering), and PROWL-035 (auto-quarantine).
