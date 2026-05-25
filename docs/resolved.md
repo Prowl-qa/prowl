@@ -4,6 +4,18 @@
 **Resolved**: 2026-04-22 (branch history-trend-tracking)
 **Description**: Every `prowlqa run` and `prowlqa ci` now appends one entry per run to `.prowlqa/history.json` (hunt, status, startedAt, durationMs, runDir). Retention is configurable via `history.maxRuns` (default 100) and enforced per-hunt on every write so one chatty hunt cannot starve another. `prowlqa history <hunt-name>` prints a status/duration/timestamp table with `--limit <n>` (default 20) and `--json` for programmatic consumers. `readHistory`, `readHuntHistory`, and the `HistoryEntry` / `HistoryFile` types are exported from the library. History writes are error-isolated so a disk failure never breaks a run. Foundation for PROWL-032 (flake detection), PROWL-033 (retry diagnostics), PROWL-034 (failure clustering), and PROWL-035 (auto-quarantine).
 
+### ~~BUG-008: Download Listener Timing and RANDOM_* Hunt Var Resolution~~
+**Resolved**: 2026-04-21
+**Found during**: Code review (2026-04-21)
+**Description**: `waitForDownload` only attached its listener when that step executed, which could miss immediate downloads triggered by the prior step. Separately, `hunt.vars` resolved before built-in `RANDOM_*` variables were merged, so patterns like `EMAIL: "{{RANDOM_EMAIL}}"` failed even though the runtime supported random interpolation elsewhere.
+**Resolution**: The runner now pre-arms the download listener when the next step is `waitForDownload`, validates suggested filenames before saving, and interpolation now resolves `hunt.vars` against the combined built-in random/environment variable set. Unit coverage was added for both behaviors.
+
+### ~~BUG-007: CLI Version String Duplicates `package.json`~~
+**Resolved**: 2026-03-18
+**Found during**: Code review (2026-03-18)
+**Description**: `src/cli/index.ts` hardcoded the CLI version string instead of sourcing it from the package metadata, creating version drift risk whenever `package.json` changed without a matching manual edit in the CLI entrypoint.
+**Resolution**: CLI program setup now sources the version from `package.json` via a central `CLI_VERSION` export, with unit coverage asserting the CLI-reported version matches package metadata.
+
 ### ~~LEGAL-003: Create NOTICE File for Attribution~~
 **Resolved**: 2026-04-22 (commit eac6b14)
 **Description**: Added a `NOTICE` file at the repo root aggregating attribution (license + copyright) for all direct runtime dependencies: chalk, commander, dotenv, ora, pixelmatch, playwright, pngjs, yaml, and zod. Standard practice for Apache 2.0 projects.
