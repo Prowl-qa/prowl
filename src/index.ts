@@ -13,6 +13,10 @@ export type {
 export { runHunt } from "./runner/index.js";
 export type { RunOptions } from "./runner/index.js";
 
+// Re-export suite runner
+export { runSuite } from "./runner/suite.js";
+export type { RunSuiteOptions, RunSuiteResult, RunSuiteHooks } from "./runner/suite.js";
+
 // Re-export history
 export { readHistory, readHuntHistory } from "./runner/history.js";
 

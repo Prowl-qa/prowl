@@ -12,6 +12,7 @@ All notable changes to ProwlQA will be documented in this file.
 - Run history: every `prowlqa run` and `prowlqa ci` appends an entry to `.prowlqa/history.json` with hunt name, status, startedAt, duration, and runDir. Retention is configurable per hunt via `history.maxRuns` (default 100) and enforced after every write (P7-001)
 - `prowlqa history <hunt-name>` command: shows the last N runs as a formatted table or as JSON via `--json`; `--limit <n>` controls the slice (default 20) (P7-001)
 - Library exports: `readHistory`, `readHuntHistory`, and `HistoryEntry` / `HistoryFile` types for programmatic history access (P7-001)
+- `runSuite()` library function: run an entire hunt suite programmatically (tag filtering, sequential/parallel execution, aggregated `CiResult`) without spawning the CLI, with presentation handled via optional hooks; exported alongside `runHunt`. `prowlqa ci` now delegates to it with no change in behavior (P5-008)
 
 ### Documentation
 - README guardrails section now documents substring-matching semantics for `forbiddenSelectors` and `networkIgnorePatterns`, and the intentional `about:`/`data:` protocol bypass in `allowedDomains` (BUG-005, BUG-006)
