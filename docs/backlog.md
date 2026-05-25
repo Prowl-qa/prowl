@@ -333,25 +333,7 @@ steps:
 
 ## Agent QA / MCP Server (Epic)
 
-Let's external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done — see `resolved.md`) → P5-009 → P5-001**. The epic is complete only when all three are done.
-
-{PROWL-041} **P5-009: Automated Bug-Logging to `docs/backlog.md`**
-   *As a developer, I want failing hunts logged as deduplicated, developer-ready bug tickets in my project backlog, so I can pick them up with full context and track regressions.*
-   When a suite runs, each failure is logged as a bug in the target project's `docs/backlog.md`, in a dedicated agent-owned section (separate from manually-entered items). Overlaps with P7-004 (Failure Clustering) fingerprinting — share logic.
-
-**Found during**: MCP design session (2026-05-24)
-**Acceptance Criteria**:
-- A "bug" = a specific hunt failing at a specific step (hunt name + step index/type/selector + normalized error class)
-- Each ticket carries a hidden fingerprint marker, e.g. `<!-- prowl:fp=<hash> hunt=auth/login step=4:click@#submit -->`
-- Lifecycle:
-  - *New spot* → create a new ticket (distinct prefix, e.g. `QA-NNN`; next id = max existing across `backlog.md` + `resolved.md`, +1) with hunt, failing step, error, and link to run artifacts under `.prowlqa/runs/...`
-  - *Spot already has an active ticket in `docs/backlog.md`* → no duplicate written
-  - *Spot matches a ticket already in `docs/resolved.md`* → regression: create a new ticket referencing the old resolved ID
-- Tickets written into a dedicated agent-owned section, not intermixed with the user's items
-- Idempotent: re-running with an unchanged failure produces no new ticket
-- Configurable backlog/resolved paths (default `docs/backlog.md`, `docs/resolved.md`)
-- Unit tests for fingerprint stability, classifier (new/open/regression), id increment, regression linking; CHANGELOG entry
-- Depends on P5-008; consumed by P5-001
+Let's external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done) → P5-009 (done) → P5-001** — P5-008 and P5-009 are in `resolved.md`. The epic is complete only when all three are done.
 
 {PROWL-039} **P5-001: MCP Server (`prowlqa mcp`)** (revived 2026-05-24)
    *As an external AI agent, I want to drive ProwlQA through named MCP tools, so I can run a project's hunts and get structured results without parsing CLI output.*
