@@ -1,5 +1,9 @@
 # Prowl (CLI) - Resolved Items
 
+## ~~P5-009: Automated Bug-Logging to `docs/backlog.md`~~
+**Resolved**: 2026-05-25 (branch auto-bug-logging, commit 0998384)
+**Description**: Added `src/backlog/` and the `updateBacklogFromSuite()` library function, which logs failing hunts from a suite run as deduplicated bug tickets in the target project's `docs/backlog.md`. A bug is fingerprinted by hunt + failing step (type/selector) + normalized error (volatile numbers like timeouts stripped; step index excluded so reordering steps does not spawn a duplicate). New failures get a `QA-NNN` ticket — carrying a hidden `<!-- prowl:fp=… -->` marker — in a dedicated `## QA Findings (automated)` section; already-open failures are skipped; failures matching a resolved ticket are logged as regressions that reference the old id. Reads each failed hunt's `result.json` for step details, is idempotent across runs, and takes configurable backlog/resolved paths. Exported from the library API for the MCP server (P5-001). 16 unit tests added.
+
 ## ~~P5-008: Extract `runSuite()` Library Function~~
 **Resolved**: 2026-05-25 (branch extract-run-suite, commit d043ffd)
 **Description**: Extracted the "run all hunts" orchestration out of the `ci` command handler into `runSuite()` in `src/runner/suite.ts`. It handles tag filtering, sequential/parallel execution, `CiResult` aggregation, and writing the suite-level `ci-result.json` artifact. It has no console output or process-exit side effects: callers receive a `RunSuiteResult` and use `RunSuiteHooks` for presentation. `prowlqa ci` now delegates to it with behavior unchanged, and `runSuite` plus `RunSuiteOptions`/`RunSuiteResult`/`RunSuiteHooks` are exported from the library API so the upcoming MCP server (P5-001) can run suites without the CLI. Foundation for the Agent QA / MCP Server epic.

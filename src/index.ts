@@ -17,6 +17,10 @@ export type { RunOptions } from "./runner/index.js";
 export { runSuite } from "./runner/suite.js";
 export type { RunSuiteOptions, RunSuiteResult, RunSuiteHooks } from "./runner/suite.js";
 
+// Re-export automated bug-logging
+export { updateBacklogFromSuite, extractFailures } from "./backlog/index.js";
+export type { UpdateBacklogOptions, BugLogSummary, BugFailure } from "./backlog/index.js";
+
 // Re-export history
 export { readHistory, readHuntHistory } from "./runner/history.js";
 
