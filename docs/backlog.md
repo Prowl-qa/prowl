@@ -333,7 +333,7 @@ steps:
 
 ## Agent QA / MCP Server (Epic)
 
-Lets external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done — see `resolved.md`) → P5-009 → P5-001**. The epic is complete only when all three are done.
+Let's external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done — see `resolved.md`) → P5-009 → P5-001**. The epic is complete only when all three are done.
 
 {PROWL-041} **P5-009: Automated Bug-Logging to `docs/backlog.md`**
    *As a developer, I want failing hunts logged as deduplicated, developer-ready bug tickets in my project backlog, so I can pick them up with full context and track regressions.*

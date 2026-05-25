@@ -1,8 +1,8 @@
 # Prowl (CLI) - Resolved Items
 
-### ~~P5-008: Extract `runSuite()` Library Function~~
+## ~~P5-008: Extract `runSuite()` Library Function~~
 **Resolved**: 2026-05-25 (branch extract-run-suite, commit d043ffd)
-**Description**: Extracted the "run all hunts" orchestration out of the `ci` command handler into a side-effect-free `runSuite()` in `src/runner/suite.ts`. It handles tag filtering, sequential/parallel execution, and `CiResult` aggregation, writes `ci-result.json`, and exposes console output via optional hooks (no `console`/`process.exit`). `prowlqa ci` now delegates to it with behavior unchanged, and `runSuite` (plus `RunSuiteOptions`/`RunSuiteResult`/`RunSuiteHooks`) is exported from the library API so the upcoming MCP server (P5-001) can run suites without the CLI. Foundation for the Agent QA / MCP Server epic.
+**Description**: Extracted the "run all hunts" orchestration out of the `ci` command handler into `runSuite()` in `src/runner/suite.ts`. It handles tag filtering, sequential/parallel execution, `CiResult` aggregation, and writing the suite-level `ci-result.json` artifact. It has no console output or process-exit side effects: callers receive a `RunSuiteResult` and use `RunSuiteHooks` for presentation. `prowlqa ci` now delegates to it with behavior unchanged, and `runSuite` plus `RunSuiteOptions`/`RunSuiteResult`/`RunSuiteHooks` are exported from the library API so the upcoming MCP server (P5-001) can run suites without the CLI. Foundation for the Agent QA / MCP Server epic.
 
 ### ~~P7-001: Run History and Trend Tracking~~
 **Resolved**: 2026-04-22 (branch history-trend-tracking)

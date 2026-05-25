@@ -39,7 +39,7 @@ function makeRunResult(huntName: string, status: "pass" | "fail"): { result: Run
       assertions: [],
       artifacts: {}
     },
-    runDir: `/tmp/prowlqa/runs/${huntName}`
+    runDir: `prowlqa/runs/${huntName}`
   };
 }
 
@@ -134,10 +134,96 @@ describe("runSuite", () => {
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "smoke-1" }));
     expect(result.passed).toBe(1);
     expect(result.skipped).toBe(2);
+    expect(result.hunts.map((h) => h.hunt)).toEqual(["smoke-1", "regression-1", "slow-smoke"]);
     expect(skipped).toEqual([
       { hunt: "regression-1", reason: "include" },
       { hunt: "slow-smoke", reason: "exclude" }
     ]);
+  });
+
+  it("treats empty tag arrays as no filter", async () => {
+    mockListHunts.mockReturnValue(["a", "b"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeRunResult("a", "pass"))
+      .mockResolvedValueOnce(makeRunResult("b", "pass"));
+
+    const { result } = await runSuite({ includeTags: [], excludeTags: [] });
+
+    expect(mockLoadHuntTags).not.toHaveBeenCalled();
+    expect(mockRunHunt).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe("pass");
+  });
+
+  it("keeps hook failures separate from hunt outcomes", async () => {
+    mockListHunts.mockReturnValue(["a", "b"]);
+    mockLoadHuntTags
+      .mockReturnValueOnce(["smoke"])
+      .mockReturnValueOnce(["regression"]);
+    mockRunHunt.mockResolvedValueOnce(makeRunResult("a", "pass"));
+
+    const { result } = await runSuite({
+      includeTags: ["smoke"],
+      hooks: {
+        onHuntStart: () => {
+          throw new Error("start hook failed");
+        },
+        onHuntSuccess: () => {
+          throw new Error("success hook failed");
+        },
+        onHuntSkipped: () => {
+          throw new Error("skip hook failed");
+        }
+      }
+    });
+
+    expect(result.status).toBe("pass");
+    expect(result.hunts).toEqual([
+      expect.objectContaining({ hunt: "a", status: "pass" }),
+      expect.objectContaining({ hunt: "b", status: "skipped" })
+    ]);
+  });
+
+  it("does not let a failing onHuntFailure hook replace the original run error", async () => {
+    mockListHunts.mockReturnValue(["broken"]);
+    mockRunHunt.mockRejectedValueOnce(new Error("Hunt file not found"));
+
+    const { result } = await runSuite({
+      hooks: {
+        onHuntFailure: () => {
+          throw new Error("failure hook failed");
+        }
+      }
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.hunts[0]).toMatchObject({
+      hunt: "broken",
+      status: "fail",
+      error: "Hunt file not found"
+    });
+  });
+
+  it("does not let an onStep hook failure change a passing hunt outcome", async () => {
+    mockListHunts.mockReturnValue(["a"]);
+    mockRunHunt.mockImplementationOnce(async (options: { onStep?: (result: unknown, step: unknown, index: number) => void }) => {
+      options.onStep?.(
+        { type: "navigate", status: "pass", durationMs: 1 },
+        { navigate: "/" },
+        0
+      );
+      return makeRunResult("a", "pass");
+    });
+
+    const { result } = await runSuite({
+      hooks: {
+        onStep: () => {
+          throw new Error("step hook failed");
+        }
+      }
+    });
+
+    expect(result.status).toBe("pass");
+    expect(result.hunts[0]).toMatchObject({ hunt: "a", status: "pass" });
   });
 
   it("runs hunts through the concurrency pool when parallel > 1", async () => {
@@ -167,15 +253,27 @@ describe("runSuite", () => {
       hooks: { onStep }
     });
 
-    expect(mockRunHunt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        huntName: "a",
-        urlOverride: "http://staging.example.com",
-        browser: "firefox",
-        junit: true,
-        onStep
-      })
+    const runOptions = mockRunHunt.mock.calls[0][0] as {
+      huntName: string;
+      urlOverride: string;
+      browser: string;
+      junit: boolean;
+      onStep?: (result: unknown, step: unknown, index: number) => void;
+    };
+    expect(runOptions).toMatchObject({
+      huntName: "a",
+      urlOverride: "http://staging.example.com",
+      browser: "firefox",
+      junit: true
+    });
+    expect(runOptions.onStep).toEqual(expect.any(Function));
+
+    runOptions.onStep?.(
+      { type: "navigate", status: "pass", durationMs: 1 },
+      { navigate: "/" },
+      0
     );
+    expect(onStep).toHaveBeenCalledTimes(1);
   });
 
   it("emits no console output of its own", async () => {

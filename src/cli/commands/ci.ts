@@ -4,6 +4,27 @@ import { runSuite } from "../../runner/suite.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 import { resultMascot } from "../mascot.js";
 import { printCiSummary } from "../../reporter/ci-summary.js";
+import type { CiHuntResult } from "../../types/index.js";
+
+function parseTagList(value: string | undefined, flag: "--include-tags" | "--exclude-tags"): string[] | undefined {
+  if (value === undefined) return undefined;
+  const tags = value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  if (tags.length === 0) {
+    throw new Error(`${flag} requires at least one non-empty tag`);
+  }
+  return tags;
+}
+
+function printFailureDetails(results: CiHuntResult[]): void {
+  for (const hunt of results) {
+    if (hunt.status === "fail" && hunt.error) {
+      console.error(`  ${chalk.red("Error")} ${hunt.hunt}: ${hunt.error}`);
+    }
+  }
+}
 
 export function buildCiCommand(): Command {
   const command = new Command("ci")
@@ -28,12 +49,8 @@ export function buildCiCommand(): Command {
       return n;
     })
     .action(async (options) => {
-      const includeTags = options.includeTags
-        ? (options.includeTags as string).split(",").map((t: string) => t.trim())
-        : undefined;
-      const excludeTags = options.excludeTags
-        ? (options.excludeTags as string).split(",").map((t: string) => t.trim())
-        : undefined;
+      const includeTags = parseTagList(options.includeTags as string | undefined, "--include-tags");
+      const excludeTags = parseTagList(options.excludeTags as string | undefined, "--exclude-tags");
 
       const parallel = options.parallel as number | undefined;
       const isParallel = parallel !== undefined && parallel > 1;
@@ -93,6 +110,9 @@ export function buildCiCommand(): Command {
         console.log(JSON.stringify(result, null, 2));
       } else {
         printCiSummary(result.hunts, result.durationMs);
+        if (!showProgress) {
+          printFailureDetails(result.hunts);
+        }
         if (resultPath) {
           console.log(`\n  CI Result: ${chalk.gray(resultPath)}\n`);
         }
