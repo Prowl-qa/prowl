@@ -147,14 +147,19 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
         onStep
       });
 
-      await callHook(() => hooks.onHuntSuccess?.(huntName, result, runDir));
+      const error = result.status === "fail" ? firstRunFailureMessage(result) ?? "Run failed" : undefined;
+      if (error) {
+        await callHook(() => hooks.onHuntFailure?.(huntName, error));
+      } else {
+        await callHook(() => hooks.onHuntSuccess?.(huntName, result, runDir));
+      }
 
       return {
         hunt: huntName,
         status: result.status,
         durationMs: result.durationMs,
         runDir,
-        error: result.status === "fail" ? firstRunFailureMessage(result) : undefined
+        error
       };
     } catch (error) {
       const durationMs = Date.now() - huntStart;

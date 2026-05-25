@@ -43,6 +43,19 @@ function makeRunResult(huntName: string, status: "pass" | "fail"): { result: Run
   };
 }
 
+function makeFailedRunResult(huntName: string, message: string): { result: RunResult; runDir: string } {
+  const run = makeRunResult(huntName, "fail");
+  run.result.steps = [
+    {
+      type: "click",
+      status: "fail",
+      durationMs: 12,
+      error: message
+    }
+  ];
+  return run;
+}
+
 describe("runSuite", () => {
   let tmpDir: string;
 
@@ -203,6 +216,26 @@ describe("runSuite", () => {
     });
   });
 
+  it("routes non-throwing failed runs through the failure hook", async () => {
+    mockListHunts.mockReturnValue(["checkout"]);
+    mockRunHunt.mockResolvedValueOnce(makeFailedRunResult("checkout", "button was not visible"));
+    const onHuntSuccess = vi.fn();
+    const onHuntFailure = vi.fn();
+
+    const { result } = await runSuite({
+      hooks: { onHuntSuccess, onHuntFailure }
+    });
+
+    expect(onHuntSuccess).not.toHaveBeenCalled();
+    expect(onHuntFailure).toHaveBeenCalledWith("checkout", "button was not visible");
+    expect(result.status).toBe("fail");
+    expect(result.hunts[0]).toMatchObject({
+      hunt: "checkout",
+      status: "fail",
+      error: "button was not visible"
+    });
+  });
+
   it("does not let an onStep hook failure change a passing hunt outcome", async () => {
     mockListHunts.mockReturnValue(["a"]);
     mockRunHunt.mockImplementationOnce(async (options: { onStep?: (result: unknown, step: unknown, index: number) => void }) => {
@@ -268,12 +301,10 @@ describe("runSuite", () => {
     });
     expect(runOptions.onStep).toEqual(expect.any(Function));
 
-    runOptions.onStep?.(
-      { type: "navigate", status: "pass", durationMs: 1 },
-      { navigate: "/" },
-      0
-    );
-    expect(onStep).toHaveBeenCalledTimes(1);
+    const stepResult = { type: "navigate", status: "pass", durationMs: 1 };
+    const step = { navigate: "/" };
+    runOptions.onStep?.(stepResult, step, 0);
+    expect(onStep).toHaveBeenCalledWith(stepResult, step, 0);
   });
 
   it("emits no console output of its own", async () => {
