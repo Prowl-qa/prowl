@@ -294,11 +294,10 @@ Connecting to 5-10 MCP servers can consume 15-20% of an LLM's context window bef
 
 ### ProwlQA's MCP Decision
 
-MCP server (P5-001) deprioritized. The CLI + library API already covers all agent use cases with better token efficiency:
+MCP server (P5-001) was initially deprioritized on token-efficiency grounds, then **revived** (2026-05-24) as a planned epic — re-scoped from a generic MCP wrapper to a first-class agent QA interface with automated bug-logging (see the "Agent QA / MCP Server" epic in `docs/backlog.md`). The CLI + library API remains the token-efficient default for agents:
 - CLI is **pay-per-use** (~150 tokens for discovery, ~800-1,200 per run)
 - MCP imposes a **constant context tax** (~2-3k+ tokens per conversation)
-- Projected MCP savings would only be 300-500 tokens per run (20-30%)
-- Revisit only if a major AI platform makes MCP the sole integration path
+- The MCP server's value is a named-tool interface (run hunts, get structured results, auto-log bugs), not token savings — so it complements rather than replaces the CLI
 
 ---
 

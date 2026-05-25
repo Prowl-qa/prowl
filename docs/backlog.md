@@ -379,7 +379,6 @@ Lets external AI agents drive ProwlQA through named MCP tools — run a project'
 - Existing guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`, `maxTotalTimeMs`) apply unchanged
 - Depends on P5-008; integrates P5-009
 - Schema validation, unit + integration tests, CHANGELOG entry
-- Reconcile stale MCP-deprioritization claims in `docs/research/competitive-analysis-full.md:295-301` and `competitive-analysis.md:11,55`
 
 ## Completed
 
