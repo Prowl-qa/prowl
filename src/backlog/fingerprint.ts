@@ -23,7 +23,7 @@ export function normalizeError(error: string): string {
   return error
     .toLowerCase()
     .replace(/0x[0-9a-f]+/g, "") // hex ids
-    .replace(/\d+(\.\d+)?\s*(ms|s|px)?/g, "") // numbers + common units
+    .replace(/\b\d+(?:\.\d+)?\s*(?:ms|s|px)\b/g, "") // unit-qualified timings/coordinates
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -40,6 +40,14 @@ export function stepLabel(failure: BugFailure): string {
   const type = failure.stepType ?? "?";
   const selector = failure.selector ? `@${failure.selector}` : "";
   return `${index}:${type}${selector}`;
+}
+
+/** Keep untrusted metadata from changing the hidden HTML-comment shape. */
+function sanitizeMarkerValue(value: string): string {
+  return value
+    .replace(/\r?\n/g, " ")
+    .replace(/-->/g, "--&gt;")
+    .trim();
 }
 
 /**
@@ -59,5 +67,7 @@ export function computeFingerprint(failure: BugFailure): string {
 
 /** Hidden HTML-comment marker embedded in each ticket so re-runs can recognize it. */
 export function buildMarker(failure: BugFailure, hash: string): string {
-  return `<!-- prowl:fp=${hash} hunt=${failure.hunt} step=${stepLabel(failure)} -->`;
+  const hunt = sanitizeMarkerValue(failure.hunt);
+  const step = sanitizeMarkerValue(stepLabel(failure));
+  return `<!-- prowl:fp=${hash} hunt=${hunt} step=${step} -->`;
 }

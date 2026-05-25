@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -40,13 +40,38 @@ describe("fingerprint", () => {
     );
   });
 
-  it("normalizes volatile numbers and units", () => {
+  it("normalizes volatile unit-qualified numbers", () => {
     expect(normalizeError("Timeout 5000ms at 12.5px")).toBe(normalizeError("Timeout 9000ms at 3px"));
+  });
+
+  it("preserves semantic numbers in normalized errors", () => {
+    expect(normalizeError("HTTP 401 while loading item 1")).not.toBe(
+      normalizeError("HTTP 500 while loading item 1")
+    );
+    expect(computeFingerprint({ ...baseFailure, error: "Expected 1 item" })).not.toBe(
+      computeFingerprint({ ...baseFailure, error: "Expected 2 items" })
+    );
   });
 
   it("builds a human-readable marker", () => {
     const fp = computeFingerprint(baseFailure);
     expect(buildMarker(baseFailure, fp)).toBe(`<!-- prowl:fp=${fp} hunt=auth/login step=4:click@#submit -->`);
+  });
+
+  it("sanitizes marker metadata that can break HTML comments", () => {
+    const marker = buildMarker(
+      {
+        ...baseFailure,
+        hunt: "auth\nlogin-->done",
+        selector: "#submit\n-->"
+      },
+      "deadbeef"
+    );
+    const markerBody = marker.replace(/^<!-- /, "").replace(/ -->$/, "");
+
+    expect(marker).toBe("<!-- prowl:fp=deadbeef hunt=auth login--&gt;done step=4:click@#submit --&gt; -->");
+    expect(markerBody).not.toContain("-->");
+    expect(marker).not.toContain("\n");
   });
 
   it("labels stepless failures with a dash", () => {
@@ -149,6 +174,22 @@ describe("updateBacklogFromSuite", () => {
     fs.writeFileSync(path.join(runDir, "result.json"), JSON.stringify(run));
   }
 
+  function writeAssertionRunResult(runDir: string, hunt: string, assertion: { type: string; error: string }): void {
+    fs.mkdirSync(runDir, { recursive: true });
+    const run: RunResult = {
+      status: "fail",
+      exitCode: 1,
+      startedAt: new Date().toISOString(),
+      durationMs: 50,
+      hunt,
+      targetUrl: "http://localhost:3000",
+      steps: [{ type: "navigate", status: "pass", durationMs: 10 }],
+      assertions: [{ type: assertion.type, status: "fail", error: assertion.error }],
+      artifacts: {}
+    };
+    fs.writeFileSync(path.join(runDir, "result.json"), JSON.stringify(run));
+  }
+
   function makeSuiteResult(hunts: CiHuntResult[]): RunSuiteResult {
     return {
       result: {
@@ -174,6 +215,7 @@ describe("updateBacklogFromSuite", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -189,7 +231,11 @@ describe("updateBacklogFromSuite", () => {
     expect(afterFirst).toContain("### QA-001: auth/login — click (#submit)");
     expect(afterFirst).toContain("prowl:fp=");
 
-    const second = updateBacklogFromSuite(suite, { backlogPath, resolvedPath, date: "2026-05-25" });
+    const duplicateSuite = makeSuiteResult([
+      { hunt: "auth/login", status: "fail", durationMs: 50, runDir, error: "Timeout 5000ms" },
+      { hunt: "auth/login", status: "fail", durationMs: 50, runDir, error: "Timeout 5000ms" }
+    ]);
+    const second = updateBacklogFromSuite(duplicateSuite, { backlogPath, resolvedPath, date: "2026-05-25" });
     expect(second.created).toEqual([]);
     expect(second.skipped).toEqual(["QA-001"]);
     // No duplicate ticket written.
@@ -224,6 +270,37 @@ describe("updateBacklogFromSuite", () => {
     });
     expect(summary.created).toEqual([]);
     expect(fs.readFileSync(backlogPath, "utf-8")).toBe(before);
+  });
+
+  it("throws a contextual error when backlog reads fail", () => {
+    const error = new Error("permission denied") as NodeJS.ErrnoException;
+    error.code = "EACCES";
+    vi.spyOn(fs, "readFileSync").mockImplementationOnce(() => {
+      throw error;
+    });
+
+    expect(() =>
+      updateBacklogFromSuite(makeSuiteResult([{ hunt: "broken", status: "fail", durationMs: 0, error: "boom" }]), {
+        backlogPath,
+        resolvedPath
+      })
+    ).toThrow(`Failed to read "${backlogPath}": permission denied`);
+  });
+
+  it("creates a ticket for an assertion-only failure", () => {
+    const runDir = path.join(tmpDir, "runs", "assertion");
+    writeAssertionRunResult(runDir, "homepage", { type: "text", error: "Expected text Welcome" });
+    const suite = makeSuiteResult([
+      { hunt: "homepage", status: "fail", durationMs: 50, runDir, error: "Expected text Welcome" }
+    ]);
+
+    const summary = updateBacklogFromSuite(suite, { backlogPath, resolvedPath, date: "2026-05-25" });
+
+    expect(summary.created).toEqual(["QA-001"]);
+    const backlog = fs.readFileSync(backlogPath, "utf-8");
+    expect(backlog).toContain("### QA-001: homepage — assert:text");
+    expect(backlog).toContain("**Failing step**: step ? — assert:text");
+    expect(backlog).toContain("**Error**: Expected text Welcome");
   });
 
   it("falls back to the error message when a hunt threw without a runDir", () => {

@@ -13,6 +13,7 @@ export interface RenderTicketOptions {
   date: string;
 }
 
+/** Render one failure as a markdown QA ticket with stable machine-readable metadata. */
 export function renderTicket(opts: RenderTicketOptions): string {
   const { id, failure, marker, regressionOf, date } = opts;
 

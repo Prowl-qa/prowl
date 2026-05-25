@@ -30,14 +30,18 @@ export interface BugLogSummary {
   backlogPath: string;
 }
 
+/** Read optional backlog state, returning empty content only when the file is absent. */
 function readFileOrEmpty(filePath: string): string {
   try {
     return fs.readFileSync(filePath, "utf-8");
-  } catch {
-    return "";
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") return "";
+    throw new Error(`Failed to read "${filePath}": ${err.message}`);
   }
 }
 
+/** Convert a failed CI hunt result into the most specific backlog failure available. */
 function buildFailure(hunt: CiHuntResult): BugFailure {
   const failure: BugFailure = {
     hunt: hunt.hunt,
@@ -49,9 +53,12 @@ function buildFailure(hunt: CiHuntResult): BugFailure {
 
   let run: RunResult;
   try {
-    run = JSON.parse(readFileOrEmpty(path.join(hunt.runDir, "result.json"))) as RunResult;
-  } catch {
-    return failure; // result.json missing/unreadable — keep the message-only failure
+    const resultJson = readFileOrEmpty(path.join(hunt.runDir, "result.json"));
+    if (!resultJson) return failure;
+    run = JSON.parse(resultJson) as RunResult;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return failure; // Malformed result.json; keep the message-only failure.
   }
   if (!run || !Array.isArray(run.steps)) return failure;
 
@@ -116,6 +123,7 @@ export function updateBacklogFromSuite(
   for (const failure of failures) {
     const fp = computeFingerprint(failure);
     if (seenThisRun.has(fp)) continue;
+    seenThisRun.add(fp);
 
     const classification = classifyFingerprint(fp, activeFps, resolvedFps);
     if (classification.kind === "open") {
@@ -123,7 +131,6 @@ export function updateBacklogFromSuite(
       continue;
     }
 
-    seenThisRun.add(fp);
     const id = makeId();
     const regressionOf = classification.kind === "regression" ? classification.resolvedId : undefined;
     ticketsToAdd.push(renderTicket({ id, failure, marker: buildMarker(failure, fp), regressionOf, date }));
