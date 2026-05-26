@@ -51,7 +51,7 @@ describe("loadProjectRegistry", () => {
 
   it("rejects an unknown field", () => {
     writeRegistry("projects:\n  coupe:\n    root: /repos/coupe\n    bogus: true\n");
-    expect(() => loadProjectRegistry(registryPath)).toThrow(/bogus|unrecognized|unknown/i);
+    expect(() => loadProjectRegistry(registryPath)).toThrow(/unrecognized key/i);
   });
 });
 
