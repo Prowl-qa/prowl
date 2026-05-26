@@ -4,8 +4,40 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import pkg from "../../package.json";
 import { listHuntsTool, runHuntTool, runSuiteTool } from "./tools.js";
 
+type TextToolResult = { content: Array<{ type: "text"; text: string }> };
+
+/** Serialize a tool payload into the MCP text-content response format. */
 function textResult(data: unknown): { content: Array<{ type: "text"; text: string }> } {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}
+
+/** Convert unknown thrown values into user-facing error text. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** JSON-stringify diagnostic values without throwing from circular structures. */
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "undefined";
+  } catch {
+    return "[unserializable]";
+  }
+}
+
+/** Run a tool implementation and rethrow failures with tool-specific context. */
+async function toolResult(
+  toolName: string,
+  args: unknown,
+  action: () => unknown | Promise<unknown>
+): Promise<TextToolResult> {
+  try {
+    return textResult(await action());
+  } catch (error) {
+    throw new Error(`${toolName} failed for args=${safeStringify(args)}: ${errorMessage(error)}`, {
+      cause: error
+    });
+  }
 }
 
 /**
@@ -20,9 +52,9 @@ export function buildMcpServer(): McpServer {
     "list_hunts",
     {
       description: "List all hunts in the current project, in run order.",
-      inputSchema: {}
+      inputSchema: z.object({}).strict()
     },
-    () => textResult(listHuntsTool())
+    async (args) => toolResult("list_hunts", args, () => listHuntsTool())
   );
 
   server.registerTool(
@@ -37,7 +69,7 @@ export function buildMcpServer(): McpServer {
         logBugs: z.boolean().optional()
       }
     },
-    async (args) => textResult(await runSuiteTool(args))
+    async (args) => toolResult("run_suite", args, () => runSuiteTool(args))
   );
 
   server.registerTool(
@@ -48,7 +80,7 @@ export function buildMcpServer(): McpServer {
         hunt: z.string().min(1)
       }
     },
-    async (args) => textResult(await runHuntTool(args))
+    async (args) => toolResult("run_hunt", args, () => runHuntTool(args))
   );
 
   return server;

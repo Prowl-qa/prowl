@@ -49,7 +49,9 @@ describe("runSuiteTool", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("runs the suite, logs bugs by default, and merges the summary", async () => {
-    mockRunSuite.mockResolvedValue(suiteResult());
+    const suite = suiteResult();
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
+    mockRunSuite.mockResolvedValue(suite);
     mockUpdateBacklog.mockReturnValue({
       created: ["QA-001"],
       regressions: ["QA-002"],
@@ -60,9 +62,10 @@ describe("runSuiteTool", () => {
     const result = await runSuiteTool({ includeTags: ["smoke"], parallel: 2 });
 
     expect(mockRunSuite).toHaveBeenCalledWith(
-      expect.objectContaining({ includeTags: ["smoke"], parallel: 2 })
+      expect.objectContaining({ configPath: "/proj/.prowlqa/config.yml", includeTags: ["smoke"], parallel: 2 })
     );
     expect(mockUpdateBacklog).toHaveBeenCalledTimes(1);
+    expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, { projectRoot: "/proj" });
     expect(result).toMatchObject({
       status: "fail",
       totalHunts: 2,
@@ -80,6 +83,7 @@ describe("runSuiteTool", () => {
   });
 
   it("skips bug-logging when logBugs is false", async () => {
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
     mockRunSuite.mockResolvedValue(suiteResult({ status: "pass", failed: 0, passed: 2 }));
 
     const result = await runSuiteTool({ logBugs: false });

@@ -18,6 +18,10 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { buildMcpServer } from "../src/mcp/server.js";
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function connectClient(): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const server = buildMcpServer();
@@ -28,17 +32,34 @@ async function connectClient(): Promise<Client> {
 }
 
 function payloadOf(res: { content: unknown }): unknown {
-  const content = res.content as Array<{ type: string; text: string }>;
-  return JSON.parse(content[0].text);
+  const { content } = res;
+  const first = Array.isArray(content) ? content[0] as { type?: unknown; text?: unknown } | undefined : undefined;
+  if (!first || first.type !== "text" || typeof first.text !== "string") {
+    throw new Error(`payloadOf expected MCP text content, received ${JSON.stringify(content)}`);
+  }
+
+  try {
+    return JSON.parse(first.text);
+  } catch (error) {
+    throw new Error(`payloadOf failed to parse JSON: ${errorMessage(error)}; content=${JSON.stringify(content)}`);
+  }
 }
 
 describe("mcp server", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
+  });
 
   it("exposes list_hunts, run_suite, and run_hunt", async () => {
     const client = await connectClient();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(["list_hunts", "run_hunt", "run_suite"]);
+    expect(tools.find((t) => t.name === "list_hunts")?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    });
     await client.close();
   });
 
@@ -75,6 +96,26 @@ describe("mcp server", () => {
     const client = await connectClient();
     const res = await client.callTool({ name: "run_hunt", arguments: { hunt: "ghost" } });
     expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain("run_hunt failed for args={\\\"hunt\\\":\\\"ghost\\\"}");
     await client.close();
+  });
+
+  it("reports contextual tool errors when a suite cannot run", async () => {
+    mockRunSuite.mockRejectedValue(new Error("Suite unavailable"));
+
+    const client = await connectClient();
+    const res = await client.callTool({ name: "run_suite", arguments: { parallel: 2 } });
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain("run_suite failed for args=");
+    expect(JSON.stringify(res.content)).toContain("\\\"parallel\\\":2");
+    expect(JSON.stringify(res.content)).toContain("Suite unavailable");
+    await client.close();
+  });
+
+  it("throws clear helper errors for malformed response payloads", () => {
+    expect(() => payloadOf({ content: [] })).toThrow("payloadOf expected MCP text content");
+    expect(() => payloadOf({ content: [{ type: "text", text: "not json" }] })).toThrow(
+      "payloadOf failed to parse JSON"
+    );
   });
 });

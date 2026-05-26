@@ -1,9 +1,11 @@
+import path from "node:path";
 import { runHunt } from "../runner/index.js";
 import { runSuite } from "../runner/suite.js";
 import { updateBacklogFromSuite } from "../backlog/index.js";
 import { loadConfig, listHunts } from "../config/loader.js";
 import type { RunResult } from "../types/index.js";
 
+/** Arguments accepted by the MCP `run_suite` tool. */
 export interface RunSuiteToolArgs {
   includeTags?: string[];
   excludeTags?: string[];
@@ -12,6 +14,7 @@ export interface RunSuiteToolArgs {
   logBugs?: boolean;
 }
 
+/** JSON payload returned by the MCP `run_suite` tool. */
 export interface RunSuiteToolResult {
   status: string;
   totalHunts: number;
@@ -39,7 +42,10 @@ export function listHuntsTool(): { hunts: string[] } {
  * ids the bug-logger created.
  */
 export async function runSuiteTool(args: RunSuiteToolArgs = {}): Promise<RunSuiteToolResult> {
+  const { configPath, configDir } = loadConfig();
+  const projectRoot = path.dirname(configDir);
   const suite = await runSuite({
+    configPath,
     includeTags: args.includeTags,
     excludeTags: args.excludeTags,
     parallel: args.parallel
@@ -47,7 +53,7 @@ export async function runSuiteTool(args: RunSuiteToolArgs = {}): Promise<RunSuit
 
   const logBugs = args.logBugs ?? true;
   const bugs = logBugs
-    ? updateBacklogFromSuite(suite)
+    ? updateBacklogFromSuite(suite, { projectRoot })
     : { created: [], regressions: [], skipped: [], backlogPath: null };
 
   const { status, totalHunts, passed, failed, skipped } = suite.result;
