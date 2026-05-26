@@ -5,6 +5,7 @@ import pkg from "../../package.json";
 import { listHuntsTool, runHuntTool, runSuiteTool } from "./tools.js";
 import {
   type ProjectRegistry,
+  type ResolvedProject,
   listRegisteredProjects,
   loadProjectRegistry,
   resolveProject
@@ -70,17 +71,21 @@ export function buildMcpServer(options: BuildMcpServerOptions = {}): McpServer {
   const registry = options.registry ?? null;
   const server = new McpServer({ name: "prowlqa", version: pkg.version });
 
-  // Resolve an optional `project` arg to that project's config path. Throws a
-  // helpful error if a project is named but no registry is configured.
-  const configPathFor = (project?: string): string | undefined => {
-    if (!project) return undefined;
+  // Resolve an optional `project` arg. Throws a helpful error if a project is
+  // named but no registry is configured.
+  const projectFor = (project?: string): ResolvedProject | null => {
+    if (!project) return null;
     if (!registry) {
       throw new Error(
         `No project registry is configured, so project "${project}" cannot be resolved. ` +
           "Start the server with `prowlqa mcp --projects <path>` (or set PROWLQA_PROJECTS)."
       );
     }
-    return resolveProject(registry, project).configPath;
+    return resolveProject(registry, project);
+  };
+
+  const configPathFor = (project?: string): string | undefined => {
+    return projectFor(project)?.configPath;
   };
 
   server.registerTool(
@@ -116,7 +121,10 @@ export function buildMcpServer(options: BuildMcpServerOptions = {}): McpServer {
         logBugs: z.boolean().optional()
       }
     },
-    async (args) => toolResult("run_suite", args, () => runSuiteTool(args, configPathFor(args.project)))
+    async (args) => toolResult("run_suite", args, () => {
+      const project = projectFor(args.project);
+      return runSuiteTool(args, { configPath: project?.configPath, projectRoot: project?.root });
+    })
   );
 
   server.registerTool(

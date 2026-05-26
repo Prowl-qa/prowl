@@ -689,7 +689,7 @@ needs shell access to your repo.
 **Prerequisites:**
 
 - **`prowlqa` must be on your `PATH`.** Install it globally with `npm install -g prowlqa`, or launch it through `npx` (use `"command": "npx", "args": ["prowlqa", "mcp"]` in the client config below). If the binary can't be found, the MCP client fails to start the server with no hunt-specific error.
-- **The target project must be initialized** — a `.prowlqa/` directory with at least one hunt. Run `prowlqa init` and author hunts first. Pointed at an un-initialized repo, `list_hunts` returns an empty list and `run_suite` returns `"status": "no-hunts"` (a setup issue, not a failure).
+- **The target project must be initialized** — a `.prowlqa/` directory with a valid config and hunts. Run `prowlqa init` and author hunts first. Pointed at an uninitialized repo, MCP tool calls fail with a missing `.prowlqa/config.yml` error.
 
 ```bash
 prowlqa mcp

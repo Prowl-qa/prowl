@@ -32,7 +32,13 @@ function writeRegistry(body: string): void {
 
 describe("loadProjectRegistry", () => {
   it("loads and validates a registry file", () => {
-    writeRegistry("projects:\n  coupe:\n    root: /repos/coupe\n  store:\n    root: /repos/store\n    configPath: /custom/config.yml\n");
+    writeRegistry(`projects:
+  coupe:
+    root: /repos/coupe
+  store:
+    root: /repos/store
+    configPath: /custom/config.yml
+`);
     const registry = loadProjectRegistry(registryPath);
     expect(registry?.projects.coupe.root).toBe("/repos/coupe");
     expect(registry?.projects.store.configPath).toBe("/custom/config.yml");
@@ -45,7 +51,7 @@ describe("loadProjectRegistry", () => {
 
   it("rejects an unknown field", () => {
     writeRegistry("projects:\n  coupe:\n    root: /repos/coupe\n    bogus: true\n");
-    expect(() => loadProjectRegistry(registryPath)).toThrow();
+    expect(() => loadProjectRegistry(registryPath)).toThrow(/bogus|unrecognized|unknown/i);
   });
 });
 
@@ -79,6 +85,27 @@ describe("resolveProject", () => {
     expect(resolveProject(registry, "store").configPath).toBe("/custom/config.yml");
   });
 
+  it("resolves relative paths from the registry file location", () => {
+    const relativeRegistry = {
+      registryPath: path.join(tmpDir, "config", "projects.yml"),
+      projects: {
+        coupe: { root: "../repos/coupe" },
+        store: { root: "../repos/store", configPath: "../configs/store.yml" }
+      }
+    };
+
+    expect(resolveProject(relativeRegistry, "coupe")).toEqual({
+      name: "coupe",
+      root: path.join(tmpDir, "repos", "coupe"),
+      configPath: path.join(tmpDir, "repos", "coupe", ".prowlqa", "config.yml")
+    });
+    expect(resolveProject(relativeRegistry, "store")).toEqual({
+      name: "store",
+      root: path.join(tmpDir, "repos", "store"),
+      configPath: path.join(tmpDir, "configs", "store.yml")
+    });
+  });
+
   it("throws a helpful error for an unknown project", () => {
     expect(() => resolveProject(registry, "ghost")).toThrow('Unknown project "ghost". Registered projects: coupe, store');
   });
@@ -88,7 +115,7 @@ describe("listRegisteredProjects", () => {
   it("returns name/root pairs, or empty for a null registry", () => {
     expect(listRegisteredProjects(null)).toEqual([]);
     expect(
-      listRegisteredProjects({ registryPath: "/x", projects: { a: { root: "/r/a" } } })
-    ).toEqual([{ name: "a", root: "/r/a" }]);
+      listRegisteredProjects({ registryPath: path.join(tmpDir, "projects.yml"), projects: { a: { root: "repos/a" } } })
+    ).toEqual([{ name: "a", root: path.join(tmpDir, "repos", "a") }]);
   });
 });

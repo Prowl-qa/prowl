@@ -31,8 +31,16 @@ export interface ResolvedProject {
   configPath: string;
 }
 
+/** Default registry location used when neither CLI flag nor env var is set. */
 function defaultRegistryPath(): string {
   return path.join(os.homedir(), ".prowlqa", "projects.yml");
+}
+
+/** Resolve a project entry path relative to the registry file that declared it. */
+function resolveRegistryRelativePath(registry: ProjectRegistry, inputPath: string): string {
+  return path.isAbsolute(inputPath)
+    ? inputPath
+    : path.resolve(path.dirname(registry.registryPath), inputPath);
 }
 
 /**
@@ -67,9 +75,9 @@ export function resolveProject(registry: ProjectRegistry, name: string): Resolve
     const known = Object.keys(registry.projects).sort().join(", ") || "(none)";
     throw new Error(`Unknown project "${name}". Registered projects: ${known}`);
   }
-  const root = path.resolve(entry.root);
+  const root = resolveRegistryRelativePath(registry, entry.root);
   const configPath = entry.configPath
-    ? path.resolve(entry.configPath)
+    ? resolveRegistryRelativePath(registry, entry.configPath)
     : path.join(root, ".prowlqa", "config.yml");
   return { name, root, configPath };
 }
@@ -79,6 +87,6 @@ export function listRegisteredProjects(registry: ProjectRegistry | null): Array<
   if (!registry) return [];
   return Object.entries(registry.projects).map(([name, entry]) => ({
     name,
-    root: path.resolve(entry.root)
+    root: resolveRegistryRelativePath(registry, entry.root)
   }));
 }

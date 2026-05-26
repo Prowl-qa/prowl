@@ -30,6 +30,13 @@ export interface RunSuiteToolResult {
   };
 }
 
+export interface RunSuiteToolOptions {
+  /** Config path for a registered project; omitted uses cwd discovery. */
+  configPath?: string;
+  /** Authoritative project root for backlog writes; defaults to config parent. */
+  projectRoot?: string;
+}
+
 /**
  * Hunt names in run order. Targets the project resolved from `configPath` (a
  * registered project's config), or the current working directory when omitted.
@@ -45,9 +52,12 @@ export function listHuntsTool(configPath?: string): { hunts: string[] } {
  * ids the bug-logger created. Targets the project resolved from `configPath`, or
  * the current working directory when omitted.
  */
-export async function runSuiteTool(args: RunSuiteToolArgs = {}, configPath?: string): Promise<RunSuiteToolResult> {
-  const { configPath: resolvedConfigPath, configDir } = loadConfig(configPath);
-  const projectRoot = path.dirname(configDir);
+export async function runSuiteTool(
+  args: RunSuiteToolArgs = {},
+  options: RunSuiteToolOptions = {}
+): Promise<RunSuiteToolResult> {
+  const { configPath: resolvedConfigPath, configDir } = loadConfig(options.configPath);
+  const projectRoot = options.projectRoot ?? path.dirname(configDir);
   const suite = await runSuite({
     configPath: resolvedConfigPath,
     includeTags: args.includeTags,

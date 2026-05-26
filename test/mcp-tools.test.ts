@@ -91,6 +91,23 @@ describe("runSuiteTool", () => {
     expect(mockUpdateBacklog).not.toHaveBeenCalled();
     expect(result.bugs).toEqual({ created: [], regressions: [], alreadyOpen: [], backlogPath: null });
   });
+
+  it("uses an explicit project root for bug logging", async () => {
+    const suite = suiteResult();
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/repo/custom/config.yml", configDir: "/repo/custom" });
+    mockRunSuite.mockResolvedValue(suite);
+    mockUpdateBacklog.mockReturnValue({
+      created: [],
+      regressions: [],
+      skipped: [],
+      backlogPath: "/repo/docs/backlog.md"
+    });
+
+    await runSuiteTool({}, { configPath: "/repo/custom/config.yml", projectRoot: "/repo" });
+
+    expect(mockRunSuite).toHaveBeenCalledWith(expect.objectContaining({ configPath: "/repo/custom/config.yml" }));
+    expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, { projectRoot: "/repo" });
+  });
 });
 
 describe("runHuntTool", () => {

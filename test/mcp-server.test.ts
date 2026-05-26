@@ -155,6 +155,24 @@ describe("mcp server", () => {
     await client.close();
   });
 
+  it("uses the registered root for project bug logging", async () => {
+    const suite = {
+      result: { status: "fail", startedAt: "x", durationMs: 100, totalHunts: 1, passed: 0, failed: 1, skipped: 0, hunts: [] },
+      resultPath: "/tmp/ci-result.json"
+    };
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/custom/config.yml", configDir: "/custom" });
+    mockRunSuite.mockResolvedValue(suite);
+    mockUpdateBacklog.mockReturnValue({ created: ["QA-001"], regressions: [], skipped: [], backlogPath: "/repos/store/docs/backlog.md" });
+
+    const client = await connectClient(registry);
+    const res = await client.callTool({ name: "run_suite", arguments: { project: "store" } });
+
+    expect(payloadOf(res)).toMatchObject({ bugs: { created: ["QA-001"] } });
+    expect(mockRunSuite).toHaveBeenCalledWith(expect.objectContaining({ configPath: "/custom/config.yml" }));
+    expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, { projectRoot: "/repos/store" });
+    await client.close();
+  });
+
   it("errors when a project is named but no registry is configured", async () => {
     const client = await connectClient();
     const res = await client.callTool({ name: "list_hunts", arguments: { project: "coupe" } });
