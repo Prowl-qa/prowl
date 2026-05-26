@@ -30,22 +30,36 @@ export interface RunSuiteToolResult {
   };
 }
 
-/** Hunt names in the current project, in run order. */
-export function listHuntsTool(): { hunts: string[] } {
-  const { configDir } = loadConfig();
+export interface RunSuiteToolOptions {
+  /** Config path for a registered project; omitted uses cwd discovery. */
+  configPath?: string;
+  /** Authoritative project root for backlog writes; defaults to config parent. */
+  projectRoot?: string;
+}
+
+/**
+ * Hunt names in run order. Targets the project resolved from `configPath` (a
+ * registered project's config), or the current working directory when omitted.
+ */
+export function listHuntsTool(configPath?: string): { hunts: string[] } {
+  const { configDir } = loadConfig(configPath);
   return { hunts: listHunts(configDir) };
 }
 
 /**
  * Run the full hunt suite and (by default) log any failures as deduplicated bug
  * tickets in the project backlog. Returns pass/fail counts plus the QA-NNN ticket
- * ids the bug-logger created.
+ * ids the bug-logger created. Targets the project resolved from `configPath`, or
+ * the current working directory when omitted.
  */
-export async function runSuiteTool(args: RunSuiteToolArgs = {}): Promise<RunSuiteToolResult> {
-  const { configPath, configDir } = loadConfig();
-  const projectRoot = path.dirname(configDir);
+export async function runSuiteTool(
+  args: RunSuiteToolArgs = {},
+  options: RunSuiteToolOptions = {}
+): Promise<RunSuiteToolResult> {
+  const { configPath: resolvedConfigPath, configDir } = loadConfig(options.configPath);
+  const projectRoot = options.projectRoot ?? path.dirname(configDir);
   const suite = await runSuite({
-    configPath,
+    configPath: resolvedConfigPath,
     includeTags: args.includeTags,
     excludeTags: args.excludeTags,
     parallel: args.parallel
@@ -73,8 +87,17 @@ export async function runSuiteTool(args: RunSuiteToolArgs = {}): Promise<RunSuit
   };
 }
 
-/** Run a single hunt by name and return its full result plus the run directory. */
-export async function runHuntTool(args: { hunt: string }): Promise<RunResult & { runDir: string }> {
-  const { result, runDir } = await runHunt({ huntName: args.hunt });
+/**
+ * Run a single hunt by name and return its full result plus the run directory.
+ * Targets the project resolved from `configPath`, or the cwd when omitted.
+ */
+export async function runHuntTool(
+  args: { hunt: string },
+  configPath?: string
+): Promise<RunResult & { runDir: string }> {
+  const { result, runDir } = await runHunt({
+    huntName: args.hunt,
+    ...(configPath ? { configPath } : {})
+  });
   return { ...result, runDir };
 }

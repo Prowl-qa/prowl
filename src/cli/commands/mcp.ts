@@ -10,9 +10,13 @@ function errorMessage(error: unknown): string {
 export function buildMcpCommand(): Command {
   return new Command("mcp")
     .description("Start an MCP server (stdio) exposing ProwlQA tools to AI agents")
-    .action(async () => {
+    .option(
+      "--projects <path>",
+      "Path to a project registry (YAML) so tools can target multiple repos by name"
+    )
+    .action(async (options) => {
       try {
-        await startMcpServer();
+        await startMcpServer({ registryPath: options.projects });
       } catch (error) {
         console.error(`Failed to start MCP server: ${errorMessage(error)}`);
         process.exit(1);
