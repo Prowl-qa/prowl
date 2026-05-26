@@ -17,14 +17,23 @@ vi.mock("../src/backlog/index.js", () => ({ updateBacklogFromSuite: (...args: un
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { buildMcpServer } from "../src/mcp/server.js";
+import type { ProjectRegistry } from "../src/mcp/projects.js";
+
+const registry: ProjectRegistry = {
+  registryPath: "/cfg/projects.yml",
+  projects: {
+    coupe: { root: "/repos/coupe" },
+    store: { root: "/repos/store", configPath: "/custom/config.yml" }
+  }
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function connectClient(): Promise<Client> {
+async function connectClient(reg: ProjectRegistry | null = null): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = buildMcpServer();
+  const server = buildMcpServer({ registry: reg });
   await server.connect(serverTransport);
   const client = new Client({ name: "test", version: "1.0.0" });
   await client.connect(clientTransport);
@@ -51,14 +60,13 @@ describe("mcp server", () => {
     mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
   });
 
-  it("exposes list_hunts, run_suite, and run_hunt", async () => {
+  it("exposes list_projects, list_hunts, run_suite, and run_hunt", async () => {
     const client = await connectClient();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["list_hunts", "run_hunt", "run_suite"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["list_hunts", "list_projects", "run_hunt", "run_suite"]);
     expect(tools.find((t) => t.name === "list_hunts")?.inputSchema).toMatchObject({
       type: "object",
-      properties: {},
-      additionalProperties: false
+      properties: { project: { type: "string" } }
     });
     await client.close();
   });
@@ -117,5 +125,49 @@ describe("mcp server", () => {
     expect(() => payloadOf({ content: [{ type: "text", text: "not json" }] })).toThrow(
       "payloadOf failed to parse JSON"
     );
+  });
+
+  it("list_projects returns the registered projects", async () => {
+    const client = await connectClient(registry);
+    const res = await client.callTool({ name: "list_projects", arguments: {} });
+    expect(payloadOf(res)).toEqual({
+      projects: [
+        { name: "coupe", root: "/repos/coupe" },
+        { name: "store", root: "/repos/store" }
+      ]
+    });
+    await client.close();
+  });
+
+  it("list_projects is empty without a registry", async () => {
+    const client = await connectClient();
+    const res = await client.callTool({ name: "list_projects", arguments: {} });
+    expect(payloadOf(res)).toEqual({ projects: [] });
+    await client.close();
+  });
+
+  it("targets a registered project's config when project is given", async () => {
+    mockListHunts.mockReturnValue(["smoke"]);
+    const client = await connectClient(registry);
+    const res = await client.callTool({ name: "list_hunts", arguments: { project: "coupe" } });
+    expect(payloadOf(res)).toEqual({ hunts: ["smoke"] });
+    expect(mockLoadConfig).toHaveBeenCalledWith("/repos/coupe/.prowlqa/config.yml");
+    await client.close();
+  });
+
+  it("errors when a project is named but no registry is configured", async () => {
+    const client = await connectClient();
+    const res = await client.callTool({ name: "list_hunts", arguments: { project: "coupe" } });
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain("No project registry");
+    await client.close();
+  });
+
+  it("errors for an unknown project", async () => {
+    const client = await connectClient(registry);
+    const res = await client.callTool({ name: "run_hunt", arguments: { hunt: "x", project: "ghost" } });
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain("Unknown project");
+    await client.close();
   });
 });

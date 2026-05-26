@@ -3,6 +3,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import pkg from "../../package.json";
 import { listHuntsTool, runHuntTool, runSuiteTool } from "./tools.js";
+import {
+  type ProjectRegistry,
+  listRegisteredProjects,
+  loadProjectRegistry,
+  resolveProject
+} from "./projects.js";
+
+export interface BuildMcpServerOptions {
+  /** When provided, a `project` tool argument selects a registered project. */
+  registry?: ProjectRegistry | null;
+}
+
+export interface StartMcpServerOptions {
+  /** Path to a project registry file (overrides env/default discovery). */
+  registryPath?: string;
+}
 
 type TextToolResult = { content: Array<{ type: "text"; text: string }> };
 
@@ -40,21 +56,51 @@ async function toolResult(
   }
 }
 
+const PROJECT_ARG_DESCRIPTION =
+  "Registered project name to target (from the registry). Omit to use the current working directory.";
+
 /**
- * Builds an MCP server exposing ProwlQA as named tools. Operates on the current
- * working directory's `.prowlqa/` project, exactly like the CLI. The agent gets a
- * fixed tool surface — it never chooses shell commands.
+ * Builds an MCP server exposing ProwlQA as named tools. By default it operates on
+ * the current working directory's `.prowlqa/` project, exactly like the CLI. When a
+ * project registry is provided, tools accept an optional `project` argument to
+ * target any registered repo. The agent gets a fixed tool surface — it never
+ * chooses shell commands.
  */
-export function buildMcpServer(): McpServer {
+export function buildMcpServer(options: BuildMcpServerOptions = {}): McpServer {
+  const registry = options.registry ?? null;
   const server = new McpServer({ name: "prowlqa", version: pkg.version });
+
+  // Resolve an optional `project` arg to that project's config path. Throws a
+  // helpful error if a project is named but no registry is configured.
+  const configPathFor = (project?: string): string | undefined => {
+    if (!project) return undefined;
+    if (!registry) {
+      throw new Error(
+        `No project registry is configured, so project "${project}" cannot be resolved. ` +
+          "Start the server with `prowlqa mcp --projects <path>` (or set PROWLQA_PROJECTS)."
+      );
+    }
+    return resolveProject(registry, project).configPath;
+  };
+
+  server.registerTool(
+    "list_projects",
+    {
+      description: "List the projects registered with this server. Empty when no registry is configured.",
+      inputSchema: z.object({}).strict()
+    },
+    async (args) => toolResult("list_projects", args, () => ({ projects: listRegisteredProjects(registry) }))
+  );
 
   server.registerTool(
     "list_hunts",
     {
-      description: "List all hunts in the current project, in run order.",
-      inputSchema: z.object({}).strict()
+      description: "List all hunts in the target project, in run order.",
+      inputSchema: {
+        project: z.string().min(1).describe(PROJECT_ARG_DESCRIPTION).optional()
+      }
     },
-    async (args) => toolResult("list_hunts", args, () => listHuntsTool())
+    async (args) => toolResult("list_hunts", args, () => listHuntsTool(configPathFor(args.project)))
   );
 
   server.registerTool(
@@ -63,13 +109,14 @@ export function buildMcpServer(): McpServer {
       description:
         "Run all hunts and, by default, log any failures as deduplicated bug tickets in the project backlog. Returns pass/fail/skip counts and the QA-NNN ticket ids created.",
       inputSchema: {
+        project: z.string().min(1).describe(PROJECT_ARG_DESCRIPTION).optional(),
         includeTags: z.array(z.string()).optional(),
         excludeTags: z.array(z.string()).optional(),
         parallel: z.number().int().min(1).optional(),
         logBugs: z.boolean().optional()
       }
     },
-    async (args) => toolResult("run_suite", args, () => runSuiteTool(args))
+    async (args) => toolResult("run_suite", args, () => runSuiteTool(args, configPathFor(args.project)))
   );
 
   server.registerTool(
@@ -77,18 +124,20 @@ export function buildMcpServer(): McpServer {
     {
       description: "Run a single hunt by name and return its full result.",
       inputSchema: {
-        hunt: z.string().min(1)
+        hunt: z.string().min(1),
+        project: z.string().min(1).describe(PROJECT_ARG_DESCRIPTION).optional()
       }
     },
-    async (args) => toolResult("run_hunt", args, () => runHuntTool(args))
+    async (args) => toolResult("run_hunt", args, () => runHuntTool(args, configPathFor(args.project)))
   );
 
   return server;
 }
 
 /** Starts the MCP server over stdio and resolves once connected. */
-export async function startMcpServer(): Promise<void> {
-  const server = buildMcpServer();
+export async function startMcpServer(options: StartMcpServerOptions = {}): Promise<void> {
+  const registry = loadProjectRegistry(options.registryPath);
+  const server = buildMcpServer({ registry });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
