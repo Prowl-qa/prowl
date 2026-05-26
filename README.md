@@ -686,6 +686,11 @@ as a small set of named tools that any MCP-capable agent can call over stdio. Th
 agent triggers runs and reads structured results through these tools — it never
 needs shell access to your repo.
 
+**Prerequisites:**
+
+- **`prowlqa` must be on your `PATH`.** Install it globally with `npm install -g prowlqa`, or launch it through `npx` (use `"command": "npx", "args": ["prowlqa", "mcp"]` in the client config below). If the binary can't be found, the MCP client fails to start the server with no hunt-specific error.
+- **The target project must be initialized** — a `.prowlqa/` directory with at least one hunt. Run `prowlqa init` and author hunts first. Pointed at an un-initialized repo, `list_hunts` returns an empty list and `run_suite` returns `"status": "no-hunts"` (a setup issue, not a failure).
+
 ```bash
 prowlqa mcp
 ```
@@ -718,6 +723,12 @@ it — for example:
 Existing guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`,
 `maxTotalTimeMs`) apply to every run the server triggers.
 
+**Controlling what the agent can do:** ProwlQA exposes only these four tools and
+never runs arbitrary shell. To restrict the agent further, allow-list tool names
+in your MCP client (e.g. OpenClaw) config — for example, allow `list_hunts` and
+`run_suite` but withhold `run_hunt`. That allow-listing is configured on the
+agent/client side, not in ProwlQA.
+
 ### Logging bugs automatically
 
 `run_suite` runs every hunt and, by default, logs each failure as a deduplicated
@@ -729,8 +740,28 @@ hunt + failing step + normalized error, so:
 - a failure that already has an open ticket is left alone (no duplicates);
 - a failure matching something already in `docs/resolved.md` is logged as a **regression** that references the old ticket id.
 
-Pass `logBugs: false` to run without touching the backlog. The response lists the
-created, regression, and already-open ticket ids.
+Pass `logBugs: false` to run without touching the backlog. A `run_suite` response
+looks like this:
+
+```json
+{
+  "status": "fail",
+  "totalHunts": 8,
+  "passed": 6,
+  "failed": 2,
+  "skipped": 0,
+  "resultPath": "/path/to/project/.prowlqa/runs/ci-2026-05-26_09-12-03-456/ci-result.json",
+  "bugs": {
+    "created": ["QA-014"],
+    "regressions": ["QA-015"],
+    "alreadyOpen": ["QA-009"],
+    "backlogPath": "/path/to/project/docs/backlog.md"
+  }
+}
+```
+
+`status` is one of `pass`, `fail`, `no-hunts`, or `all-skipped`. When
+`logBugs` is `false`, `bugs` arrays are empty and `backlogPath` is `null`.
 
 ### Driving multiple projects
 
