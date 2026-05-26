@@ -649,6 +649,10 @@ prowlqa ci --parallel 4                 # Run hunts with 4 workers
 prowlqa history <hunt-name>
 prowlqa history <hunt-name> --limit 50   # Show the last 50 runs (default: 20)
 prowlqa history <hunt-name> --json       # Machine-readable history output
+
+# MCP server — expose ProwlQA to AI agents over stdio
+prowlqa mcp
+prowlqa mcp --projects ~/.prowlqa/projects.yml   # Drive multiple repos via a registry
 ```
 
 `--parallel <count>` details:
@@ -672,6 +676,97 @@ history:
 
 Use `prowlqa history <hunt-name>` for a quick status/duration table, or
 `--json` to feed the entries into dashboards, flake detectors, or agents.
+
+---
+
+## MCP Server (AI Agent Integration)
+
+ProwlQA can run as an [MCP](https://modelcontextprotocol.io) server, exposing QA
+as a small set of named tools that any MCP-capable agent can call over stdio. The
+agent triggers runs and reads structured results through these tools — it never
+needs shell access to your repo.
+
+```bash
+prowlqa mcp
+```
+
+This starts a stdio server for the current project (it discovers `.prowlqa/` from
+the working directory, exactly like the other commands). Point your MCP client at
+it — for example:
+
+```json
+{
+  "mcpServers": {
+    "prowlqa": {
+      "command": "prowlqa",
+      "args": ["mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+### Tools
+
+| Tool | Arguments | Returns |
+|------|-----------|---------|
+| `list_hunts` | `project?` | Hunt names in run order |
+| `run_hunt` | `hunt`, `project?` | The full `RunResult` for a single hunt |
+| `run_suite` | `includeTags?`, `excludeTags?`, `parallel?`, `logBugs?`, `project?` | Pass/fail/skip counts, the `ci-result.json` path, and the bug tickets created |
+| `list_projects` | — | Registered projects (empty unless a registry is configured) |
+
+Existing guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`,
+`maxTotalTimeMs`) apply to every run the server triggers.
+
+### Logging bugs automatically
+
+`run_suite` runs every hunt and, by default, logs each failure as a deduplicated
+bug ticket in the project's `docs/backlog.md`, under a `## QA Findings (automated)`
+section that stays separate from your hand-written items. A bug is identified by
+hunt + failing step + normalized error, so:
+
+- a brand-new failure creates a `QA-NNN` ticket with the hunt, failing step, error, and a link to the run artifacts;
+- a failure that already has an open ticket is left alone (no duplicates);
+- a failure matching something already in `docs/resolved.md` is logged as a **regression** that references the old ticket id.
+
+Pass `logBugs: false` to run without touching the backlog. The response lists the
+created, regression, and already-open ticket ids.
+
+### Driving multiple projects
+
+By default the server acts on the current directory. To drive several repos from a
+single server, give it a **project registry** — one YAML file that maps project
+names to repo roots. This file lives *outside* any repo (it spans many), not
+inside a target project:
+
+```yaml
+# ~/.prowlqa/projects.yml
+projects:
+  coupe:
+    root: /Users/you/projects/coupe
+  storefront:
+    root: /Users/you/projects/storefront
+    configPath: /custom/.prowlqa/config.yml   # optional; defaults to <root>/.prowlqa/config.yml
+```
+
+The registry is resolved in priority order:
+
+1. `prowlqa mcp --projects <path>`
+2. the `PROWLQA_PROJECTS` environment variable
+3. `~/.prowlqa/projects.yml`
+
+With a registry loaded, every tool accepts an optional `project` argument that
+selects which repo to act on, and `list_projects` enumerates what's available.
+For example, these `run_suite` arguments run the smoke suite for `coupe` and log
+any failures to `coupe/docs/backlog.md`:
+
+```jsonc
+{ "project": "coupe", "includeTags": ["smoke"] }
+```
+
+Omit `project` and the tool falls back to the current directory. Naming a project
+that isn't registered — or naming one when no registry is configured — returns a
+clear error.
 
 ---
 
