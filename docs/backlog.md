@@ -331,25 +331,6 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
-## Agent QA / MCP Server (Epic)
-
-Let's external AI agents drive ProwlQA through named MCP tools — run a project's hunts and get structured results — and automatically log failures as deduplicated bug tickets in the project backlog. Implementation order: **P5-008 (done) → P5-009 (done) → P5-001** — P5-008 and P5-009 are in `resolved.md`. The epic is complete only when all three are done.
-
-{PROWL-039} **P5-001: MCP Server (`prowlqa mcp`)** (revived 2026-05-24)
-   *As an external AI agent, I want to drive ProwlQA through named MCP tools, so I can run a project's hunts and get structured results without parsing CLI output.*
-   Revives the previously-deprioritized P5-001, re-scoped from a generic MCP wrapper to an agent QA interface with built-in bug-logging. Ships inside the existing `prowlqa` package (not a separate package), reusing the CLI core so the tool surface always matches the CLI's step schema. Runs over stdio against the current repo (config discovered from cwd, like the CLI); multi-project registry deferred.
-
-**Found during**: MCP design session (2026-05-24)
-**Acceptance Criteria**:
-- New `prowlqa mcp` subcommand starts a stdio MCP server (`src/mcp/server.ts`, `src/cli/commands/mcp.ts`, registered in `src/cli/program.ts`)
-- Add dependency `@modelcontextprotocol/sdk`
-- Tool `list_hunts` → hunt names in run order
-- Tool `run_suite` → runs all hunts sequentially (via P5-008), returns structured summary (counts + ticket IDs created by P5-009)
-- Tool `run_hunt(name)` → runs a single hunt, returns its `RunResult`
-- Existing guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`, `maxTotalTimeMs`) apply unchanged
-- Depends on P5-008; integrates P5-009
-- Schema validation, unit + integration tests, CHANGELOG entry
-
 ## Completed
 
 Completed and resolved work lives in [`resolved.md`](./resolved.md).
