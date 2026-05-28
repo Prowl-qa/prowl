@@ -332,11 +332,27 @@ async function selectByLabelOrFallback(
   throw new Error(`Could not resolve select shorthand for "${label}"`);
 }
 
-function looksLikeSelector(value: string): boolean {
-  return /[.#[\]>:=~|^$*@]/.test(value);
+// Playwright engine prefixes (e.g. `css=`, `xpath=…`, `text="…"`) that mark a
+// value as an explicit selector rather than text to match.
+const SELECTOR_ENGINE_PREFIX = /^(?:css|xpath|text|id|role|data-testid)=/i;
+
+// A visibility value is treated as a selector only when it has a clear
+// structural signature: a leading class/id/attribute token, an attribute
+// selector bracket, or an explicit Playwright engine prefix (incl. `//` xpath).
+// Everything else — including prose that merely contains punctuation such as
+// "name:" or a sentence ending in "." — is matched as text, so assertions read
+// the way they are written. For exotic selectors (pseudo-classes, combinators),
+// use an explicit engine prefix like `css=input:checked`.
+export function looksLikeSelector(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  if (SELECTOR_ENGINE_PREFIX.test(trimmed) || trimmed.startsWith("//")) return true;
+  if (/^[.#[]/.test(trimmed)) return true; // leading class, id, or attribute selector
+  if (/\[[^\]]+\]/.test(trimmed)) return true; // contains an attribute selector, e.g. img[alt='Logo']
+  return false;
 }
 
-function toVisibilitySelector(value: string): string {
+export function toVisibilitySelector(value: string): string {
   if (looksLikeSelector(value)) return value;
   return `text=${escapeForText(value)}`;
 }
