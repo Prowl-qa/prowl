@@ -243,8 +243,12 @@ function escapeForAttribute(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function textSelector(text: string): string {
+function exactTextSelector(text: string): string {
   return `text="${escapeForText(text)}"`;
+}
+
+function textContainsSelector(text: string): string {
+  return `text=${escapeForText(text)}`;
 }
 
 function getSinglePair(value: Record<string, string>, stepType: string): [string, string] {
@@ -268,7 +272,7 @@ async function clickByTextWithFallback(
     return roleSelector;
   }
 
-  const selector = textSelector(text);
+  const selector = exactTextSelector(text);
   assertAllowedSelector(selector, forbiddenSelectors);
   await page.locator(selector).first().click();
   return selector;
@@ -332,13 +336,156 @@ async function selectByLabelOrFallback(
   throw new Error(`Could not resolve select shorthand for "${label}"`);
 }
 
-function looksLikeSelector(value: string): boolean {
-  return /[.#[\]>:=~|^$*@]/.test(value);
+// Playwright engine prefixes (e.g. `css=`, `xpath=…`, `text="…"`) that mark a
+// value as an explicit selector rather than text to match.
+const SELECTOR_ENGINE_PREFIX = /^(?:css|xpath|text|id|role|data-testid)=/i;
+const HTML_TYPE_SELECTORS = new Set([
+  "a",
+  "article",
+  "aside",
+  "body",
+  "button",
+  "canvas",
+  "dialog",
+  "div",
+  "fieldset",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "html",
+  "iframe",
+  "img",
+  "input",
+  "label",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "option",
+  "p",
+  "section",
+  "select",
+  "span",
+  "table",
+  "tbody",
+  "td",
+  "textarea",
+  "th",
+  "thead",
+  "tr",
+  "ul"
+]);
+
+function isKnownCssTypeSelector(value: string): boolean {
+  return value === "*" || value.includes("-") || HTML_TYPE_SELECTORS.has(value.toLowerCase());
 }
 
-function toVisibilitySelector(value: string): string {
+function readCssTypeSelector(value: string, start: number): { end: number; isKnown: boolean } | null {
+  const match = /^(?:[A-Za-z][\w-]*|\*)/.exec(value.slice(start));
+  if (!match) return null;
+  return { end: start + match[0].length, isKnown: isKnownCssTypeSelector(match[0]) };
+}
+
+function readCssStructuralSelectorPart(value: string, start: number): number | null {
+  const rest = value.slice(start);
+  const classOrId = /^[.#][A-Za-z_][\w-]*/.exec(rest);
+  if (classOrId) return start + classOrId[0].length;
+
+  const attribute = /^\[[A-Za-z_][\w:-]*(?:\s*(?:[~|^$*]?=)\s*(?:"[^"]*"|'[^']*'|[^\]\s]+))?\]/.exec(rest);
+  if (attribute) return start + attribute[0].length;
+
+  return null;
+}
+
+function readCssCompoundSelector(value: string, start: number): { end: number; hasStructuralPart: boolean } | null {
+  let cursor = start;
+  const type = readCssTypeSelector(value, cursor);
+  if (type) {
+    cursor = type.end;
+  }
+
+  let hasStructuralPart = false;
+  for (;;) {
+    const next = readCssStructuralSelectorPart(value, cursor);
+    if (next === null) break;
+    hasStructuralPart = true;
+    cursor = next;
+  }
+
+  if (cursor === start) return null;
+  if (type && !type.isKnown) return null;
+  return { end: cursor, hasStructuralPart };
+}
+
+function readCssSelectorSeparator(value: string, start: number): number | null {
+  let cursor = start;
+  let sawWhitespace = false;
+  while (/\s/.test(value[cursor] ?? "")) {
+    sawWhitespace = true;
+    cursor += 1;
+  }
+
+  if (/[>+~]/.test(value[cursor] ?? "")) {
+    cursor += 1;
+    while (/\s/.test(value[cursor] ?? "")) {
+      cursor += 1;
+    }
+    return cursor;
+  }
+
+  return sawWhitespace ? cursor : null;
+}
+
+function isCssSelectorSequence(value: string): boolean {
+  const first = readCssCompoundSelector(value, 0);
+  if (!first) return false;
+
+  let cursor = first.end;
+  let sawSeparator = false;
+  let hasStructuralPart = first.hasStructuralPart;
+
+  while (cursor < value.length) {
+    const afterSeparator = readCssSelectorSeparator(value, cursor);
+    if (afterSeparator === null) return false;
+
+    const next = readCssCompoundSelector(value, afterSeparator);
+    if (!next) return false;
+
+    sawSeparator = true;
+    hasStructuralPart = hasStructuralPart || next.hasStructuralPart;
+    cursor = next.end;
+  }
+
+  return sawSeparator && hasStructuralPart;
+}
+
+// A visibility value is treated as a selector only when it has a clear
+// structural signature: a leading class/id/attribute token, a supported CSS
+// compound/sequence, or explicit Playwright engine prefix (incl. `//` xpath).
+// Everything else — including prose that merely contains punctuation such as
+// "name:" or a sentence ending in "." — is matched as text, so assertions read
+// the way they are written. For exotic selectors (pseudo-classes), use an
+// explicit engine prefix like `css=input:checked`.
+export function looksLikeSelector(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  if (SELECTOR_ENGINE_PREFIX.test(trimmed) || trimmed.startsWith("//")) return true;
+  if (/^[.#]/.test(trimmed)) return true; // leading class or id selector
+  const compound = readCssCompoundSelector(trimmed, 0);
+  if (compound?.end === trimmed.length && compound.hasStructuralPart) return true;
+  if (isCssSelectorSequence(trimmed)) return true;
+  return false;
+}
+
+export function toVisibilitySelector(value: string): string {
   if (looksLikeSelector(value)) return value;
-  return `text=${escapeForText(value)}`;
+  return textContainsSelector(value);
 }
 
 async function runInlineAssert(

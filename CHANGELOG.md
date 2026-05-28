@@ -17,6 +17,9 @@ All notable changes to ProwlQA will be documented in this file.
 - `prowlqa mcp` command: starts an MCP server (stdio) that exposes ProwlQA to AI agents as named tools — `list_hunts`, `run_suite` (runs all hunts and logs failures to the backlog, returning counts + created `QA-NNN` ids), and `run_hunt`. Lets any MCP client drive QA against the current project without shell access. Adds the `@modelcontextprotocol/sdk` dependency (P5-001)
 - MCP multi-project registry: `prowlqa mcp --projects <path>` (or `PROWLQA_PROJECTS`, or `~/.prowlqa/projects.yml`) loads a YAML registry mapping project names to repo roots, so one server instance can drive many repos. Adds a `list_projects` tool and an optional `project` argument on `list_hunts`/`run_suite`/`run_hunt`; omitting it keeps the current-directory behavior (P5-010)
 
+### Fixed
+- `assert` visibility now treats prose values as text instead of CSS selectors. Strings containing punctuation (e.g. `visible: "name:"` or a sentence ending in `.`) previously crashed with "Unexpected token … while parsing css selector"; they are now matched via Playwright's text engine. Values with a clear selector signature (leading `.`/`#`/`[`, an attribute bracket, or an engine prefix like `css=`/`xpath=`/`text=`) still route to the selector engine (PQH-QA-001, PQH-QA-002)
+
 ### Documentation
 - README guardrails section now documents substring-matching semantics for `forbiddenSelectors` and `networkIgnorePatterns`, and the intentional `about:`/`data:` protocol bypass in `allowedDomains` (BUG-005, BUG-006)
 
