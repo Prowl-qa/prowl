@@ -335,20 +335,39 @@ async function selectByLabelOrFallback(
 // Playwright engine prefixes (e.g. `css=`, `xpath=…`, `text="…"`) that mark a
 // value as an explicit selector rather than text to match.
 const SELECTOR_ENGINE_PREFIX = /^(?:css|xpath|text|id|role|data-testid)=/i;
+const CSS_IDENTIFIER = "[A-Za-z_][\\w-]*";
+const CSS_TYPE_SELECTOR = `(?:${CSS_IDENTIFIER}|\\*)`;
+const CSS_CLASS_OR_ID_SELECTOR = "[.#][A-Za-z_][\\w-]*";
+const CSS_ATTRIBUTE_WITH_VALUE = "\\[[^\\]\\s=]+\\s*(?:[~|^$*]?=)\\s*(?:\"[^\"]*\"|'[^']*'|[^\\]\\s]+)\\]";
+const CSS_ATTRIBUTE_PRESENCE = "\\[[A-Za-z_][\\w:-]*\\]";
+const CSS_ATTRIBUTE_SELECTOR = `(?:${CSS_ATTRIBUTE_WITH_VALUE}|${CSS_ATTRIBUTE_PRESENCE})`;
+const CSS_STRUCTURAL_SELECTOR_PART = `(?:${CSS_CLASS_OR_ID_SELECTOR}|${CSS_ATTRIBUTE_SELECTOR})`;
+const CSS_COMPOUND_SELECTOR = new RegExp(`^(?:${CSS_TYPE_SELECTOR})?${CSS_STRUCTURAL_SELECTOR_PART}+$`);
+const CSS_SIMPLE_SELECTOR = `(?:${CSS_TYPE_SELECTOR}|(?:${CSS_TYPE_SELECTOR})?${CSS_STRUCTURAL_SELECTOR_PART}+)`;
+const CSS_SELECTOR_SEQUENCE = new RegExp(`^${CSS_SIMPLE_SELECTOR}(?:\\s*(?:[>+~]|\\s)\\s*${CSS_SIMPLE_SELECTOR})+$`);
+const CSS_WHITESPACE_SEQUENCE_STRUCTURE = new RegExp(`(?:${CSS_CLASS_OR_ID_SELECTOR}|${CSS_ATTRIBUTE_WITH_VALUE})`);
+const CSS_EXPLICIT_COMBINATOR = /[>+~]/;
 
 // A visibility value is treated as a selector only when it has a clear
 // structural signature: a leading class/id/attribute token, an attribute
-// selector bracket, or an explicit Playwright engine prefix (incl. `//` xpath).
+// selector bracket, compound CSS token, or explicit Playwright engine prefix
+// (incl. `//` xpath).
 // Everything else — including prose that merely contains punctuation such as
 // "name:" or a sentence ending in "." — is matched as text, so assertions read
-// the way they are written. For exotic selectors (pseudo-classes, combinators),
-// use an explicit engine prefix like `css=input:checked`.
+// the way they are written. For exotic selectors (pseudo-classes), use an
+// explicit engine prefix like `css=input:checked`.
 export function looksLikeSelector(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed.length === 0) return false;
   if (SELECTOR_ENGINE_PREFIX.test(trimmed) || trimmed.startsWith("//")) return true;
-  if (/^[.#[]/.test(trimmed)) return true; // leading class, id, or attribute selector
-  if (/\[[^\]]+\]/.test(trimmed)) return true; // contains an attribute selector, e.g. img[alt='Logo']
+  if (/^[.#]/.test(trimmed)) return true; // leading class or id selector
+  if (CSS_COMPOUND_SELECTOR.test(trimmed)) return true;
+  if (
+    CSS_SELECTOR_SEQUENCE.test(trimmed) &&
+    (CSS_EXPLICIT_COMBINATOR.test(trimmed) || CSS_WHITESPACE_SEQUENCE_STRUCTURE.test(trimmed))
+  ) {
+    return true;
+  }
   return false;
 }
 

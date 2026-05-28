@@ -15,6 +15,7 @@ describe("toVisibilitySelector — prose is matched as text", () => {
     "$19.99",
     "Are you sure?",
     "Save & exit",
+    "Use [beta] mode",
     "Dashboard"
   ];
 
@@ -32,6 +33,9 @@ describe("toVisibilitySelector — documented selector forms still route to the 
     "#submit",
     "[data-testid='submit-btn']",
     "img[alt='Logo']",
+    "button.primary",
+    "div > .toast",
+    "form input[name='email']",
     "css=input:checked",
     "xpath=//div[@id='main']",
     "//button",
@@ -54,5 +58,6 @@ describe("toVisibilitySelector — edge cases", () => {
 
   it("escapes embedded quotes and backslashes in text values", () => {
     expect(toVisibilitySelector('She said "hi"')).toBe('text=She said \\"hi\\"');
+    expect(toVisibilitySelector(String.raw`C:\tmp\file.txt`)).toBe(String.raw`text=C:\\tmp\\file.txt`);
   });
 });
