@@ -243,8 +243,12 @@ function escapeForAttribute(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function textSelector(text: string): string {
+function exactTextSelector(text: string): string {
   return `text="${escapeForText(text)}"`;
+}
+
+function textContainsSelector(text: string): string {
+  return `text=${escapeForText(text)}`;
 }
 
 function getSinglePair(value: Record<string, string>, stepType: string): [string, string] {
@@ -268,7 +272,7 @@ async function clickByTextWithFallback(
     return roleSelector;
   }
 
-  const selector = textSelector(text);
+  const selector = exactTextSelector(text);
   assertAllowedSelector(selector, forbiddenSelectors);
   await page.locator(selector).first().click();
   return selector;
@@ -335,23 +339,135 @@ async function selectByLabelOrFallback(
 // Playwright engine prefixes (e.g. `css=`, `xpath=…`, `text="…"`) that mark a
 // value as an explicit selector rather than text to match.
 const SELECTOR_ENGINE_PREFIX = /^(?:css|xpath|text|id|role|data-testid)=/i;
-const CSS_IDENTIFIER = "[A-Za-z_][\\w-]*";
-const CSS_TYPE_SELECTOR = `(?:${CSS_IDENTIFIER}|\\*)`;
-const CSS_CLASS_OR_ID_SELECTOR = "[.#][A-Za-z_][\\w-]*";
-const CSS_ATTRIBUTE_WITH_VALUE = "\\[[^\\]\\s=]+\\s*(?:[~|^$*]?=)\\s*(?:\"[^\"]*\"|'[^']*'|[^\\]\\s]+)\\]";
-const CSS_ATTRIBUTE_PRESENCE = "\\[[A-Za-z_][\\w:-]*\\]";
-const CSS_ATTRIBUTE_SELECTOR = `(?:${CSS_ATTRIBUTE_WITH_VALUE}|${CSS_ATTRIBUTE_PRESENCE})`;
-const CSS_STRUCTURAL_SELECTOR_PART = `(?:${CSS_CLASS_OR_ID_SELECTOR}|${CSS_ATTRIBUTE_SELECTOR})`;
-const CSS_COMPOUND_SELECTOR = new RegExp(`^(?:${CSS_TYPE_SELECTOR})?${CSS_STRUCTURAL_SELECTOR_PART}+$`);
-const CSS_SIMPLE_SELECTOR = `(?:${CSS_TYPE_SELECTOR}|(?:${CSS_TYPE_SELECTOR})?${CSS_STRUCTURAL_SELECTOR_PART}+)`;
-const CSS_SELECTOR_SEQUENCE = new RegExp(`^${CSS_SIMPLE_SELECTOR}(?:\\s*(?:[>+~]|\\s)\\s*${CSS_SIMPLE_SELECTOR})+$`);
-const CSS_WHITESPACE_SEQUENCE_STRUCTURE = new RegExp(`(?:${CSS_CLASS_OR_ID_SELECTOR}|${CSS_ATTRIBUTE_WITH_VALUE})`);
-const CSS_EXPLICIT_COMBINATOR = /[>+~]/;
+const HTML_TYPE_SELECTORS = new Set([
+  "a",
+  "article",
+  "aside",
+  "body",
+  "button",
+  "canvas",
+  "dialog",
+  "div",
+  "fieldset",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "html",
+  "iframe",
+  "img",
+  "input",
+  "label",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "option",
+  "p",
+  "section",
+  "select",
+  "span",
+  "table",
+  "tbody",
+  "td",
+  "textarea",
+  "th",
+  "thead",
+  "tr",
+  "ul"
+]);
+
+function isKnownCssTypeSelector(value: string): boolean {
+  return value === "*" || value.includes("-") || HTML_TYPE_SELECTORS.has(value.toLowerCase());
+}
+
+function readCssTypeSelector(value: string, start: number): { end: number; isKnown: boolean } | null {
+  const match = /^(?:[A-Za-z][\w-]*|\*)/.exec(value.slice(start));
+  if (!match) return null;
+  return { end: start + match[0].length, isKnown: isKnownCssTypeSelector(match[0]) };
+}
+
+function readCssStructuralSelectorPart(value: string, start: number): number | null {
+  const rest = value.slice(start);
+  const classOrId = /^[.#][A-Za-z_][\w-]*/.exec(rest);
+  if (classOrId) return start + classOrId[0].length;
+
+  const attribute = /^\[[A-Za-z_][\w:-]*(?:\s*(?:[~|^$*]?=)\s*(?:"[^"]*"|'[^']*'|[^\]\s]+))?\]/.exec(rest);
+  if (attribute) return start + attribute[0].length;
+
+  return null;
+}
+
+function readCssCompoundSelector(value: string, start: number): { end: number; hasStructuralPart: boolean } | null {
+  let cursor = start;
+  const type = readCssTypeSelector(value, cursor);
+  if (type) {
+    cursor = type.end;
+  }
+
+  let hasStructuralPart = false;
+  for (;;) {
+    const next = readCssStructuralSelectorPart(value, cursor);
+    if (next === null) break;
+    hasStructuralPart = true;
+    cursor = next;
+  }
+
+  if (cursor === start) return null;
+  if (type && !type.isKnown) return null;
+  return { end: cursor, hasStructuralPart };
+}
+
+function readCssSelectorSeparator(value: string, start: number): number | null {
+  let cursor = start;
+  let sawWhitespace = false;
+  while (/\s/.test(value[cursor] ?? "")) {
+    sawWhitespace = true;
+    cursor += 1;
+  }
+
+  if (/[>+~]/.test(value[cursor] ?? "")) {
+    cursor += 1;
+    while (/\s/.test(value[cursor] ?? "")) {
+      cursor += 1;
+    }
+    return cursor;
+  }
+
+  return sawWhitespace ? cursor : null;
+}
+
+function isCssSelectorSequence(value: string): boolean {
+  const first = readCssCompoundSelector(value, 0);
+  if (!first) return false;
+
+  let cursor = first.end;
+  let sawSeparator = false;
+  let hasStructuralPart = first.hasStructuralPart;
+
+  while (cursor < value.length) {
+    const afterSeparator = readCssSelectorSeparator(value, cursor);
+    if (afterSeparator === null) return false;
+
+    const next = readCssCompoundSelector(value, afterSeparator);
+    if (!next) return false;
+
+    sawSeparator = true;
+    hasStructuralPart = hasStructuralPart || next.hasStructuralPart;
+    cursor = next.end;
+  }
+
+  return sawSeparator && hasStructuralPart;
+}
 
 // A visibility value is treated as a selector only when it has a clear
-// structural signature: a leading class/id/attribute token, an attribute
-// selector bracket, compound CSS token, or explicit Playwright engine prefix
-// (incl. `//` xpath).
+// structural signature: a leading class/id/attribute token, a supported CSS
+// compound/sequence, or explicit Playwright engine prefix (incl. `//` xpath).
 // Everything else — including prose that merely contains punctuation such as
 // "name:" or a sentence ending in "." — is matched as text, so assertions read
 // the way they are written. For exotic selectors (pseudo-classes), use an
@@ -361,19 +477,15 @@ export function looksLikeSelector(value: string): boolean {
   if (trimmed.length === 0) return false;
   if (SELECTOR_ENGINE_PREFIX.test(trimmed) || trimmed.startsWith("//")) return true;
   if (/^[.#]/.test(trimmed)) return true; // leading class or id selector
-  if (CSS_COMPOUND_SELECTOR.test(trimmed)) return true;
-  if (
-    CSS_SELECTOR_SEQUENCE.test(trimmed) &&
-    (CSS_EXPLICIT_COMBINATOR.test(trimmed) || CSS_WHITESPACE_SEQUENCE_STRUCTURE.test(trimmed))
-  ) {
-    return true;
-  }
+  const compound = readCssCompoundSelector(trimmed, 0);
+  if (compound?.end === trimmed.length && compound.hasStructuralPart) return true;
+  if (isCssSelectorSequence(trimmed)) return true;
   return false;
 }
 
 export function toVisibilitySelector(value: string): string {
   if (looksLikeSelector(value)) return value;
-  return `text=${escapeForText(value)}`;
+  return textContainsSelector(value);
 }
 
 async function runInlineAssert(

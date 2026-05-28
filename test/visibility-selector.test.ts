@@ -16,6 +16,8 @@ describe("toVisibilitySelector — prose is matched as text", () => {
     "Are you sure?",
     "Save & exit",
     "Use [beta] mode",
+    "example.com",
+    "README.md",
     "Dashboard"
   ];
 
