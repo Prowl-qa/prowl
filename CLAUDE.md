@@ -24,6 +24,22 @@ Every feature or bug fix must include:
 
 Work is not considered complete until all four items are done.
 
+## Release Configuration
+
+Project-specific details for the `release-prep-npm` skill. The generic workflow lives in the skill; the specifics for this repo are here.
+
+- **Package**: `prowlqa` (public, npm). License Apache-2.0.
+- **Publish mode**: **CI tag-triggered**. `.github/workflows/publish.yml` runs on pushed tags matching `v*`. It runs `npm ci` → build → lint → test → `npm publish --provenance --access public`, then extracts release notes and creates a GitHub Release. **Do not run `npm publish` locally** — push the tag and let CI publish.
+- **Release notes source**: the workflow extracts the section under `## [<version>]` in `CHANGELOG.md` (version = tag without the `v`). The heading must exist and the section must be non-empty or the release job fails. So before tagging: rename `## [Unreleased]` → `## [x.y.z] - YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it.
+- **Version source of truth**: `package.json`. The CLI reports its version via `CLI_VERSION` in `src/cli/program.ts`, which reads `package.json` — no hardcoded version to update.
+- **Bump command**: `npm version <x.y.z> --no-git-tag-version` (updates `package.json` + `package-lock.json`; we own the commit/tag separately).
+- **Branch policy**: never commit the bump directly to `main`. Use a `release-vX.Y.Z` branch → PR → merge, then tag from `main`. (PRs are created by the user, not the agent.)
+- **Tag step (after the bump is merged to `main`)**: `git tag vX.Y.Z && git push origin vX.Y.Z` — this triggers the publish workflow.
+- **Tarball contents** (`files` in `package.json`): `dist`, `examples`, `LICENSE` (+ `README.md`). Verify with `npm pack --dry-run` — never ship `src/` or `test/`, never omit `dist/`.
+- **npm version-history quirk**: an orphaned `1.0.0` exists on npm, but `latest` tracks the `0.1.x` line. Keep releasing in the `0.1.x`/`0.x` line so `latest` advances correctly; do not assume the next version follows `1.0.0`.
+- **Downstream — Homebrew**: the README advertises `brew tap prowl-qa/tap && brew install prowlqa`. The publish workflow does **not** update the tap, so the Homebrew formula needs a manual `version` + `sha256` bump in the tap repo after publishing (sha256 of the published tarball: `npm view prowlqa dist.tarball`, download, `shasum -a 256`).
+- **Downstream — docs/web**: per Cross-Repo Guidelines, update `prowl-docs` for new commands/step types and `prowl-web` for major feature descriptions.
+
 ## ProwlQA Ecosystem
 
 **GitHub Org**: [Prowl-qa](https://github.com/Prowl-qa)
