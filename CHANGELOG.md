@@ -4,6 +4,8 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-28
+
 ### Added
 - `copyText` step type: extract text content from an element and store as a runtime variable for use in subsequent steps (P4-004)
 - `waitForDownload` step type: wait for a file download event with optional filename assertion and custom timeout, saves downloaded file to run artifacts (P4-009)
