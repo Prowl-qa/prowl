@@ -45,7 +45,9 @@
   "files": [
     "dist",
     "examples",
-    "LICENSE"
+    "LICENSE",
+    "README.md",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=20.0.0"
