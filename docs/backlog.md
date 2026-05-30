@@ -69,26 +69,6 @@
 - Config option: `reliability.flakyThreshold` (default: 0.3 = 30% oscillation rate)
 - Requires P7-001 (run history) as a prerequisite
 
-{PROWL-039} **P5-011: Configurable Bug-Log Destination (path + config-level opt-out)**
-   Automated bug-logging from `run_suite` (P5-009) always writes to `<projectRoot>/docs/backlog.md` and `docs/resolved.md` — the `docs/` location is hardcoded in `updateBacklogFromSuite` (`src/backlog/index.ts`). The destination is only overridable through the library options (`backlogPath`/`resolvedPath`/`projectRoot`); MCP and CLI/config users are locked to `docs/`. For commercial use, customers should be able to choose where these logs land (or disable them) via `config.yml`, not only through a custom Node integration.
-
-**Found during**: Docs review of the MCP server page (2026-05-29)
-**Acceptance Criteria**:
-- Add a `bugLog` block to the config schema, Zod-validated:
-  - `bugLog.enabled` (boolean, default `true`)
-  - `bugLog.backlogPath` (string, default `"docs/backlog.md"`)
-  - `bugLog.resolvedPath` (string, default `"docs/resolved.md"`)
-- `runSuiteTool` reads `config.bugLog` and passes `backlogPath`/`resolvedPath` through to `updateBacklogFromSuite`.
-- Relative config paths resolve against the **project root** (not the server's cwd), so MCP multi-project mode (P5-010) targets the correct repo.
-- `bugLog.enabled: false` skips logging entirely; the per-call MCP `logBugs` argument overrides config — precedence `args.logBugs ?? config.bugLog.enabled ?? true`.
-- Optional: expose `backlogPath`/`resolvedPath` as `run_suite` tool arguments for per-call override.
-- The `run_suite` response `bugs.backlogPath` reflects the resolved destination.
-- Decide and document `resolvedPath` behavior when only `backlogPath` is set (default alongside `backlogPath`, or require both).
-- Directory auto-creation is already handled (`fs.mkdirSync(path.dirname(backlogPath), { recursive: true })` in `updateBacklogFromSuite`).
-- Schema validation + unit tests: config parsing, path resolution in single- and multi-project modes, enabled/opt-out precedence.
-- Update docs (MCP server page + agents library page) once shipped.
-- Follow-up to P5-009 (automated bug-logging) and P5-010 (multi-project registry).
-
 ## Medium Priority
 
 {PROWL-011} **LEGAL-002: Add Dependency License Audit to CI**
