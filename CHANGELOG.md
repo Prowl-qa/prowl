@@ -4,6 +4,8 @@ All notable changes to ProwlQA will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-29
+
 ### Added
 - Configurable bug-log destination via `config.yml`: a `bugLog` block controls automated bug-logging — `bugLog.enabled` (default `true`), `bugLog.backlogPath` (default `docs/backlog.md`), and `bugLog.resolvedPath` (default `docs/resolved.md`). Paths resolve against the project root so MCP multi-project mode writes into the correct repo; the `run_suite` `logBugs` argument still overrides config (precedence: `logBugs` arg → `bugLog.enabled` → on). When only `backlogPath` is set, `resolvedPath` defaults to a sibling `resolved.md` (P5-011)
 
