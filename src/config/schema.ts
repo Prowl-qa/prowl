@@ -58,6 +58,14 @@ export const configSchema = z
       .object({
         maxRuns: z.number().int().positive().optional()
       })
+      .optional(),
+    bugLog: z
+      .object({
+        enabled: z.boolean().optional(),
+        backlogPath: z.string().min(1).optional(),
+        resolvedPath: z.string().min(1).optional()
+      })
+      .strict()
       .optional()
   })
   .strict();

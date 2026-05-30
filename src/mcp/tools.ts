@@ -56,7 +56,7 @@ export async function runSuiteTool(
   args: RunSuiteToolArgs = {},
   options: RunSuiteToolOptions = {}
 ): Promise<RunSuiteToolResult> {
-  const { configPath: resolvedConfigPath, configDir } = loadConfig(options.configPath);
+  const { configPath: resolvedConfigPath, configDir, config } = loadConfig(options.configPath);
   const projectRoot = options.projectRoot ?? path.dirname(configDir);
   const suite = await runSuite({
     configPath: resolvedConfigPath,
@@ -65,9 +65,24 @@ export async function runSuiteTool(
     parallel: args.parallel
   });
 
-  const logBugs = args.logBugs ?? true;
+  // Precedence: a per-call logBugs arg wins, then config.bugLog.enabled, else on by default.
+  const bugLogCfg = config.bugLog ?? {};
+  const logBugs = args.logBugs ?? bugLogCfg.enabled ?? true;
+
+  // Config paths resolve against the project root (not the server cwd) so MCP
+  // multi-project mode writes into the correct repo. When only backlogPath is set,
+  // resolvedPath defaults to a sibling resolved.md so the pair stays together.
+  const backlogPath = bugLogCfg.backlogPath
+    ? path.resolve(projectRoot, bugLogCfg.backlogPath)
+    : undefined;
+  const resolvedPath = bugLogCfg.resolvedPath
+    ? path.resolve(projectRoot, bugLogCfg.resolvedPath)
+    : backlogPath
+      ? path.join(path.dirname(backlogPath), "resolved.md")
+      : undefined;
+
   const bugs = logBugs
-    ? updateBacklogFromSuite(suite, { projectRoot })
+    ? updateBacklogFromSuite(suite, { projectRoot, backlogPath, resolvedPath })
     : { created: [], regressions: [], skipped: [], backlogPath: null };
 
   const { status, totalHunts, passed, failed, skipped } = suite.result;
