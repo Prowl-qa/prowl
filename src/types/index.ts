@@ -45,6 +45,13 @@ export type Config = {
   history: {
     maxRuns: number;
   };
+  bugLog?: BugLogConfig;
+};
+
+export type BugLogConfig = {
+  enabled?: boolean;
+  backlogPath?: string;
+  resolvedPath?: string;
 };
 
 export type HistoryEntry = {

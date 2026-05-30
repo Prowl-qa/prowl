@@ -65,7 +65,11 @@ describe("runSuiteTool", () => {
       expect.objectContaining({ configPath: "/proj/.prowlqa/config.yml", includeTags: ["smoke"], parallel: 2 })
     );
     expect(mockUpdateBacklog).toHaveBeenCalledTimes(1);
-    expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, { projectRoot: "/proj" });
+    expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, {
+      projectRoot: "/proj",
+      backlogPath: undefined,
+      resolvedPath: undefined
+    });
     expect(result).toMatchObject({
       status: "fail",
       totalHunts: 2,
