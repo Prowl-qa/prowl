@@ -46,6 +46,12 @@ export type Config = {
     maxRuns: number;
   };
   bugLog?: BugLogConfig;
+  tracing?: TracingConfig;
+};
+
+export type TracingConfig = {
+  /** Request header carrying the distributed-trace id (default "traceparent"). */
+  header?: string;
 };
 
 export type BugLogConfig = {
@@ -214,6 +220,13 @@ export type RunArtifacts = {
   junit?: string;
 };
 
+export type TraceCorrelation = {
+  url: string;
+  status: number;
+  traceId: string;
+  header: string;
+};
+
 export type RunResult = {
   status: "pass" | "fail";
   exitCode: 0 | 1;
@@ -224,6 +237,7 @@ export type RunResult = {
   steps: StepResult[];
   assertions: AssertionResult[];
   artifacts: RunArtifacts;
+  traceCorrelations?: TraceCorrelation[];
 };
 
 export type CiHuntResult = {

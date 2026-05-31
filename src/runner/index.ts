@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AssertionResult, BrowserChannel, RunResult, Step, StepResult } from "../types/index.js";
+import type { AssertionResult, BrowserChannel, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { launchBrowser, closeBrowser } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
+import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
 import { appendEntry as appendHistoryEntry } from "./history.js";
@@ -49,6 +50,7 @@ function buildRunResult(options: {
   steps: StepResult[];
   assertions: AssertionResult[];
   artifacts: RunResult["artifacts"];
+  traceCorrelations?: TraceCorrelation[];
 }): RunResult {
   return {
     status: options.status,
@@ -59,7 +61,11 @@ function buildRunResult(options: {
     targetUrl: options.targetUrl,
     steps: options.steps,
     assertions: options.assertions,
-    artifacts: options.artifacts
+    artifacts: options.artifacts,
+    // Omit entirely when there are no correlations, so passing/clean runs stay tidy.
+    ...(options.traceCorrelations && options.traceCorrelations.length > 0
+      ? { traceCorrelations: options.traceCorrelations }
+      : {})
   };
 }
 
@@ -118,6 +124,8 @@ async function executeHuntAttempt(
   try {
     const consoleEntries: ConsoleEntry[] = [];
     const networkEntries: NetworkEntry[] = [];
+    const traceCorrelations: TraceCorrelation[] = [];
+    const traceHeader = config.tracing?.header ?? DEFAULT_TRACE_HEADER;
 
     session.page.on("console", (message) => {
       consoleEntries.push({
@@ -130,6 +138,7 @@ async function executeHuntAttempt(
     session.page.on("response", (response) => {
       if (response.status() >= 400) {
         networkEntries.push({ url: response.url(), status: response.status() });
+        captureTraceCorrelation(response, traceHeader, traceCorrelations);
       }
     });
 
@@ -214,7 +223,8 @@ async function executeHuntAttempt(
       targetUrl,
       steps: stepResults,
       assertions: assertionResults,
-      artifacts
+      artifacts,
+      traceCorrelations
     });
 
     result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
