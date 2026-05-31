@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import type { CiHuntResult, CiResult, CiStatus } from "../types/index.js";
+import type { CiFlakyHunt, CiHuntResult, CiResult, CiStatus } from "../types/index.js";
 
 export type CiCounts = {
   passed: number;
@@ -25,7 +25,11 @@ export function resolveCiStatus(results: CiHuntResult[]): CiStatus {
   return "all-skipped";
 }
 
-export function printCiSummary(results: CiHuntResult[], totalDurationMs: number): void {
+export function printCiSummary(
+  results: CiHuntResult[],
+  totalDurationMs: number,
+  flaky: CiFlakyHunt[] = []
+): void {
   const { passed, failed, skipped } = countCiResults(results);
 
   const lineWidth = 45;
@@ -48,9 +52,22 @@ export function printCiSummary(results: CiHuntResult[], totalDurationMs: number)
   parts.push(chalk.gray(`(${totalDurationMs}ms)`));
 
   console.log(`  ${parts.join("  ")}`);
+
+  if (flaky.length > 0) {
+    console.log(`\n  ${chalk.yellow("Flaky hunts")} (oscillating pass/fail):`);
+    for (const entry of flaky) {
+      console.log(`  ${chalk.yellow("~")} ${entry.hunt} ${chalk.gray(`(score ${entry.score.toFixed(2)})`)}`);
+    }
+  }
 }
 
-export function writeCiResult(ciRunDir: string, results: CiHuntResult[], startedAt: string, totalDurationMs: number): string {
+export function writeCiResult(
+  ciRunDir: string,
+  results: CiHuntResult[],
+  startedAt: string,
+  totalDurationMs: number,
+  flaky: CiFlakyHunt[] = []
+): string {
   const { passed, failed, skipped } = countCiResults(results);
 
   const ciResult: CiResult = {
@@ -61,7 +78,8 @@ export function writeCiResult(ciRunDir: string, results: CiHuntResult[], started
     passed,
     failed,
     skipped,
-    hunts: results
+    hunts: results,
+    ...(flaky.length > 0 ? { flaky } : {})
   };
 
   fs.mkdirSync(ciRunDir, { recursive: true });

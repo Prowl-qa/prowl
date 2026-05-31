@@ -50,3 +50,21 @@ describe("configSchema — tracing block (OBS-001)", () => {
     expect(() => configSchema.parse({ ...base, tracing: { header: "" } })).toThrow();
   });
 });
+
+describe("configSchema — reliability block (PROWL-032)", () => {
+  it("accepts a flakyThreshold in [0,1]", () => {
+    expect(configSchema.parse({ ...base, reliability: { flakyThreshold: 0.5 } }).reliability).toEqual({
+      flakyThreshold: 0.5
+    });
+  });
+
+  it("accepts config with no reliability block", () => {
+    expect(configSchema.parse({ ...base }).reliability).toBeUndefined();
+  });
+
+  it("rejects out-of-range thresholds and unknown keys (strict)", () => {
+    expect(() => configSchema.parse({ ...base, reliability: { flakyThreshold: 1.5 } })).toThrow();
+    expect(() => configSchema.parse({ ...base, reliability: { flakyThreshold: -0.1 } })).toThrow();
+    expect(() => configSchema.parse({ ...base, reliability: { bogus: 1 } })).toThrow();
+  });
+});

@@ -5,6 +5,7 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Flake detection & scoring (P7-002): new `prowlqa flaky` command ranks hunts by flake score — the share of consecutive runs where pass/fail status flipped, computed from `.prowlqa/history.json`. Supports `--json`, `--limit <n>` (score only the most recent N runs), and `--threshold <0-1>`. Configurable via `reliability.flakyThreshold` in `config.yml` (default `0.3`). `prowlqa ci` now flags flaky hunts that ran in the suite, both in the CI summary and as a `flaky` array in `ci-result.json`. Library exports: `computeFlakeScore`, `rankFlaky`, `FlakyScore` (PROWL-032)
 - Trace-ID correlation (OBS-001): when a hunt hits a failing request
   (status >= 400), ProwlQA reads the response's `traceparent` header,
   extracts the W3C trace id, and surfaces it in:

@@ -10,6 +10,7 @@ import { buildUpdateBaselinesCommand } from "./commands/update-baselines.js";
 import { buildAnalyzeCommand } from "./commands/analyze.js";
 import { buildGenerateCommand } from "./commands/generate.js";
 import { buildHistoryCommand } from "./commands/history.js";
+import { buildFlakyCommand } from "./commands/flaky.js";
 import { buildMcpCommand } from "./commands/mcp.js";
 
 export const CLI_VERSION = pkg.version;
@@ -32,6 +33,7 @@ export function buildProgram(): Command {
   program.addCommand(buildAnalyzeCommand());
   program.addCommand(buildGenerateCommand());
   program.addCommand(buildHistoryCommand());
+  program.addCommand(buildFlakyCommand());
   program.addCommand(buildMcpCommand());
 
   return program;
