@@ -616,7 +616,7 @@ npx playwright show-trace .prowlqa/runs/2026-02-09_10-30-45/trace.zip
 
 ### Trace Correlation (link failures to your app's traces)
 
-When a hunt hits a failing request (HTTP status ≥ 400), ProwlQA reads the request's
+When a hunt hits a failing request (HTTP status ≥ 400), ProwlQA reads the response's
 `traceparent` header, extracts the W3C trace ID, and records it. This lets you pivot
 straight from a hunt failure to the matching distributed trace in your own
 observability stack (Datadog, Grafana/Tempo, Jaeger, etc.).

@@ -50,7 +50,7 @@ export type Config = {
 };
 
 export type TracingConfig = {
-  /** Request header carrying the distributed-trace id (default "traceparent"). */
+  /** Response header carrying the distributed-trace id (default "traceparent"). */
   header?: string;
 };
 

@@ -87,6 +87,7 @@ async function executeHuntAttempt(
   interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
   redactedFillSteps: Set<string>,
   randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
+  redactionValues: readonly string[],
   targetUrl: string,
   allowedDomains: string[]
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
@@ -138,7 +139,7 @@ async function executeHuntAttempt(
     session.page.on("response", (response) => {
       if (response.status() >= 400) {
         networkEntries.push({ url: response.url(), status: response.status() });
-        captureTraceCorrelation(response, traceHeader, traceCorrelations);
+        captureTraceCorrelation(response, traceHeader, traceCorrelations, redactionValues);
       }
     });
 
@@ -244,7 +245,12 @@ export async function runHunt(
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
   const { config, configDir } = loadConfig(options.configPath);
   const hunt = loadHunt(options.huntName, configDir);
-  const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(
+  const {
+    hunt: interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    redactionValues = []
+  } = interpolateHunt(
     hunt,
     process.env
   );
@@ -274,6 +280,7 @@ export async function runHunt(
       interpolatedHunt,
       redactedFillSteps,
       randomVars,
+      redactionValues,
       targetUrl,
       allowedDomains
     );

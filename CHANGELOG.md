@@ -5,7 +5,17 @@ All notable changes to ProwlQA will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- Trace-ID correlation (OBS-001): when a hunt hits a failing request (status >= 400), ProwlQA reads the request's `traceparent` header, extracts the W3C trace id, and surfaces it in `result.json` (`traceCorrelations`) and a "Trace Correlations" section in `summary.md` — so you can pivot from a hunt failure to the matching distributed trace in your own APM (Datadog, Grafana/Tempo, Jaeger, etc.). The header is configurable via `tracing.header` in `config.yml` (default `traceparent`); no output when the app emits no trace headers. ProwlQA does not generate or propagate its own spans (PROWL-047)
+- Trace-ID correlation (OBS-001): when a hunt hits a failing request
+  (status >= 400), ProwlQA reads the response's `traceparent` header,
+  extracts the W3C trace id, and surfaces it in:
+  - `result.json` under `traceCorrelations`
+  - `summary.md` under a "Trace Correlations" section
+
+  This lets you pivot from a hunt failure to the matching distributed trace in
+  your own APM (Datadog, Grafana/Tempo, Jaeger, etc.). The header is
+  configurable via `tracing.header` in `config.yml` (default `traceparent`); no
+  output when the app emits no trace headers. ProwlQA does not generate or
+  propagate its own spans (PROWL-047)
 
 ## [0.1.2] - 2026-05-29
 

@@ -44,7 +44,7 @@ export function writeSummary(runDir: string, result: RunResult): string {
     lines.push("## Trace Correlations");
     for (const correlation of result.traceCorrelations) {
       lines.push(
-        `- [${correlation.status}] ${escapeMd(correlation.url)} traceId=${correlation.traceId}`
+        `- [${correlation.status}] ${escapeMd(correlation.url)} traceId=${escapeMd(correlation.traceId)}`
       );
     }
   }

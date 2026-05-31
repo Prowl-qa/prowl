@@ -36,16 +36,16 @@ describe("parseTraceId", () => {
   });
 });
 
-function fakeResponse(url: string, status: number, requestHeaders: Record<string, string>) {
+function fakeResponse(url: string, status: number, responseHeaders: Record<string, string>) {
   return {
     url: () => url,
     status: () => status,
-    request: () => ({ headers: () => requestHeaders })
+    headers: () => responseHeaders
   };
 }
 
 describe("captureTraceCorrelation", () => {
-  it("records a correlation when the request carries the trace header", () => {
+  it("records a correlation when the response carries the trace header", () => {
     const sink: TraceCorrelation[] = [];
     captureTraceCorrelation(
       fakeResponse("https://app.test/api/checkout", 500, {
@@ -85,6 +85,19 @@ describe("captureTraceCorrelation", () => {
       sink
     );
     expect(sink).toEqual([{ url: "https://app.test/y", status: 503, traceId: "req-abc-123", header: "req-abc-123" }]);
+  });
+
+  it("redacts interpolated values before storing the URL", () => {
+    const sink: TraceCorrelation[] = [];
+    captureTraceCorrelation(
+      fakeResponse("https://app.test/reset?token=secret-token", 500, {
+        traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"
+      }),
+      "traceparent",
+      sink,
+      ["secret-token"]
+    );
+    expect(sink[0].url).toBe("https://app.test/reset?token=[REDACTED]");
   });
 
   it("is a no-op when the trace header is absent", () => {

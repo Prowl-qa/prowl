@@ -5,6 +5,7 @@ export type InterpolatedHunt = {
   hunt: Hunt;
   redactedFillSteps: Set<string>;
   randomVars: Record<string, string>;
+  redactionValues: string[];
 };
 
 export type InterpolationResult = {
@@ -13,6 +14,30 @@ export type InterpolationResult = {
 };
 
 const VAR_PATTERN = /\{\{([A-Z0-9_]+)\}\}/g;
+
+function collectInterpolatedValues(input: unknown, vars: Record<string, string>, values: Set<string>): void {
+  if (typeof input === "string") {
+    for (const match of input.matchAll(VAR_PATTERN)) {
+      const varValue = vars[match[1]];
+      if (varValue) values.add(varValue);
+    }
+    return;
+  }
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      collectInterpolatedValues(item, vars, values);
+    }
+    return;
+  }
+
+  if (input && typeof input === "object") {
+    for (const [key, value] of Object.entries(input)) {
+      collectInterpolatedValues(key, vars, values);
+      collectInterpolatedValues(value, vars, values);
+    }
+  }
+}
 
 export function interpolateString(
   input: string,
@@ -393,6 +418,10 @@ export function interpolateHunt(
   }
 
   const vars = { ...baseVars, ...resolvedHuntVars };
+  const redactionValues = new Set<string>();
+  collectInterpolatedValues(hunt.steps, vars, redactionValues);
+  collectInterpolatedValues(hunt.assertions, vars, redactionValues);
+
   const steps = hunt.steps.map((step, index) =>
     interpolateStep(step, vars, `${index}`, redactedFillSteps)
   );
@@ -404,6 +433,7 @@ export function interpolateHunt(
       assertions
     },
     redactedFillSteps,
-    randomVars
+    randomVars,
+    redactionValues: [...redactionValues]
   };
 }
