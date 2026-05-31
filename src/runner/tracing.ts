@@ -25,12 +25,8 @@ export function parseTraceId(headerValue: string): string | undefined {
 }
 
 function readHeader(headers: Record<string, string>, headerName: string): string | undefined {
-  const direct = headers[headerName.toLowerCase()];
-  if (direct !== undefined) return direct;
-
   const normalizedName = headerName.toLowerCase();
-  const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === normalizedName);
-  return entry?.[1];
+  return headers[normalizedName];
 }
 
 function redactValues(text: string, values: readonly string[]): string {
