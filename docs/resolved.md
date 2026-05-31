@@ -1,7 +1,7 @@
 # Prowl (CLI) - Resolved Items
 
 ## ~~PROWL-032 / P7-002: Flake Detection and Scoring~~
-**Resolved**: 2026-05-31 (branch flaky-detection, commit e7a1f09)
+**Resolved**: 2026-05-31 (branch flaky-detection, commit b24b12b)
 **Description**: Added `prowlqa flaky`, which ranks hunts by flake score — the fraction of consecutive runs where pass/fail status flipped (oscillation rate), computed from the existing `.prowlqa/history.json` (P7-001 prerequisite, already shipped). New `src/runner/flaky.ts` (`computeFlakeScore` over a hunt's history; `rankFlaky` ranks all hunts highest-first). The command supports `--json`, `--limit <n>` (score only the most recent N runs), and `--threshold <0-1>`; threshold precedence is flag → `config.reliability.flakyThreshold` → default 0.3. `reliability.flakyThreshold` added to the config schema (Zod-validated, strict). `prowlqa ci` now flags flaky hunts that actually ran in the suite — in the CI summary and as a `flaky` array in `ci-result.json` (omitted when none). Exported `computeFlakeScore`/`rankFlaky`/`FlakyScore` from the library API. Covered by scoring, command, and config-schema unit tests; verified end-to-end against a sample history. 558 tests pass.
 
 ## ~~PROWL-047 / OBS-001: Correlate Hunt Failures with Application Trace IDs~~
