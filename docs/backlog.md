@@ -331,6 +331,73 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
+## CI/CD & OpenShift (Epic)
+
+Make ProwlQA usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowlqa ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.
+
+{PROWL-042} **CICD-001: Publish a `prowlqa` container image**
+   *As a platform/devops user, I want a ready-to-run ProwlQA container so I can run hunts in CI without installing Node, the CLI, and Playwright browsers myself.*
+   Foundation for the rest of the epic — both generic CI and OpenShift need a prebuilt image bundling Node + ProwlQA + Chromium + Playwright system libs.
+
+**Found during**: CI/CD + OpenShift feasibility review (2026-05-30, Red Hat SA conversation)
+**Acceptance Criteria**:
+- Dockerfile: Node 20 base, ProwlQA installed (global or built `dist`), Chromium + Playwright system dependencies, pinned Playwright/Chromium versions
+- `docker run --rm <image> prowlqa ci --url <target> --json` runs a suite end-to-end and exits with the correct code (0/1/2)
+- **Non-root UID run check**: image runs and Chromium launches when started as an arbitrary non-root user (de-risks OpenShift's restricted SCC early)
+- Published to a registry (GHCR and/or Docker Hub) with documented tags
+- Shared dependency for CICD-003, CICD-004, CICD-005
+
+{PROWL-043} **CICD-002: Generic CI/CD usage docs + sample pipelines**
+   *As a developer, I want copy-paste CI examples so I can wire `prowlqa ci` in as a deploy gate without figuring out the plumbing.*
+   Documentation + samples only; no runtime change.
+
+**Found during**: CI/CD + OpenShift feasibility review (2026-05-30)
+**Acceptance Criteria**:
+- README + prowl-docs section: run `prowlqa ci` as a deploy go/no-go gate, framed as an acceptance/smoke layer (not a replacement for unit/integration tests)
+- Ready-to-copy GitHub Actions and GitLab CI examples using the CICD-001 image
+- Document how exit codes (0 pass / 1 fail / 2 no-hunts|all-skipped) gate the build
+- Document publishing `junit.xml` and `.prowlqa/runs/` artifacts from the pipeline
+- Document injecting `--url` (staging/preview targets) and secrets via `{{VAR}}` interpolation
+- Depends on CICD-001
+
+{PROWL-044} **CICD-003: Tekton Task + OpenShift Pipelines example**
+   *As an OpenShift user, I want a Tekton Task that runs ProwlQA so I can gate promotion on real browser acceptance checks.*
+
+**Found during**: CI/CD + OpenShift feasibility review (2026-05-30)
+**Acceptance Criteria**:
+- A Tekton `Task` (plus a sample `Pipeline`) that runs the CICD-001 image
+- Params for target URL and config path
+- Runs `prowlqa ci`; exits non-zero on failure to gate promotion
+- Stores artifacts (`.prowlqa/runs/`, junit.xml) to a workspace/PVC
+- Docs: "Run ProwlQA in OpenShift Pipelines"
+- Depends on CICD-001
+
+{PROWL-045} **CICD-004: OpenShift compatibility hardening + docs**
+   *As an enterprise OpenShift user, I want ProwlQA to run under the restricted SCC so it works in a locked-down cluster.*
+   The item that makes the enterprise claim real. **Confirmed gap:** `launchBrowser` (`src/browser/controller.ts:30-34`) calls `engine.launch({ headless, slowMo, channel })` with no `args`, so there is no `--no-sandbox` hook — Chromium under OpenShift's restricted SCC will likely need one. This is the only place in the epic that touches `src/`.
+
+**Found during**: CI/CD + OpenShift feasibility review (2026-05-30)
+**Acceptance Criteria**:
+- Image runs rootless / SCC `restricted-v2` compatible
+- Add a config/guardrail-gated browser launch-args option (e.g. opt-in `--no-sandbox`) — **opt-in only, never a default**, since it's a security trade-off; local `prowlqa run`/`ci` behavior unchanged
+- Document secrets / `auth-state.json` injection for pipeline use
+- Document artifact persistence (workspace/PVC)
+- Schema validation + unit tests for the new launch-args option
+- Depends on CICD-001
+
+{PROWL-046} **CICD-005: Enterprise productization (LARGE — do last)**
+   *As a Red Hat / enterprise customer, I want a certified, governed ProwlQA distribution integrated with the OpenShift Console.*
+   Captured per full-scope decision, but **do not start before CICD-001–004 ship** — building an Operator first is overkill (per the Red Hat SA's own advice). Will likely split into sub-items when picked up.
+
+**Found during**: CI/CD + OpenShift feasibility review (2026-05-30)
+**Acceptance Criteria** (high-level; to be decomposed later):
+- Operator or certified/operator-style distribution
+- OpenShift Console integration
+- Dashboards for run results/trends
+- Multi-project governance + RBAC/policy templates
+- Hosted report ingestion
+- Explicitly blocked on CICD-001 through CICD-004
+
 ## Completed
 
 Completed and resolved work lives in [`resolved.md`](./resolved.md).
