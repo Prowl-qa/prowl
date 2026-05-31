@@ -66,6 +66,12 @@ export const configSchema = z
         resolvedPath: z.string().min(1).optional()
       })
       .strict()
+      .optional(),
+    tracing: z
+      .object({
+        header: z.string().min(1).optional()
+      })
+      .strict()
       .optional()
   })
   .strict();

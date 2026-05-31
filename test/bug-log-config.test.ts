@@ -34,3 +34,19 @@ describe("configSchema — bugLog block", () => {
     expect(() => configSchema.parse({ ...base, bugLog: { backlogPath: "" } })).toThrow();
   });
 });
+
+describe("configSchema — tracing block (OBS-001)", () => {
+  it("accepts a tracing block with a custom header", () => {
+    const parsed = configSchema.parse({ ...base, tracing: { header: "x-request-id" } });
+    expect(parsed.tracing).toEqual({ header: "x-request-id" });
+  });
+
+  it("accepts config with no tracing block", () => {
+    expect(configSchema.parse({ ...base }).tracing).toBeUndefined();
+  });
+
+  it("rejects unknown keys and empty header (strict)", () => {
+    expect(() => configSchema.parse({ ...base, tracing: { header: "x", bogus: 1 } })).toThrow();
+    expect(() => configSchema.parse({ ...base, tracing: { header: "" } })).toThrow();
+  });
+});

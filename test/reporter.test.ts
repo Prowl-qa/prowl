@@ -158,6 +158,30 @@ describe("markdown escaping", () => {
   it("escapeMd escapes all markdown special characters", () => {
     expect(escapeMd("|`*_{}[]()#+\\-!")).toBe("\\|\\`\\*\\_\\{\\}\\[\\]\\(\\)\\#\\+\\\\\\-\\!");
   });
+
+  it("escapes trace correlation URLs and trace ids", () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-trace-summary-"));
+    try {
+      const result = makeResult({
+        traceCorrelations: [
+          {
+            url: "https://app.test/api?token=[REDACTED]",
+            status: 500,
+            traceId: "trace|id*with`chars",
+            header: "trace|id*with`chars"
+          }
+        ]
+      });
+
+      writeSummary(runDir, result);
+      const content = fs.readFileSync(path.join(runDir, "summary.md"), "utf-8");
+
+      expect(content).toContain("https://app.test/api?token=\\[REDACTED\\]");
+      expect(content).toContain("traceId=trace\\|id\\*with\\`chars");
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("writeResult content", () => {

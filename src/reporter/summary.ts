@@ -39,6 +39,16 @@ export function writeSummary(runDir: string, result: RunResult): string {
   for (const assertion of result.assertions) {
     lines.push(formatAssertion(assertion));
   }
+  if (result.traceCorrelations && result.traceCorrelations.length > 0) {
+    lines.push("");
+    lines.push("## Trace Correlations");
+    for (const correlation of result.traceCorrelations) {
+      lines.push(
+        `- [${correlation.status}] ${escapeMd(correlation.url)} traceId=${escapeMd(correlation.traceId)}`
+      );
+    }
+  }
+
   lines.push("");
   lines.push("## Artifacts");
   const artifacts = result.artifacts;

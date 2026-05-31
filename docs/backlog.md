@@ -331,20 +331,6 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
-{PROWL-047} **OBS-001: Correlate Hunt Failures with Application Trace IDs**
-   *As a developer triaging a failed hunt, I want the failing request's distributed-trace ID surfaced in the failure output, so I can jump straight to the corresponding trace in my own observability stack (Datadog, Grafana/Tempo, Jaeger, etc.).*
-   ProwlQA already captures rich browser-side diagnostics (Playwright `trace.zip`, `network.har`, `console.log`, screenshots). What it does NOT do is link a failure back to the **application's** distributed trace. This is a thin correlation bridge, NOT ProwlQA doing its own distributed tracing — it stays in scope as a QA tool while making failures actionable against existing APM tooling.
-
-**Found during**: Observability discussion (2026-05-31)
-**Acceptance Criteria**:
-- Capture the W3C `traceparent` (and/or `tracestate`) header of the failing request from the browser's network activity (already recorded in `network.har`)
-- Surface the extracted trace ID in failure output: `result.json`, the failure entry, and the summary report
-- Optional config to specify which header carries the trace id (default `traceparent`) for non-standard setups
-- Graceful no-op when the app emits no trace headers (no failure, no noise)
-- Document the feature and how to pivot from a hunt failure to an app trace
-- Out of scope: ProwlQA generating/propagating its own spans or acting as a tracing backend
-- Schema validation + unit tests
-
 ## CI/CD & OpenShift (Epic)
 
 Make ProwlQA usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowlqa ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.

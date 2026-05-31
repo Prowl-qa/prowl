@@ -54,6 +54,17 @@ describe("interpolateHunt", () => {
     expect(redactedFillSteps.has("1")).toBe(true);
   });
 
+  it("records interpolated values for output redaction", () => {
+    const hunt: Hunt = {
+      vars: { RESET_PATH: "/reset?token={{TEST_PASSWORD}}" },
+      steps: [{ navigate: "{{RESET_PATH}}" }]
+    };
+
+    const { redactionValues } = interpolateHunt(hunt, env);
+
+    expect(redactionValues).toContain("/reset?token=secret");
+  });
+
   it("interpolates hunt vars that reference env vars", () => {
     const hunt: Hunt = {
       vars: { EMAIL: "{{TEST_EMAIL}}" },
