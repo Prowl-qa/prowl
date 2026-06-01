@@ -15,6 +15,9 @@ function mockPage(locatorCounts: Record<string, number>) {
       first: vi.fn(() => locator),
       click: vi.fn(async () => undefined),
       fill: vi.fn(async () => undefined),
+      press: vi.fn(async () => undefined),
+      selectOption: vi.fn(async () => undefined),
+      setInputFiles: vi.fn(async () => undefined),
       hover: vi.fn(async () => undefined),
       scrollIntoViewIfNeeded: vi.fn(async () => undefined)
     };
@@ -22,6 +25,7 @@ function mockPage(locatorCounts: Record<string, number>) {
   };
   return {
     url: () => "http://localhost",
+    screenshot: vi.fn(async () => Buffer.from("")),
     locator: vi.fn((selector: string) => createLocator(locatorCounts[selector] ?? 1))
   };
 }
