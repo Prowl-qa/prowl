@@ -4,8 +4,10 @@ import { loadConfig, listHunts, loadHuntTags } from "../config/loader.js";
 import { writeCiResult, resolveCiStatus, countCiResults } from "../reporter/ci-summary.js";
 import { timestamp } from "../utils/timestamp.js";
 import { runWithConcurrency } from "../utils/concurrency.js";
-import type { CiFlakyHunt, CiHuntResult, CiResult, RunResult } from "../types/index.js";
+import type { CiFailureCluster, CiFlakyHunt, CiHuntResult, CiResult, RunResult } from "../types/index.js";
 import { rankFlaky, DEFAULT_FLAKY_THRESHOLD } from "./flaky.js";
+import { clusterFailures } from "./clustering.js";
+import { extractFailures } from "../backlog/index.js";
 
 export type SkipReason = "include" | "exclude";
 type SuiteHookResult = void | Promise<void>;
@@ -224,8 +226,14 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
     .filter((entry) => entry.flaky && ranThisSuite.has(entry.hunt))
     .map((entry) => ({ hunt: entry.hunt, score: entry.score }));
 
+  // Cluster failures from this suite by shared cause; surface only multi-hunt
+  // clusters (a single failing hunt is just that failure, not a "cluster").
+  const clusters: CiFailureCluster[] = clusterFailures(
+    extractFailures({ result: { hunts: results } as CiResult, resultPath: null })
+  ).filter((cluster) => cluster.count > 1);
+
   const ciRunDir = path.join(configDir, "runs", timestamp("ci"));
-  const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs, flaky);
+  const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs, flaky, clusters);
 
   const { passed, failed, skipped } = countCiResults(results);
 
@@ -239,7 +247,8 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
       failed,
       skipped,
       hunts: results,
-      ...(flaky.length > 0 ? { flaky } : {})
+      ...(flaky.length > 0 ? { flaky } : {}),
+      ...(clusters.length > 0 ? { clusters } : {})
     },
     resultPath
   };
