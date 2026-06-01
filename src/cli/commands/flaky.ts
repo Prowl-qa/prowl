@@ -97,5 +97,5 @@ function pad(value: string, width: number): string {
 
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replace(/\[[0-9;]*m/g, "");
+  return value.replace(/\x1b\[[0-9;]*m/g, "");
 }

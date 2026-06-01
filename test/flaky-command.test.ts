@@ -13,6 +13,11 @@ vi.mock("../src/runner/flaky.js", async (importOriginal) => {
 
 import { buildFlakyCommand } from "../src/cli/commands/flaky.js";
 
+function stripAnsi(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 describe("flaky command", () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
 
@@ -64,6 +69,26 @@ describe("flaky command", () => {
       try { JSON.parse(c[0]); return true; } catch { return false; }
     });
     expect(JSON.parse(jsonCall![0])).toEqual(scores);
+  });
+
+  it("renders a non-JSON table with ranked scores", async () => {
+    mockRankFlaky.mockReturnValue([
+      { hunt: "checkout", score: 0.75, runs: 5, flaky: true },
+      { hunt: "login", score: 0.25, runs: 4, flaky: false }
+    ]);
+
+    await buildFlakyCommand().parseAsync(["node", "prowlqa"]);
+
+    const output = stripAnsi(logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n"));
+    expect(output).toContain("Flake scores");
+    expect(output).toContain("checkout");
+    expect(output).toContain("0.75");
+    expect(output).toContain("5");
+    expect(output).toContain("yes");
+    expect(output).toContain("login");
+    expect(output).toContain("0.25");
+    expect(output).toContain("4");
+    expect(output).toContain("no");
   });
 
   it("rejects an out-of-range --threshold", async () => {
