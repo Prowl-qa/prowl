@@ -17,21 +17,6 @@
 - Consider filing a trademark application in Classes 9 and 42 specifically for QA testing tools
 - Using "Prowl QA" or "prowlai" as the primary brand provides stronger differentiation
 
-{PROWL-023} **P5-005: Self-Healing Selectors**
-   When a selector fails, attempt to find the element using alternative strategies before failing the hunt.
-
-**Acceptance Criteria**:
-- On selector failure, capture page state and attempt alternatives:
-  1. Similar text content (fuzzy match)
-  2. Similar ARIA role/label
-  3. Nearby element with matching structure
-- If healed, log the original selector and the healed selector as a warning
-- Config option: `guardrails.selfHealing: true | false` (default: false)
-- Report includes healed selector suggestions for the user to update their hunt
-- Key selling point for long-term test maintenance
-
----
-
 {PROWL-024} **P6-001: VS Code Extension**
    VS Code extension for Prowl hunt authoring and execution.
 
