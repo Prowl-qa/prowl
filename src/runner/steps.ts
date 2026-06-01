@@ -12,6 +12,7 @@ import {
 import type { Step, StepResult } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
+import { healSelector } from "./healing.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
