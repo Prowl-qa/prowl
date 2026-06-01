@@ -93,6 +93,47 @@ function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): 
   }
 }
 
+/**
+ * Resolve the selector an explicit-selector action should operate on. Asserts it
+ * is allowed, then — when `guardrails.selfHealing` is on and the selector matches
+ * nothing — attempts to heal to an equivalent selector. A healed selector is also
+ * re-checked against the forbidden list. Returns the selector to use plus, when
+ * healing occurred, the original selector for reporting.
+ */
+async function resolveActionSelector(
+  context: StepExecutionContext,
+  selector: string
+): Promise<{ selector: string; healedFrom?: string }> {
+  assertAllowedSelector(selector, context.forbiddenSelectors);
+
+  if (!context.selfHealing) {
+    return { selector };
+  }
+
+  let matched = false;
+  try {
+    matched = (await context.page.locator(selector).count()) > 0;
+  } catch {
+    // Unparseable/odd selector — let the real action surface the error.
+    return { selector };
+  }
+  if (matched) {
+    return { selector };
+  }
+
+  const healed = await healSelector(context.page, selector, { enabled: true });
+  if (!healed) {
+    return { selector };
+  }
+
+  assertAllowedSelector(healed.selector, context.forbiddenSelectors);
+  console.warn(
+    `Self-healed selector: "${selector}" → "${healed.selector}" (${healed.strategy}). ` +
+      "Update your hunt to use a stable selector."
+  );
+  return { selector: healed.selector, healedFrom: healed.healedFrom };
+}
+
 function assertWithinMaxSteps(stepCount: number, maxSteps: number, huntName?: string): void {
   if (stepCount > maxSteps) {
     if (huntName) {
@@ -664,6 +705,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
         stepResult = { type: "navigate", status: "pass", durationMs: Date.now() - stepStart };
       } else if ("click" in step) {
         let selector: string;
+        let healedFrom: string | undefined;
         if (typeof step.click === "string") {
           selector = await clickByTextWithFallback(
             context.page,
@@ -671,24 +713,28 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
             context.forbiddenSelectors
           );
         } else {
-          assertAllowedSelector(step.click.selector, context.forbiddenSelectors);
-          await clickElement(context.page, step.click.selector);
-          selector = step.click.selector;
+          const resolved = await resolveActionSelector(context, step.click.selector);
+          await clickElement(context.page, resolved.selector);
+          selector = resolved.selector;
+          healedFrom = resolved.healedFrom;
         }
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "click",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector
+          selector,
+          ...(healedFrom ? { healedFrom } : {})
         };
       } else if ("fill" in step) {
         let selector: string;
         let value: string;
+        let healedFrom: string | undefined;
         if (isExplicitFillStep(step.fill)) {
-          assertAllowedSelector(step.fill.selector, context.forbiddenSelectors);
-          await fillElement(context.page, step.fill.selector, step.fill.value);
-          selector = step.fill.selector;
+          const resolved = await resolveActionSelector(context, step.fill.selector);
+          await fillElement(context.page, resolved.selector, step.fill.value);
+          selector = resolved.selector;
+          healedFrom = resolved.healedFrom;
           value = step.fill.value;
         } else {
           const [label, shorthandValue] = getSinglePair(step.fill, "fill");
@@ -706,7 +752,8 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           status: "pass",
           durationMs: Date.now() - stepStart,
           selector,
-          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : value
+          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : value,
+          ...(healedFrom ? { healedFrom } : {})
         };
       } else if ("type" in step) {
         assertAllowedSelector(":focus", context.forbiddenSelectors);
@@ -720,15 +767,16 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : step.type
         };
       } else if ("selectOption" in step) {
-        assertAllowedSelector(step.selectOption.selector, context.forbiddenSelectors);
-        await selectOption(context.page, step.selectOption.selector, step.selectOption.value);
+        const resolved = await resolveActionSelector(context, step.selectOption.selector);
+        await selectOption(context.page, resolved.selector, step.selectOption.value);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "selectOption",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.selectOption.selector,
-          value: step.selectOption.value
+          selector: resolved.selector,
+          value: step.selectOption.value,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
         };
       } else if ("select" in step) {
         const [label, value] = getSinglePair(step.select, "select");
@@ -755,21 +803,22 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: step.onDialog.action
         };
       } else if ("setInputFiles" in step) {
-        assertAllowedSelector(step.setInputFiles.selector, context.forbiddenSelectors);
+        const resolvedInput = await resolveActionSelector(context, step.setInputFiles.selector);
         const rawFiles = step.setInputFiles.files;
         const resolveFile = (f: string) =>
           path.isAbsolute(f) ? f : path.join(context.configDir, f);
         const resolvedFiles = Array.isArray(rawFiles)
           ? rawFiles.map(resolveFile)
           : resolveFile(rawFiles);
-        await setInputFiles(context.page, step.setInputFiles.selector, resolvedFiles);
+        await setInputFiles(context.page, resolvedInput.selector, resolvedFiles);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         const filesLabel = Array.isArray(rawFiles) ? rawFiles.join(", ") : rawFiles;
         stepResult = {
           type: "setInputFiles",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.setInputFiles.selector,
+          selector: resolvedInput.selector,
+          ...(resolvedInput.healedFrom ? { healedFrom: resolvedInput.healedFrom } : {}),
           value: filesLabel
         };
       } else if ("runHunt" in step) {

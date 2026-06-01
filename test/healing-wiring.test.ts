@@ -1,0 +1,113 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { executeSteps } from "../src/runner/steps.js";
+import type { Page } from "playwright";
+import type { Step } from "../src/types/index.js";
+
+// PROWL-023: end-to-end wiring of self-healing into the explicit-selector actions.
+
+function mockPage(locatorCounts: Record<string, number>) {
+  const createLocator = (count: number) => {
+    const locator = {
+      count: vi.fn(async () => count),
+      first: vi.fn(() => locator),
+      click: vi.fn(async () => undefined),
+      fill: vi.fn(async () => undefined),
+      hover: vi.fn(async () => undefined),
+      scrollIntoViewIfNeeded: vi.fn(async () => undefined)
+    };
+    return locator;
+  };
+  return {
+    url: () => "http://localhost",
+    locator: vi.fn((selector: string) => createLocator(locatorCounts[selector] ?? 1))
+  };
+}
+
+function baseContext(page: unknown, steps: Step[], runDir: string, overrides?: Record<string, unknown>) {
+  return {
+    page: page as Page,
+    steps,
+    targetUrl: "http://localhost",
+    runDir,
+    screenshotsMode: "on-failure" as const,
+    forbiddenSelectors: [],
+    allowedDomains: ["localhost"],
+    maxSteps: 50,
+    maxTotalTimeMs: 60000,
+    redactedFillSteps: new Set<string>(),
+    configDir: runDir,
+    onStep: undefined,
+    ...overrides
+  };
+}
+
+describe("self-healing wiring", () => {
+  let runDir: string;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-heal-wire-"));
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("heals a failed click selector when selfHealing is on", async () => {
+    // #sign-in matches nothing; the healed text=sign in matches exactly one.
+    const page = mockPage({ "#sign-in": 0, "text=sign in": 1 });
+    const steps: Step[] = [{ click: { selector: "#sign-in" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      type: "click",
+      status: "pass",
+      selector: "text=sign in",
+      healedFrom: "#sign-in"
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Self-healed selector"));
+  });
+
+  it("does NOT heal when selfHealing is off (selector is used as-is)", async () => {
+    const page = mockPage({ "#sign-in": 0, "text=sign in": 1 });
+    const steps: Step[] = [{ click: { selector: "#sign-in" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: false }));
+
+    // No heal: the action runs against the original selector, result has no healedFrom.
+    expect(result.results[0]).toMatchObject({ type: "click", selector: "#sign-in" });
+    expect(result.results[0].healedFrom).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not heal when the original selector already matches", async () => {
+    const page = mockPage({ "#sign-in": 1 });
+    const steps: Step[] = [{ click: { selector: "#sign-in" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.results[0]).toMatchObject({ selector: "#sign-in" });
+    expect(result.results[0].healedFrom).toBeUndefined();
+  });
+
+  it("heals a hover selector too", async () => {
+    const page = mockPage({ "#menu-toggle": 0, "text=menu toggle": 1 });
+    const steps: Step[] = [{ hover: { selector: "#menu-toggle" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.results[0]).toMatchObject({
+      type: "hover",
+      status: "pass",
+      selector: "text=menu toggle",
+      healedFrom: "#menu-toggle"
+    });
+  });
+});
