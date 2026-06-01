@@ -123,7 +123,8 @@ function mergeConfig(partial: Partial<Config>): Config {
       maxRuns: partial.history?.maxRuns ?? DEFAULT_CONFIG.history.maxRuns
     },
     bugLog: partial.bugLog,
-    tracing: partial.tracing
+    tracing: partial.tracing,
+    reliability: partial.reliability
   };
 }
 

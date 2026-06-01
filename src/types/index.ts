@@ -47,6 +47,12 @@ export type Config = {
   };
   bugLog?: BugLogConfig;
   tracing?: TracingConfig;
+  reliability?: ReliabilityConfig;
+};
+
+export type ReliabilityConfig = {
+  /** Flake score (0-1) at or above which a hunt is flagged flaky (default 0.3). */
+  flakyThreshold?: number;
 };
 
 export type TracingConfig = {
@@ -250,6 +256,11 @@ export type CiHuntResult = {
 
 export type CiStatus = "pass" | "fail" | "no-hunts" | "all-skipped";
 
+export type CiFlakyHunt = {
+  hunt: string;
+  score: number;
+};
+
 export type CiResult = {
   status: CiStatus;
   startedAt: string;
@@ -259,4 +270,6 @@ export type CiResult = {
   failed: number;
   skipped: number;
   hunts: CiHuntResult[];
+  /** Hunts whose flake score is at/above the configured threshold (omitted when none). */
+  flaky?: CiFlakyHunt[];
 };

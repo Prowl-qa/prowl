@@ -3,7 +3,8 @@ export type {
   Config, Hunt, Step, Assertion,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
-  CiResult, CiHuntResult, CiStatus,
+  CiResult, CiHuntResult, CiStatus, CiFlakyHunt,
+  ReliabilityConfig,
   IfStep, RepeatStep, MockRouteStep, UnmockRouteStep,
   EvalScriptStep, RunScriptStep, AssertScreenshotStep,
   HistoryEntry, HistoryFile
@@ -23,6 +24,10 @@ export type { UpdateBacklogOptions, BugLogSummary, BugFailure } from "./backlog/
 
 // Re-export history
 export { readHistory, readHuntHistory } from "./runner/history.js";
+
+// Re-export flake detection
+export { computeFlakeScore, rankFlaky, DEFAULT_FLAKY_THRESHOLD } from "./runner/flaky.js";
+export type { FlakyScore, RankFlakyOptions } from "./runner/flaky.js";
 
 // Re-export config utilities
 export {

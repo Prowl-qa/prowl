@@ -72,6 +72,12 @@ export const configSchema = z
         header: z.string().min(1).optional()
       })
       .strict()
+      .optional(),
+    reliability: z
+      .object({
+        flakyThreshold: z.number().min(0).max(1).optional()
+      })
+      .strict()
       .optional()
   })
   .strict();

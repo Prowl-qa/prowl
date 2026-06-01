@@ -57,18 +57,6 @@
 - Export accumulated steps to `.prowlqa/hunts/<name>.yml`
 - Support for recording fill values (prompt user for input)
 
-{PROWL-032} **P7-002: Flake Detection and Scoring**
-   Identify intermittently failing hunts by analyzing run history. Assign a flake score based on pass/fail oscillation frequency. Flaky hunts are the #1 reason teams lose trust in test suites.
-
-**Found during**: Gap analysis (2026-02-16)
-**Acceptance Criteria**:
-- `prowlqa flaky` lists hunts ranked by flake score (highest first)
-- `prowlqa flaky --json` for programmatic access
-- Flake score: percentage of runs where status differs from the previous run (over last N runs)
-- Hunts with score > threshold flagged as "flaky" in CI summary and `ci-result.json`
-- Config option: `reliability.flakyThreshold` (default: 0.3 = 30% oscillation rate)
-- Requires P7-001 (run history) as a prerequisite
-
 ## Medium Priority
 
 {PROWL-011} **LEGAL-002: Add Dependency License Audit to CI**

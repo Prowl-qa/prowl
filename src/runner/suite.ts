@@ -4,7 +4,8 @@ import { loadConfig, listHunts, loadHuntTags } from "../config/loader.js";
 import { writeCiResult, resolveCiStatus, countCiResults } from "../reporter/ci-summary.js";
 import { timestamp } from "../utils/timestamp.js";
 import { runWithConcurrency } from "../utils/concurrency.js";
-import type { CiHuntResult, CiResult, RunResult } from "../types/index.js";
+import type { CiFlakyHunt, CiHuntResult, CiResult, RunResult } from "../types/index.js";
+import { rankFlaky, DEFAULT_FLAKY_THRESHOLD } from "./flaky.js";
 
 export type SkipReason = "include" | "exclude";
 type SuiteHookResult = void | Promise<void>;
@@ -82,7 +83,7 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
   const startTime = Date.now();
   const hooks = options.hooks ?? {};
 
-  const { configDir } = loadConfig(options.configPath);
+  const { config, configDir } = loadConfig(options.configPath);
   const hunts = listHunts(configDir);
 
   if (hunts.length === 0) {
@@ -213,8 +214,18 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
     };
   });
 
+  // Flag flaky hunts among those that actually ran this suite, using accumulated
+  // run history (which already includes this run's entries). Omitted when none.
+  const threshold = config.reliability?.flakyThreshold ?? DEFAULT_FLAKY_THRESHOLD;
+  const ranThisSuite = new Set(
+    results.filter((r) => r.status !== "skipped").map((r) => r.hunt)
+  );
+  const flaky: CiFlakyHunt[] = rankFlaky(configDir, { threshold })
+    .filter((entry) => entry.flaky && ranThisSuite.has(entry.hunt))
+    .map((entry) => ({ hunt: entry.hunt, score: entry.score }));
+
   const ciRunDir = path.join(configDir, "runs", timestamp("ci"));
-  const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs);
+  const resultPath = writeCiResult(ciRunDir, results, startedAt, totalDurationMs, flaky);
 
   const { passed, failed, skipped } = countCiResults(results);
 
@@ -227,7 +238,8 @@ export async function runSuite(options: RunSuiteOptions = {}): Promise<RunSuiteR
       passed,
       failed,
       skipped,
-      hunts: results
+      hunts: results,
+      ...(flaky.length > 0 ? { flaky } : {})
     },
     resultPath
   };
