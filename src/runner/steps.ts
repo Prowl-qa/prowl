@@ -932,14 +932,15 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           durationMs: Date.now() - stepStart
         };
       } else if ("hover" in step) {
-        assertAllowedSelector(step.hover.selector, context.forbiddenSelectors);
-        await context.page.locator(step.hover.selector).hover();
+        const resolved = await resolveActionSelector(context, step.hover.selector);
+        await context.page.locator(resolved.selector).hover();
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "hover",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.hover.selector
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
         };
       } else if ("scroll" in step) {
         const amount = step.scroll.amount ?? 500;
