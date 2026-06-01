@@ -870,14 +870,15 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: huntName
         };
       } else if ("press" in step) {
-        assertAllowedSelector(step.press.selector, context.forbiddenSelectors);
-        await pressKey(context.page, step.press.selector, step.press.key);
+        const resolved = await resolveActionSelector(context, step.press.selector);
+        await pressKey(context.page, resolved.selector, step.press.key);
         ensureAllowedUrl(context.page.url(), context.allowedDomains);
         stepResult = {
           type: "press",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.press.selector
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
         };
       } else if ("assert" in step) {
         const value = await runInlineAssert(context.page, step.assert, context.forbiddenSelectors);
@@ -959,13 +960,14 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
           value: `${step.scroll.direction} ${amount}px`
         };
       } else if ("scrollTo" in step) {
-        assertAllowedSelector(step.scrollTo.selector, context.forbiddenSelectors);
-        await context.page.locator(step.scrollTo.selector).scrollIntoViewIfNeeded();
+        const resolved = await resolveActionSelector(context, step.scrollTo.selector);
+        await context.page.locator(resolved.selector).scrollIntoViewIfNeeded();
         stepResult = {
           type: "scrollTo",
           status: "pass",
           durationMs: Date.now() - stepStart,
-          selector: step.scrollTo.selector
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
         };
       } else if ("screenshot" in step) {
         const name = step.screenshot.name ?? `manual_step_${index + 1}.png`;

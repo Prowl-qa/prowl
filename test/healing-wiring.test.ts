@@ -110,4 +110,32 @@ describe("self-healing wiring", () => {
       healedFrom: "#menu-toggle"
     });
   });
+
+  it("heals a press selector", async () => {
+    const page = mockPage({ "#search-box": 0, "text=search box": 1 });
+    const steps: Step[] = [{ press: { selector: "#search-box", key: "Enter" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.results[0]).toMatchObject({
+      type: "press",
+      status: "pass",
+      selector: "text=search box",
+      healedFrom: "#search-box"
+    });
+  });
+
+  it("heals a scrollTo selector", async () => {
+    const page = mockPage({ "#footer-cta": 0, "text=footer cta": 1 });
+    const steps: Step[] = [{ scrollTo: { selector: "#footer-cta" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.results[0]).toMatchObject({
+      type: "scrollTo",
+      status: "pass",
+      selector: "text=footer cta",
+      healedFrom: "#footer-cta"
+    });
+  });
 });
