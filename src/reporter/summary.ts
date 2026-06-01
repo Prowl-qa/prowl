@@ -9,9 +9,10 @@ export function escapeMd(text: string): string {
 function formatStep(step: StepResult): string {
   const base = `- [${step.status.toUpperCase()}] ${step.type} (${step.durationMs}ms)`;
   const selector = step.selector ? ` selector=${step.selector}` : "";
+  const healed = step.healedFrom ? ` healed-from=${escapeMd(step.healedFrom)}` : "";
   const value = step.value ? ` value=${escapeMd(step.value)}` : "";
   const error = step.error ? ` error=${escapeMd(step.error)}` : "";
-  return `${base}${selector}${value}${error}`;
+  return `${base}${selector}${healed}${value}${error}`;
 }
 
 function formatAssertion(assertion: AssertionResult): string {
@@ -34,6 +35,17 @@ export function writeSummary(runDir: string, result: RunResult): string {
   for (const step of result.steps) {
     lines.push(formatStep(step));
   }
+
+  const healed = result.steps.filter((step) => step.healedFrom);
+  if (healed.length > 0) {
+    lines.push("");
+    lines.push("## Self-Healed Selectors");
+    lines.push("These selectors no longer matched and were auto-healed. Update your hunt to use the healed selector (or a stable `data-testid`):");
+    for (const step of healed) {
+      lines.push(`- ${escapeMd(step.healedFrom ?? "")} → ${escapeMd(step.selector ?? "")}`);
+    }
+  }
+
   lines.push("");
   lines.push("## Assertions");
   for (const assertion of result.assertions) {
