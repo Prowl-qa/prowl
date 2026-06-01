@@ -46,7 +46,8 @@ export const configSchema = z
       .object({
         maxSteps: z.number().optional(),
         allowedDomains: z.array(z.string()).optional(),
-        forbiddenSelectors: z.array(z.string()).optional()
+        forbiddenSelectors: z.array(z.string()).optional(),
+        selfHealing: z.boolean().optional()
       })
       .optional(),
     auth: z

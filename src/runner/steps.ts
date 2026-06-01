@@ -24,6 +24,7 @@ export type StepExecutionContext = {
   forbiddenSelectors: string[];
   allowedDomains: string[];
   maxSteps: number;
+  selfHealing?: boolean;
   maxTotalTimeMs: number;
   redactedFillSteps: Set<string>;
   configDir: string;

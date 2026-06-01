@@ -38,6 +38,7 @@ export type Config = {
     maxSteps: number;
     allowedDomains: string[];
     forbiddenSelectors: string[];
+    selfHealing: boolean;
   };
   auth: {
     storageStatePath?: string;
@@ -208,6 +209,8 @@ export type StepResult = {
   value?: string;
   error?: string;
   screenshot?: string;
+  /** Original selector when the step was completed via a self-healed selector. */
+  healedFrom?: string;
 };
 
 export type AssertionResult = {

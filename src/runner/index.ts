@@ -161,6 +161,7 @@ async function executeHuntAttempt(
         allowedDomains,
         maxSteps,
         maxTotalTimeMs: config.assertions.maxTotalTimeMs,
+        selfHealing: config.guardrails.selfHealing,
         redactedFillSteps,
         randomVars,
         configDir,
