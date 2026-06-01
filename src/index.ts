@@ -29,6 +29,10 @@ export { readHistory, readHuntHistory } from "./runner/history.js";
 export { computeFlakeScore, rankFlaky, DEFAULT_FLAKY_THRESHOLD } from "./runner/flaky.js";
 export type { FlakyScore, RankFlakyOptions } from "./runner/flaky.js";
 
+// Re-export self-healing selectors
+export { healSelector, buildHealCandidates, extractSelectorIntent } from "./runner/healing.js";
+export type { HealResult } from "./runner/healing.js";
+
 // Re-export config utilities
 export {
   loadConfig, loadHunt, listHunts,

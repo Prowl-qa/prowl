@@ -32,7 +32,8 @@ const DEFAULT_CONFIG: Config = {
   guardrails: {
     maxSteps: 50,
     allowedDomains: ["localhost", "127.0.0.1", "0.0.0.0"],
-    forbiddenSelectors: ["[data-danger]", ".delete-btn"]
+    forbiddenSelectors: ["[data-danger]", ".delete-btn"],
+    selfHealing: false
   },
   auth: {
     storageStatePath: ".prowlqa/auth-state.json"
@@ -114,7 +115,8 @@ function mergeConfig(partial: Partial<Config>): Config {
       maxSteps: partial.guardrails?.maxSteps ?? DEFAULT_CONFIG.guardrails.maxSteps,
       allowedDomains: partial.guardrails?.allowedDomains ?? DEFAULT_CONFIG.guardrails.allowedDomains,
       forbiddenSelectors:
-        partial.guardrails?.forbiddenSelectors ?? DEFAULT_CONFIG.guardrails.forbiddenSelectors
+        partial.guardrails?.forbiddenSelectors ?? DEFAULT_CONFIG.guardrails.forbiddenSelectors,
+      selfHealing: partial.guardrails?.selfHealing ?? DEFAULT_CONFIG.guardrails.selfHealing
     },
     auth: {
       storageStatePath: partial.auth?.storageStatePath ?? (partial.auth !== undefined ? DEFAULT_CONFIG.auth.storageStatePath : undefined)

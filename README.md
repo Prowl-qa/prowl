@@ -474,6 +474,28 @@ history:
 
 ---
 
+### Self-Healing Selectors
+
+Set `guardrails.selfHealing: true` (default `false`) to let ProwlQA recover when an
+**explicit** selector stops matching — for example after a markup change renames
+`#sign-in-btn`. When such a selector matches nothing, ProwlQA derives the intent from
+the selector text and tries, in order:
+
+1. **Fuzzy text** — an element containing the selector's words (e.g. "sign in")
+2. **ARIA label** — an element whose `aria-label` contains those words
+3. **Structural** — an interactive element (`button`, `a`, `input`, …) containing the text
+
+It heals **only** to a candidate that matches exactly one element — it never guesses
+among multiple. A heal is logged as a warning and recorded in the run report:
+
+- `result.json`: the step gains a `healedFrom` field
+- `summary.md`: a **Self-Healed Selectors** section lists `original → healed`
+
+Healing applies to action steps (`click`, `fill`, `selectOption`, `setInputFiles`,
+`press`, `hover`, `scrollTo`) and is meant as a safety net — update your hunt to a stable
+selector (ideally a `data-testid`) when you see a heal. `waitForSelector` is excluded,
+since a not-yet-present element is its normal state.
+
 ## Variable Interpolation
 
 Use `{{VAR_NAME}}` to inject dynamic values into your hunts.
