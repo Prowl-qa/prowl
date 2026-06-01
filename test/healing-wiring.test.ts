@@ -142,4 +142,60 @@ describe("self-healing wiring", () => {
       healedFrom: "#footer-cta"
     });
   });
+
+  it("heals a fill selector and keeps redacted value in the result", async () => {
+    const page = mockPage({ "#email-field": 0, "text=email field": 1 });
+    const steps: Step[] = [{ fill: { selector: "#email-field", value: "secret.test" } }];
+
+    const result = await executeSteps(
+      baseContext(page, steps, runDir, {
+        selfHealing: true,
+        redactedFillSteps: new Set(["0"])
+      })
+    );
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      type: "fill",
+      status: "pass",
+      selector: "text=email field",
+      value: "[REDACTED]",
+      healedFrom: "#email-field"
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Self-healed selector"));
+  });
+
+  it("heals a selectOption selector", async () => {
+    const page = mockPage({ "#plan-select": 0, "text=plan select": 1 });
+    const steps: Step[] = [{ selectOption: { selector: "#plan-select", value: "pro" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      type: "selectOption",
+      status: "pass",
+      selector: "text=plan select",
+      value: "pro",
+      healedFrom: "#plan-select"
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Self-healed selector"));
+  });
+
+  it("heals a setInputFiles selector", async () => {
+    const page = mockPage({ "#resume-upload": 0, "text=resume upload": 1 });
+    const steps: Step[] = [{ setInputFiles: { selector: "#resume-upload", files: "resume.pdf" } }];
+
+    const result = await executeSteps(baseContext(page, steps, runDir, { selfHealing: true }));
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      type: "setInputFiles",
+      status: "pass",
+      selector: "text=resume upload",
+      value: "resume.pdf",
+      healedFrom: "#resume-upload"
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Self-healed selector"));
+  });
 });
