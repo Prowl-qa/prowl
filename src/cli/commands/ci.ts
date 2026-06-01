@@ -109,7 +109,7 @@ export function buildCiCommand(): Command {
       if (options.json) {
         console.log(JSON.stringify(result, null, 2));
       } else {
-        printCiSummary(result.hunts, result.durationMs, result.flaky);
+        printCiSummary(result.hunts, result.durationMs, result.flaky, result.clusters);
         if (!showProgress) {
           printFailureDetails(result.hunts);
         }

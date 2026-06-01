@@ -1,5 +1,6 @@
 import type { BugFailure } from "../backlog/fingerprint.js";
 import { normalizeError } from "../backlog/fingerprint.js";
+import type { CiFailureCluster } from "../types/index.js";
 
 /**
  * Failure clustering (PROWL-034). Groups failures that share a common cause —
@@ -7,18 +8,7 @@ import { normalizeError } from "../backlog/fingerprint.js";
  * root cause (e.g. one renamed selector breaking 5 hunts) surfaces as one
  * cluster instead of N independent failures.
  */
-export type FailureCluster = {
-  /** Human-readable description of the shared cause. */
-  cause: string;
-  stepType?: string;
-  selector?: string;
-  /** A representative raw error message for the cluster. */
-  error: string;
-  /** Number of failing hunts in this cluster. */
-  count: number;
-  /** Names of the hunts affected (sorted, de-duplicated). */
-  hunts: string[];
-};
+export type FailureCluster = CiFailureCluster;
 
 function clusterKey(failure: BugFailure): string {
   return [failure.stepType ?? "", failure.selector ?? "", normalizeError(failure.error)].join("|");
