@@ -10,15 +10,15 @@ import type { CiFailureCluster } from "../types/index.js";
  */
 export type FailureCluster = CiFailureCluster;
 
-function clusterKey(failure: BugFailure): string {
-  return [failure.stepType ?? "", failure.selector ?? "", normalizeError(failure.error)].join("|");
+function clusterKey(failure: BugFailure, normalizedError: string): string {
+  return [failure.stepType ?? "", failure.selector ?? "", normalizedError].join("|");
 }
 
-function describeCause(failure: BugFailure): string {
+function describeCause(failure: BugFailure, error: string): string {
   const where = failure.stepType
     ? `${failure.stepType}${failure.selector ? ` (${failure.selector})` : ""}`
     : "run";
-  return `${where}: ${failure.error}`;
+  return `${where}: ${error}`;
 }
 
 /**
@@ -28,25 +28,26 @@ function describeCause(failure: BugFailure): string {
  * `count > 1` to show only shared root causes.
  */
 export function clusterFailures(failures: BugFailure[]): FailureCluster[] {
-  const groups = new Map<string, { sample: BugFailure; hunts: Set<string> }>();
+  const groups = new Map<string, { sample: BugFailure; error: string; hunts: Set<string> }>();
 
   for (const failure of failures) {
-    const key = clusterKey(failure);
+    const error = normalizeError(failure.error);
+    const key = clusterKey(failure, error);
     const existing = groups.get(key);
     if (existing) {
       existing.hunts.add(failure.hunt);
     } else {
-      groups.set(key, { sample: failure, hunts: new Set([failure.hunt]) });
+      groups.set(key, { sample: failure, error, hunts: new Set([failure.hunt]) });
     }
   }
 
   const clusters: FailureCluster[] = [];
-  for (const { sample, hunts } of groups.values()) {
+  for (const { sample, error, hunts } of groups.values()) {
     clusters.push({
-      cause: describeCause(sample),
+      cause: describeCause(sample, error),
       stepType: sample.stepType,
       selector: sample.selector,
-      error: sample.error,
+      error,
       count: hunts.size,
       hunts: [...hunts].sort()
     });

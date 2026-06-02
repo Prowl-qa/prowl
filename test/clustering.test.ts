@@ -17,8 +17,10 @@ describe("clusterFailures", () => {
     ]);
     expect(clusters).toHaveLength(1);
     expect(clusters[0]).toMatchObject({
+      cause: "click (#submit): timeout",
       stepType: "click",
       selector: "#submit",
+      error: "timeout",
       count: 3,
       hunts: ["a", "b", "c"]
     });
@@ -35,12 +37,16 @@ describe("clusterFailures", () => {
   it("sorts clusters by size (largest first), then cause", () => {
     const clusters = clusterFailures([
       failure("a", { stepType: "fill", selector: "#email", error: "not found" }),
+      failure("d", { stepType: "assert", selector: "#banner", error: "mismatch" }),
       failure("b", { stepType: "click", selector: "#submit", error: "Timeout" }),
       failure("c", { stepType: "click", selector: "#submit", error: "Timeout" })
     ]);
-    expect(clusters[0].count).toBe(2);
-    expect(clusters[0].selector).toBe("#submit");
-    expect(clusters[1].count).toBe(1);
+
+    expect(clusters.map((cluster) => cluster.cause)).toEqual([
+      "click (#submit): timeout",
+      "assert (#banner): mismatch",
+      "fill (#email): not found"
+    ]);
   });
 
   it("de-duplicates the same hunt within a cluster", () => {
@@ -56,15 +62,16 @@ describe("clusterFailures", () => {
     expect(clusterFailures([])).toEqual([]);
   });
 
-  it("builds a readable cause description", () => {
+  it("builds a readable cause description from the normalized error", () => {
     const clusters = clusterFailures([
       failure("a", { stepType: "click", selector: "#submit", error: "Timeout 5000ms" })
     ]);
-    expect(clusters[0].cause).toBe("click (#submit): Timeout 5000ms");
+    expect(clusters[0].cause).toBe("click (#submit): timeout");
+    expect(clusters[0].error).toBe("timeout");
   });
 
-  it("describes a stepless failure with 'run'", () => {
+  it("describes a stepless failure with run", () => {
     const clusters = clusterFailures([failure("a", { error: "Hunt file not found" })]);
-    expect(clusters[0].cause).toBe("run: Hunt file not found");
+    expect(clusters[0].cause).toBe("run: hunt file not found");
   });
 });
