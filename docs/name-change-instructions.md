@@ -29,7 +29,7 @@ domain `prowlqa.dev` are retired.
   | Prowl Code Review *(future, backlog only)* | `review.prowl.tools` *(reserved)* | `prowl-code-review` |
   | Prowl CLI tool | *no own subdomain — hero of `prowl.tools`, reference at `docs.prowl.tools`* | `prowl` |
 
-- **GitHub org:** `Prowl-qa` → **`prowl`** (`github.com/prowl/…`). GitHub auto-redirects old URLs, but update references anyway.
+- **GitHub org:** `Prowl-qa` → **`prowl-tools`** (`github.com/prowl-tools/…`). GitHub auto-redirects old URLs, but update references anyway.
 - **CLI project config dir:** `.prowlqa/` → **`.prowl/`** — the CLI must keep reading `.prowlqa/` during a deprecation window (back-compat), emitting a warning.
 
 ## Global find → replace
@@ -40,8 +40,8 @@ Apply repo-wide, **longest / most-specific tokens first**, then eyeball every hi
 |---|---|---|
 | `docs.prowlqa.dev` | `docs.prowl.tools` | do before the next row |
 | `prowlqa.dev` | `prowl.tools` | |
-| `github.com/Prowl-qa` | `github.com/prowl` | |
-| `Prowl-qa` | `prowl` | org refs only — check context |
+| `github.com/Prowl-qa` | `github.com/prowl-tools` | |
+| `Prowl-qa` | `prowl-tools` | org refs only — check context |
 | `.prowlqa/` | `.prowl/` | config dir — see back-compat note |
 | `prowlai` | `prowl` | pre-existing typo — fix it |
 | `prowlqa` | `prowl` | package / command / handle — check context |
@@ -56,7 +56,7 @@ so coordinate the package/command rename with the **npm** and **Homebrew** steps
 
 ### Package & binary
 - `package.json`: `name` `prowlqa` → `prowl`; `bin` entry → `prowl`; update `repository.url`,
-  `homepage` (`https://prowl.tools`), `bugs.url` (`https://github.com/prowl/prowl/issues`),
+  `homepage` (`https://prowl.tools`), `bugs.url` (`https://github.com/prowl-tools/prowl/issues`),
   `description`, and keywords.
 - `src/cli/program.ts`: program/command name → `prowl`; update the usage/help banner and any branded strings.
 
