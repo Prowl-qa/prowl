@@ -7,7 +7,7 @@ import { z } from "zod";
 const projectEntrySchema = z
   .object({
     root: z.string().min(1),
-    /** Optional override; defaults to <root>/.prowlqa/config.yml. */
+    /** Optional override; defaults to <root>/.prowl/config.yml (legacy: .prowlqa/). */
     configPath: z.string().min(1).optional()
   })
   .strict();
@@ -33,7 +33,21 @@ export interface ResolvedProject {
 
 /** Default registry location used when neither CLI flag nor env var is set. */
 function defaultRegistryPath(): string {
+  return path.join(os.homedir(), ".prowl", "projects.yml");
+}
+
+/** Legacy registry location (pre-rename), still honored for back-compat. */
+function legacyRegistryPath(): string {
   return path.join(os.homedir(), ".prowlqa", "projects.yml");
+}
+
+/** Resolve a project's config path within its root, preferring .prowl/ over legacy .prowlqa/. */
+function resolveProjectConfigPath(root: string): string {
+  const preferred = path.join(root, ".prowl", "config.yml");
+  if (fs.existsSync(preferred)) return preferred;
+  const legacy = path.join(root, ".prowlqa", "config.yml");
+  if (fs.existsSync(legacy)) return legacy;
+  return preferred;
 }
 
 /** Resolve a project entry path relative to the registry file that declared it. */
@@ -45,14 +59,18 @@ function resolveRegistryRelativePath(registry: ProjectRegistry, inputPath: strin
 
 /**
  * Resolve which registry file to use, in priority order: an explicit path
- * (`prowlqa mcp --projects`), the `PROWLQA_PROJECTS` env var, then the default
- * `~/.prowlqa/projects.yml`. Returns null when no registry is configured.
+ * (`prowl mcp --projects`), the `PROWL_PROJECTS` env var (or legacy
+ * `PROWLQA_PROJECTS`), then the default `~/.prowl/projects.yml` (or legacy
+ * `~/.prowlqa/projects.yml`). Returns null when no registry is configured.
  */
 export function resolveRegistryPath(explicitPath?: string): string | null {
   if (explicitPath) return path.resolve(explicitPath);
-  if (process.env.PROWLQA_PROJECTS) return path.resolve(process.env.PROWLQA_PROJECTS);
+  const envPath = process.env.PROWL_PROJECTS ?? process.env.PROWLQA_PROJECTS;
+  if (envPath) return path.resolve(envPath);
   const fallback = defaultRegistryPath();
-  return fs.existsSync(fallback) ? fallback : null;
+  if (fs.existsSync(fallback)) return fallback;
+  const legacy = legacyRegistryPath();
+  return fs.existsSync(legacy) ? legacy : null;
 }
 
 /** Load and validate the project registry, or return null when none is configured. */
@@ -78,7 +96,7 @@ export function resolveProject(registry: ProjectRegistry, name: string): Resolve
   const root = resolveRegistryRelativePath(registry, entry.root);
   const configPath = entry.configPath
     ? resolveRegistryRelativePath(registry, entry.configPath)
-    : path.join(root, ".prowlqa", "config.yml");
+    : resolveProjectConfigPath(root);
   return { name, root, configPath };
 }
 

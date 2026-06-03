@@ -24,7 +24,7 @@ export function buildGenerateCommand(): Command {
     .description("Generate a hunt file from page analysis and intent using AI")
     .option("--url <url>", "URL to analyze and generate for")
     .option("--intent <description>", "What to test (required)")
-    .option("--output <name>", "Hunt file name (saved to .prowlqa/hunts/)")
+    .option("--output <name>", "Hunt file name (saved to .prowl/hunts/)")
     .option("--stdout", "Print YAML to stdout instead of saving")
     .option("--browser <engine>", "Browser engine for analysis")
     .option("--viewport <size>", "Viewport for analysis")
@@ -80,7 +80,7 @@ export function buildGenerateCommand(): Command {
               const result = loadConfig(options.config);
               configDir = result.configDir;
             } catch {
-              configDir = path.join(process.cwd(), ".prowlqa");
+              configDir = path.join(process.cwd(), ".prowl");
             }
 
             const huntsDir = path.join(configDir, "hunts");

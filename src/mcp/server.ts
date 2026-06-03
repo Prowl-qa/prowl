@@ -61,15 +61,15 @@ const PROJECT_ARG_DESCRIPTION =
   "Registered project name to target (from the registry). Omit to use the current working directory.";
 
 /**
- * Builds an MCP server exposing ProwlQA as named tools. By default it operates on
- * the current working directory's `.prowlqa/` project, exactly like the CLI. When a
+ * Builds an MCP server exposing Prowl as named tools. By default it operates on
+ * the current working directory's `.prowl/` project, exactly like the CLI. When a
  * project registry is provided, tools accept an optional `project` argument to
  * target any registered repo. The agent gets a fixed tool surface — it never
  * chooses shell commands.
  */
 export function buildMcpServer(options: BuildMcpServerOptions = {}): McpServer {
   const registry = options.registry ?? null;
-  const server = new McpServer({ name: "prowlqa", version: pkg.version });
+  const server = new McpServer({ name: "prowl", version: pkg.version });
 
   // Resolve an optional `project` arg. Throws a helpful error if a project is
   // named but no registry is configured.
@@ -78,7 +78,7 @@ export function buildMcpServer(options: BuildMcpServerOptions = {}): McpServer {
     if (!registry) {
       throw new Error(
         `No project registry is configured, so project "${project}" cannot be resolved. ` +
-          "Start the server with `prowlqa mcp --projects <path>` (or set PROWLQA_PROJECTS)."
+          "Start the server with `prowl mcp --projects <path>` (or set PROWL_PROJECTS)."
       );
     }
     return resolveProject(registry, project);
