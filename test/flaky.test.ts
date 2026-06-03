@@ -44,7 +44,7 @@ describe("rankFlaky", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-flaky-"));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-flaky-"));
   });
 
   afterEach(() => {

@@ -22,7 +22,7 @@ function makeResult(overrides?: Partial<RunResult>): RunResult {
 
 describe("writeJunit", () => {
   it("writes junit.xml file to run directory", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult();
       const fileName = writeJunit(runDir, result);
@@ -35,7 +35,7 @@ describe("writeJunit", () => {
   });
 
   it("produces valid XML structure", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult();
       writeJunit(runDir, result);
@@ -53,7 +53,7 @@ describe("writeJunit", () => {
   });
 
   it("maps steps to testcases with correct names", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         steps: [
@@ -72,7 +72,7 @@ describe("writeJunit", () => {
   });
 
   it("maps assertions to testcases", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         assertions: [
@@ -91,7 +91,7 @@ describe("writeJunit", () => {
   });
 
   it("includes failure elements for failed steps", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -111,7 +111,7 @@ describe("writeJunit", () => {
   });
 
   it("includes failure elements for failed assertions", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -130,7 +130,7 @@ describe("writeJunit", () => {
   });
 
   it("includes fallback failure text for failed step without error", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -150,7 +150,7 @@ describe("writeJunit", () => {
   });
 
   it("includes fallback failure text for failed assertion without error", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -170,7 +170,7 @@ describe("writeJunit", () => {
   });
 
   it("computes correct tests, failures, and time attributes", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -198,7 +198,7 @@ describe("writeJunit", () => {
   });
 
   it("escapes XML special characters in error messages", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({
         status: "fail",
@@ -220,7 +220,7 @@ describe("writeJunit", () => {
   });
 
   it("handles empty steps and assertions gracefully", () => {
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-junit-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {
       const result = makeResult({ steps: [], assertions: [] });
       writeJunit(runDir, result);

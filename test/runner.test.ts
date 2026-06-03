@@ -60,7 +60,7 @@ function defaultConfig() {
     artifacts: { screenshots: "on-failure", networkHar: false, console: true, junit: false },
     assertions: { noConsoleErrors: true, noNetworkErrors: true, maxTotalTimeMs: 30000, networkIgnorePatterns: [] },
     guardrails: { maxSteps: 50, allowedDomains: ["localhost"], forbiddenSelectors: [] },
-    auth: { storageStatePath: ".prowlqa/auth-state.json" },
+    auth: { storageStatePath: ".prowl/auth-state.json" },
     history: { maxRuns: 100 }
   };
 }
@@ -86,7 +86,7 @@ function setupMocks(overrides?: {
   huntRetry?: { maxRetries: number; delay?: number };
 }) {
   const config = defaultConfig();
-  const configDir = "/tmp/prowlqa-test-runner/.prowlqa";
+  const configDir = "/tmp/prowl-test-runner/.prowl";
 
   mockLoadConfig.mockReturnValue({ config, configDir, configPath: `${configDir}/config.yml` });
   mockLoadHunt.mockReturnValue({
@@ -329,7 +329,7 @@ describe("runHunt", () => {
 
     expect(mockAppendHistoryEntry).toHaveBeenCalledTimes(1);
     const [configDirArg, entry, maxRunsArg] = mockAppendHistoryEntry.mock.calls[0];
-    expect(configDirArg).toBe("/tmp/prowlqa-test-runner/.prowlqa");
+    expect(configDirArg).toBe("/tmp/prowl-test-runner/.prowl");
     expect(maxRunsArg).toBe(100);
     expect(entry).toMatchObject({
       hunt: "test-hunt",

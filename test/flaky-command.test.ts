@@ -24,7 +24,7 @@ describe("flaky command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowl" });
     process.exitCode = undefined;
   });
 
@@ -36,35 +36,35 @@ describe("flaky command", () => {
   it("uses the config flakyThreshold when no flag is given", async () => {
     mockLoadConfig.mockReturnValue({
       config: { reliability: { flakyThreshold: 0.5 } },
-      configDir: "/proj/.prowlqa"
+      configDir: "/proj/.prowl"
     });
     mockRankFlaky.mockReturnValue([]);
 
-    await buildFlakyCommand().parseAsync(["node", "prowlqa", "--json"]);
+    await buildFlakyCommand().parseAsync(["node", "prowl", "--json"]);
 
-    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowlqa", { lastN: undefined, threshold: 0.5 });
+    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowl", { lastN: undefined, threshold: 0.5 });
   });
 
   it("defaults the threshold to 0.3 when neither flag nor config is set", async () => {
     mockRankFlaky.mockReturnValue([]);
-    await buildFlakyCommand().parseAsync(["node", "prowlqa", "--json"]);
-    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowlqa", { lastN: undefined, threshold: 0.3 });
+    await buildFlakyCommand().parseAsync(["node", "prowl", "--json"]);
+    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowl", { lastN: undefined, threshold: 0.3 });
   });
 
   it("lets --threshold override config", async () => {
     mockLoadConfig.mockReturnValue({
       config: { reliability: { flakyThreshold: 0.5 } },
-      configDir: "/proj/.prowlqa"
+      configDir: "/proj/.prowl"
     });
     mockRankFlaky.mockReturnValue([]);
-    await buildFlakyCommand().parseAsync(["node", "prowlqa", "--threshold", "0.8", "--json"]);
-    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowlqa", { lastN: undefined, threshold: 0.8 });
+    await buildFlakyCommand().parseAsync(["node", "prowl", "--threshold", "0.8", "--json"]);
+    expect(mockRankFlaky).toHaveBeenCalledWith("/proj/.prowl", { lastN: undefined, threshold: 0.8 });
   });
 
   it("outputs JSON of the ranked scores", async () => {
     const scores = [{ hunt: "a", score: 1, runs: 3, flaky: true }];
     mockRankFlaky.mockReturnValue(scores);
-    await buildFlakyCommand().parseAsync(["node", "prowlqa", "--json"]);
+    await buildFlakyCommand().parseAsync(["node", "prowl", "--json"]);
     const jsonCall = logSpy.mock.calls.find((c) => {
       try { JSON.parse(c[0]); return true; } catch { return false; }
     });
@@ -77,7 +77,7 @@ describe("flaky command", () => {
       { hunt: "login", score: 0.25, runs: 4, flaky: false }
     ]);
 
-    await buildFlakyCommand().parseAsync(["node", "prowlqa"]);
+    await buildFlakyCommand().parseAsync(["node", "prowl"]);
 
     const output = stripAnsi(logSpy.mock.calls.map((call) => String(call[0] ?? "")).join("\n"));
     expect(output).toContain("Flake scores");
@@ -93,7 +93,7 @@ describe("flaky command", () => {
 
   it("rejects an out-of-range --threshold", async () => {
     await expect(
-      buildFlakyCommand().parseAsync(["node", "prowlqa", "--threshold", "2"])
+      buildFlakyCommand().parseAsync(["node", "prowl", "--threshold", "2"])
     ).rejects.toThrow("--threshold must be a number between 0 and 1");
   });
 });

@@ -1,5 +1,5 @@
 {
-  "name": "prowlqa",
+  "name": "prowl-tools",
   "version": "0.1.2",
   "description": "CLI-first QA testing tool for deterministic Playwright flows.",
   "type": "module",
@@ -7,11 +7,11 @@
   "author": "Prowl Tools",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Prowl-qa/prowl.git"
+    "url": "https://github.com/prowl-tools/prowl.git"
   },
-  "homepage": "https://prowlqa.dev",
+  "homepage": "https://prowl.tools",
   "bugs": {
-    "url": "https://github.com/Prowl-qa/prowl/issues"
+    "url": "https://github.com/prowl-tools/prowl/issues"
   },
   "keywords": [
     "testing",
@@ -40,7 +40,7 @@
     }
   },
   "bin": {
-    "prowlqa": "dist/index.js"
+    "prowl": "dist/index.js"
   },
   "files": [
     "dist",

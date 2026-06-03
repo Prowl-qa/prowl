@@ -100,7 +100,7 @@ export function buildCiCommand(): Command {
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
         } else {
-          console.log(chalk.yellow("\n  No hunts found. Create hunts in .prowlqa/hunts/\n"));
+          console.log(chalk.yellow("\n  No hunts found. Create hunts in .prowl/hunts/\n"));
         }
         process.exitCode = 2;
         return;

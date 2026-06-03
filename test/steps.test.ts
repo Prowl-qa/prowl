@@ -66,7 +66,7 @@ function createMockPage(options?: {
 describe("executeSteps", () => {
   it("executes steps and returns pass", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { navigate: "/" },
       { click: { selector: "button" } }
@@ -93,7 +93,7 @@ describe("executeSteps", () => {
 
   it("fails on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: { selector: "[data-danger]" } }];
 
     const result = await executeSteps({
@@ -117,7 +117,7 @@ describe("executeSteps", () => {
 
   it("registers dialog handler for onDialog step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ onDialog: { action: "accept" } }];
 
     const result = await executeSteps({
@@ -145,7 +145,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       roleCounts: { "button:Sign In": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: "Sign In" }];
 
     const result = await executeSteps({
@@ -172,7 +172,7 @@ describe("executeSteps", () => {
       roleCounts: { "button:Sign In": 0 },
       locatorCounts: { 'text="Sign In"': 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: "Sign In" }];
 
     const result = await executeSteps({
@@ -198,7 +198,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { Email: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ fill: { Email: "user@test.com" } }];
 
     const result = await executeSteps({
@@ -226,7 +226,7 @@ describe("executeSteps", () => {
       labelCounts: { Email: 0 },
       locatorCounts: { [placeholder]: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ fill: { Email: "user@test.com" } }];
 
     const result = await executeSteps({
@@ -250,7 +250,7 @@ describe("executeSteps", () => {
 
   it("supports type shorthand by filling focused element", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ type: "Hello world" }];
 
     const result = await executeSteps({
@@ -274,7 +274,7 @@ describe("executeSteps", () => {
 
   it("redacts type shorthand value when marked sensitive", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ type: "super-secret" }];
 
     const result = await executeSteps({
@@ -298,7 +298,7 @@ describe("executeSteps", () => {
 
   it("fails type shorthand when :focus selector is forbidden", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ type: "Hello world" }];
 
     const result = await executeSteps({
@@ -322,7 +322,7 @@ describe("executeSteps", () => {
 
   it("executes selectOption step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       {
         selectOption: {
@@ -358,7 +358,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { State: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ select: { State: "FL" } }];
 
     const result = await executeSteps({
@@ -384,7 +384,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       roleCounts: { "button:Sign In": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: "Sign In" }];
 
     const result = await executeSteps({
@@ -411,7 +411,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       roleCounts: { [`button:${text}`]: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: text }];
 
     const result = await executeSteps({
@@ -437,7 +437,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { Email: 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ fill: { Email: "user@test.com" } }];
 
     const result = await executeSteps({
@@ -464,7 +464,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { [label]: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ fill: { [label]: "user@test.com" } }];
 
     const result = await executeSteps({
@@ -490,7 +490,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { State: 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ select: { State: "FL" } }];
 
     const result = await executeSteps({
@@ -517,7 +517,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       labelCounts: { [label]: 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ select: { [label]: "FL" } }];
 
     const result = await executeSteps({
@@ -541,7 +541,7 @@ describe("executeSteps", () => {
 
   it("uses wait shorthand with text selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ wait: "Welcome" }];
 
     const result = await executeSteps({
@@ -565,7 +565,7 @@ describe("executeSteps", () => {
 
   it("fails explicit waitForSelector when selector is forbidden", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForSelector: { selector: "[data-danger]" } }];
 
     const result = await executeSteps({
@@ -589,7 +589,7 @@ describe("executeSteps", () => {
 
   it("fails wait shorthand when derived text selector is forbidden", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ wait: "Welcome" }];
 
     const result = await executeSteps({
@@ -615,7 +615,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { "text=Welcome back": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ assert: { visible: "Welcome back" } }];
 
     const result = await executeSteps({
@@ -639,7 +639,7 @@ describe("executeSteps", () => {
 
   it("fails inline assert when derived text selector is forbidden", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ assert: { visible: "Welcome back" } }];
 
     const result = await executeSteps({
@@ -663,7 +663,7 @@ describe("executeSteps", () => {
 
   it("fails selectOption on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ selectOption: { selector: "[data-danger]", value: "US" } }];
 
     const result = await executeSteps({
@@ -687,7 +687,7 @@ describe("executeSteps", () => {
 
   it("executes setInputFiles step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       {
         setInputFiles: {
@@ -720,7 +720,7 @@ describe("executeSteps", () => {
 
   it("fails setInputFiles on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { setInputFiles: { selector: "[data-danger]", files: "file.png" } }
     ];
@@ -746,7 +746,7 @@ describe("executeSteps", () => {
 
   it("executes runHunt step and merges sub-hunt results", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -784,7 +784,7 @@ describe("executeSteps", () => {
 
   it("detects circular hunt dependency", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-circular-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-circular-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -817,7 +817,7 @@ describe("executeSteps", () => {
 
   it("executes runHunt with variable overrides", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-vars-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-vars-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -857,7 +857,7 @@ describe("executeSteps", () => {
 
   it("reuses RANDOM vars across parent and nested hunts", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-random-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-random-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -909,7 +909,7 @@ describe("executeSteps", () => {
 
   it("shares generated RANDOM vars across sibling runHunt steps", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-siblings-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-siblings-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -976,7 +976,7 @@ describe("executeSteps", () => {
 
   it("executes hover step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ hover: { selector: "[data-testid=menu-item]" } }];
 
     const result = await executeSteps({
@@ -1002,7 +1002,7 @@ describe("executeSteps", () => {
 
   it("fails hover on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ hover: { selector: "[data-danger]" } }];
 
     const result = await executeSteps({
@@ -1026,7 +1026,7 @@ describe("executeSteps", () => {
 
   it("executes scroll step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ scroll: { direction: "down", amount: 300 } }];
 
     const result = await executeSteps({
@@ -1052,7 +1052,7 @@ describe("executeSteps", () => {
 
   it("executes scrollTo step", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ scrollTo: { selector: "#footer" } }];
 
     const result = await executeSteps({
@@ -1078,7 +1078,7 @@ describe("executeSteps", () => {
 
   it("fails scrollTo on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ scrollTo: { selector: "[data-danger]" } }];
 
     const result = await executeSteps({
@@ -1102,7 +1102,7 @@ describe("executeSteps", () => {
 
   it("rejects screenshot name with path traversal", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ screenshot: { name: "../../etc/passwd" } }];
 
     const result = await executeSteps({
@@ -1126,7 +1126,7 @@ describe("executeSteps", () => {
 
   it("rejects screenshot name with path separator", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ screenshot: { name: "sub/dir" } }];
 
     const result = await executeSteps({
@@ -1152,7 +1152,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1187,7 +1187,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1222,7 +1222,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1261,7 +1261,7 @@ describe("executeSteps", () => {
     });
     // Make page.goto throw for the sub-step
     page.goto.mockRejectedValueOnce(new Error("Navigation failed"));
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1293,7 +1293,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".welcome-modal": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1327,7 +1327,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".danger-banner": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1361,7 +1361,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1395,7 +1395,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".cookie-banner": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         if: {
@@ -1429,7 +1429,7 @@ describe("executeSteps", () => {
 
   it("executes repeat step with fixed count", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1480,7 +1480,7 @@ describe("executeSteps", () => {
       hover: vi.fn(async () => undefined),
       scrollIntoViewIfNeeded: vi.fn(async () => undefined)
     }));
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1515,7 +1515,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".load-more": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1550,7 +1550,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".danger-load-more": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1582,7 +1582,7 @@ describe("executeSteps", () => {
 
   it("repeat enforces maxSteps guardrail", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1619,7 +1619,7 @@ describe("executeSteps", () => {
     page.goto
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("Navigation failed"));
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1651,7 +1651,7 @@ describe("executeSteps", () => {
 
   it("redacts sensitive fill values inside repeat sub-steps", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1685,7 +1685,7 @@ describe("executeSteps", () => {
 
   it("enforces maxTotalTimeMs across repeat iterations", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         repeat: {
@@ -1731,7 +1731,7 @@ describe("executeSteps", () => {
   it("executes mockRoute step", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         mockRoute: {
@@ -1766,7 +1766,7 @@ describe("executeSteps", () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
     page.unroute = vi.fn(async () => undefined);
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         mockRoute: {
@@ -1799,7 +1799,7 @@ describe("executeSteps", () => {
 
   it("fails unmockRoute when no active mock exists", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       { unmockRoute: { url: "**/api/users" } }
     ] as Step[];
@@ -1827,7 +1827,7 @@ describe("executeSteps", () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
     page.unroute = vi.fn(async () => undefined);
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps = [
       {
         mockRoute: {
@@ -1862,7 +1862,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { "img[alt='Logo']": 1 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ assert: { visible: "img[alt='Logo']" } }];
 
     const result = await executeSteps({
@@ -1889,7 +1889,7 @@ describe("executeSteps", () => {
     const page = createMockPage({
       locatorCounts: { ".error-banner": 0 }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ assert: { notVisible: ".error-banner" } }];
 
     const result = await executeSteps({
@@ -1915,7 +1915,7 @@ describe("executeSteps", () => {
   it("mockRoute reads file-based response from configDir", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-file-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mock-file-"));
     const runDir = path.join(configDir, "runs", "test");
     fs.mkdirSync(runDir, { recursive: true });
     fs.writeFileSync(path.join(configDir, "fixtures.json"), '{"data": true}');
@@ -1951,7 +1951,7 @@ describe("executeSteps", () => {
   it("fails mockRoute when file path traverses outside configDir", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
-    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-traversal-"));
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mock-traversal-"));
     const configDir = path.join(baseDir, "config");
     fs.mkdirSync(configDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -1990,7 +1990,7 @@ describe("executeSteps", () => {
   it("fails mockRoute when absolute file path is outside configDir", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
-    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-abs-"));
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mock-abs-"));
     const configDir = path.join(baseDir, "config");
     fs.mkdirSync(configDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -2030,7 +2030,7 @@ describe("executeSteps", () => {
   it("fails mockRoute with clear error when response body and file are both missing", async () => {
     const page = createMockPage();
     page.route = vi.fn(async () => undefined);
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-mock-missing-response-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mock-missing-response-"));
     const steps = [
       {
         mockRoute: {
@@ -2063,7 +2063,7 @@ describe("executeSteps", () => {
   it("executes evalScript shorthand expression", async () => {
     const page = createMockPage();
     page.evaluate.mockResolvedValueOnce("My Page Title");
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ evalScript: "document.title" }];
 
     const result = await executeSteps({
@@ -2090,7 +2090,7 @@ describe("executeSteps", () => {
   it("executes evalScript with as and stores runtime var", async () => {
     const page = createMockPage();
     page.evaluate.mockResolvedValueOnce(42);
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { evalScript: { expression: "document.querySelectorAll('tr').length", as: "ROW_COUNT" } }
     ];
@@ -2121,7 +2121,7 @@ describe("executeSteps", () => {
   it("runtime vars substitute in subsequent steps", async () => {
     const page = createMockPage();
     page.evaluate.mockResolvedValueOnce("Dashboard");
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { evalScript: { expression: "document.title", as: "TITLE" } },
       { assert: { visible: "{{TITLE}}" } }
@@ -2151,7 +2151,7 @@ describe("executeSteps", () => {
 
   it("executes runScript step by reading and evaluating file", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runscript-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runscript-"));
     const runDir = path.join(configDir, "runs", "test");
     fs.mkdirSync(runDir, { recursive: true });
     fs.writeFileSync(path.join(configDir, "setup.js"), "window.testSetup = true;");
@@ -2182,7 +2182,7 @@ describe("executeSteps", () => {
 
   it("fails runHunt when sub-hunt exceeds maxSteps", async () => {
     const page = createMockPage();
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-maxsteps-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-maxsteps-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -2219,7 +2219,7 @@ describe("copyText step", () => {
     const page = createMockPage({
       textContents: { "[data-testid=heading]": "Hello World" }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { copyText: { selector: "[data-testid=heading]", as: "HEADING" } }
     ];
@@ -2252,7 +2252,7 @@ describe("copyText step", () => {
     const page = createMockPage({
       textContents: { "[data-testid=empty]": null }
     });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { copyText: { selector: "[data-testid=empty]", as: "EMPTY" } }
     ];
@@ -2278,7 +2278,7 @@ describe("copyText step", () => {
 
   it("fails on forbidden selector", async () => {
     const page = createMockPage();
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { copyText: { selector: "[data-danger]", as: "VAR" } }
     ];
@@ -2310,7 +2310,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-runhunt-download-"));
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-runhunt-download-"));
     const huntsDir = path.join(configDir, "hunts");
     fs.mkdirSync(huntsDir, { recursive: true });
     const runDir = path.join(configDir, "runs", "test");
@@ -2353,7 +2353,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [
       { click: { selector: "#download" } },
       { waitForDownload: { timeout: 5000 } }
@@ -2393,7 +2393,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForDownload: null }];
 
     const result = await executeSteps({
@@ -2424,7 +2424,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForDownload: { filename: "data.csv" } }];
 
     const result = await executeSteps({
@@ -2452,7 +2452,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForDownload: { filename: "expected.pdf" } }];
 
     const result = await executeSteps({
@@ -2481,7 +2481,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForDownload: { timeout: 60000 } }];
 
     const result = await executeSteps({
@@ -2509,7 +2509,7 @@ describe("waitForDownload step", () => {
       saveAs: vi.fn(async () => undefined)
     };
     const page = createMockPage({ waitForEventResult: mockDownload });
-    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-steps-"));
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ waitForDownload: null }];
 
     const result = await executeSteps({

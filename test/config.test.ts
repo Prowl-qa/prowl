@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { ensureAllowedDomain, loadConfig, loadHunt } from "../src/config/loader.js";
+import { describe, expect, it, vi } from "vitest";
+import { ensureAllowedDomain, findConfigPath, loadConfig, loadHunt } from "../src/config/loader.js";
 
 function setupTempProject(): string {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-"));
-  const prowlDir = path.join(tmpDir, ".prowlqa");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-"));
+  const prowlDir = path.join(tmpDir, ".prowl");
   fs.mkdirSync(path.join(prowlDir, "hunts"), { recursive: true });
 
   fs.writeFileSync(
@@ -77,7 +77,7 @@ describe("loadHunt", () => {
     try {
       process.chdir(project);
 
-      const prowlDir = path.join(project, ".prowlqa");
+      const prowlDir = path.join(project, ".prowl");
       fs.mkdirSync(path.join(prowlDir, "hunts", "admin"), { recursive: true });
       fs.writeFileSync(
         path.join(prowlDir, "hunts", "admin", "users-crud.yml"),
@@ -90,6 +90,53 @@ describe("loadHunt", () => {
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("legacy .prowlqa/ back-compat", () => {
+  it("findConfigPath prefers .prowl/ over legacy .prowlqa/", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-both-"));
+    try {
+      fs.mkdirSync(path.join(tmpDir, ".prowlqa"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, ".prowlqa", "config.yml"),
+        "target:\n  url: 'http://legacy.example'\n"
+      );
+      fs.mkdirSync(path.join(tmpDir, ".prowl"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, ".prowl", "config.yml"),
+        "target:\n  url: 'http://new.example'\n"
+      );
+
+      expect(findConfigPath(tmpDir)).toBe(path.join(tmpDir, ".prowl", "config.yml"));
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to legacy .prowlqa/ and warns when .prowl/ is absent", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-legacy-"));
+    const legacyDir = path.join(tmpDir, ".prowlqa");
+    fs.mkdirSync(path.join(legacyDir, "hunts"), { recursive: true });
+    fs.writeFileSync(
+      path.join(legacyDir, "config.yml"),
+      "target:\n  url: 'http://example.com'\n"
+    );
+
+    const cwd = process.cwd();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      process.chdir(tmpDir);
+
+      const { config, configDir } = loadConfig();
+      expect(config.target.url).toBe("http://example.com");
+      expect(path.basename(configDir)).toBe(".prowlqa");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(".prowlqa/"));
+    } finally {
+      process.chdir(cwd);
+      warn.mockRestore();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });
@@ -123,7 +170,7 @@ describe("loadConfig history", () => {
       process.chdir(project);
 
       fs.writeFileSync(
-        path.join(project, ".prowlqa", "config.yml"),
+        path.join(project, ".prowl", "config.yml"),
         "target:\n  url: 'http://example.com'\nhistory:\n  maxRuns: 25\n"
       );
 
@@ -142,7 +189,7 @@ describe("loadConfig history", () => {
       process.chdir(project);
 
       fs.writeFileSync(
-        path.join(project, ".prowlqa", "config.yml"),
+        path.join(project, ".prowl", "config.yml"),
         "target:\n  url: 'http://example.com'\nhistory:\n  maxRuns: 0\n"
       );
 

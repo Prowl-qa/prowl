@@ -19,7 +19,7 @@ export function buildProgram(): Command {
   const program = new Command();
 
   program
-    .name("prowlqa")
+    .name("prowl")
     .description("CLI-first QA testing tool for deterministic Playwright flows")
     .version(CLI_VERSION);
 

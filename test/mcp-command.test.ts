@@ -21,7 +21,7 @@ describe("mcp command", () => {
   it("starts the MCP server", async () => {
     mockStartMcpServer.mockResolvedValue(undefined);
 
-    await buildMcpCommand().parseAsync(["node", "prowlqa", "mcp"]);
+    await buildMcpCommand().parseAsync(["node", "prowl", "mcp"]);
 
     expect(mockStartMcpServer).toHaveBeenCalledTimes(1);
   });
@@ -32,7 +32,7 @@ describe("mcp command", () => {
       throw new Error(`process.exit:${code}`);
     }) as never);
 
-    await expect(buildMcpCommand().parseAsync(["node", "prowlqa", "mcp"])).rejects.toThrow("process.exit:1");
+    await expect(buildMcpCommand().parseAsync(["node", "prowl", "mcp"])).rejects.toThrow("process.exit:1");
 
     expect(console.error).toHaveBeenCalledWith("Failed to start MCP server: transport unavailable");
     expect(exitSpy).toHaveBeenCalledWith(1);

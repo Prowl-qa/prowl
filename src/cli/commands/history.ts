@@ -32,7 +32,7 @@ export function buildHistoryCommand(): Command {
         if (recent.length === 0) {
           console.log(
             chalk.yellow(
-              `\n  No history found for "${huntName}". Run it at least once with \`prowlqa run ${huntName}\`.\n`
+              `\n  No history found for "${huntName}". Run it at least once with \`prowl run ${huntName}\`.\n`
             )
           );
           return;

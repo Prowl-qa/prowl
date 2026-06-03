@@ -1,11 +1,11 @@
-# Hello Hunt — Your First ProwlQA Test
+# Hello Hunt — Your First Prowl Test
 # ---
 # This minimal hunt verifies your target app is running and the page loads.
 # Customize the URL path and expected text to match your app.
 #
-# Run it:  prowlqa run hello
+# Run it:  prowl run hello
 #
-# Browse more hunt templates at https://hub.prowlqa.dev
+# Browse more hunt templates at https://hub.prowl.tools
 
 name: hello
 description: Verify the target app loads successfully

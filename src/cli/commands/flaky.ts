@@ -43,7 +43,7 @@ export function buildFlakyCommand(): Command {
         if (scores.length === 0) {
           console.log(
             chalk.yellow(
-              "\n  No run history found. Run hunts with `prowlqa run` or `prowlqa ci` first.\n"
+              "\n  No run history found. Run hunts with `prowl run` or `prowl ci` first.\n"
             )
           );
           return;

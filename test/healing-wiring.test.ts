@@ -53,7 +53,7 @@ describe("self-healing wiring", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-heal-wire-"));
+    runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-heal-wire-"));
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
