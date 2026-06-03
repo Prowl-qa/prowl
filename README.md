@@ -1,13 +1,13 @@
-# ProwlQA
+# Prowl
 
 CLI-first QA testing tool for deterministic web testing with Playwright.
 
-<!-- ILLUSTRATION: ProwlQA raccoon mascot hero image — cyan raccoon with terminal window showing pass/fail output -->
+<!-- ILLUSTRATION: Prowl raccoon mascot hero image — cyan raccoon with terminal window showing pass/fail output -->
 
 Write tests in YAML. Run them from the terminal. Get screenshots, traces, and reports automatically.
 
 ```yaml
-# .prowlqa/hunts/login-flow.yml
+# .prowl/hunts/login-flow.yml
 name: login-flow
 steps:
   - navigate: "/login"
@@ -29,7 +29,7 @@ steps:
     ✓ assert visible "Dashboard" (15ms)
 
   PASS login-flow (622ms) 5/5 steps
-  Artifacts: .prowlqa/runs/2026-02-09_10-30-45
+  Artifacts: .prowl/runs/2026-02-09_10-30-45
 ```
 
 ---
@@ -39,17 +39,17 @@ steps:
 ### 1. Install
 
 ```bash
-npm install -g prowlqa
+npm install -g prowl-tools
 ```
 
 Or with Homebrew:
 
 ```bash
-brew tap prowl-qa/tap
-brew install prowlqa
+brew tap prowl-tools/tap
+brew install prowl
 ```
 
-ProwlQA uses Playwright under the hood. Install the browser:
+Prowl uses Playwright under the hood. Install the browser:
 
 ```bash
 npx playwright install chromium
@@ -59,15 +59,15 @@ npx playwright install chromium
 
 ```bash
 cd your-project
-prowlqa init
+prowl init
 ```
 
-<!-- ILLUSTRATION: Terminal screenshot showing `prowlqa init` output with raccoon mascot and file listing -->
+<!-- ILLUSTRATION: Terminal screenshot showing `prowl init` output with raccoon mascot and file listing -->
 
-This creates a `.prowlqa/` directory with a config file and 8 example hunts:
+This creates a `.prowl/` directory with a config file and 8 example hunts:
 
 ```
-.prowlqa/
+.prowl/
 ├── config.yml              # Target URL, browser settings, guardrails
 └── hunts/
     ├── homepage.yml         # Basic page load smoke test
@@ -82,7 +82,7 @@ This creates a `.prowlqa/` directory with a config file and 8 example hunts:
 
 ### 3. Configure
 
-Edit `.prowlqa/config.yml` to point at your app:
+Edit `.prowl/config.yml` to point at your app:
 
 ```yaml
 target:
@@ -91,7 +91,7 @@ target:
 
 ### 4. Write Your First Hunt
 
-Edit `.prowlqa/hunts/homepage.yml` or create a new file:
+Edit `.prowl/hunts/homepage.yml` or create a new file:
 
 ```yaml
 name: smoke-test
@@ -107,7 +107,7 @@ assertions:
 ### 5. Run
 
 ```bash
-prowlqa run smoke-test
+prowl run smoke-test
 ```
 
 <!-- ILLUSTRATION: Terminal screenshot showing colorized pass/fail output with step timings -->
@@ -118,7 +118,7 @@ That's it. You're testing.
 
 ## Step Type Reference
 
-ProwlQA supports both **shorthand** and **explicit** syntax for most step types. Shorthand is concise and readable. Explicit gives you full control over selectors.
+Prowl supports both **shorthand** and **explicit** syntax for most step types. Shorthand is concise and readable. Explicit gives you full control over selectors.
 
 ### navigate
 
@@ -339,7 +339,7 @@ Handle browser-native dialogs (alert, confirm, prompt). Register the handler **b
 
 ### setInputFiles
 
-Set files on `<input type="file">` elements. Paths are relative to `.prowlqa/`.
+Set files on `<input type="file">` elements. Paths are relative to `.prowl/`.
 
 ```yaml
 # Single file
@@ -419,7 +419,7 @@ assertions:
 
 ## Config Reference
 
-Config lives at `.prowlqa/config.yml`. All options with defaults:
+Config lives at `.prowl/config.yml`. All options with defaults:
 
 ```yaml
 # The base URL for all hunt navigation
@@ -455,9 +455,9 @@ guardrails:
     - "[data-danger]"
     - ".delete-btn"
 
-# Auth state from `prowlqa login`
+# Auth state from `prowl login`
 auth:
-  storageStatePath: ".prowlqa/auth-state.json"
+  storageStatePath: ".prowl/auth-state.json"
 
 # Run history retention
 history:
@@ -476,9 +476,9 @@ history:
 
 ### Self-Healing Selectors
 
-Set `guardrails.selfHealing: true` (default `false`) to let ProwlQA recover when an
+Set `guardrails.selfHealing: true` (default `false`) to let Prowl recover when an
 **explicit** selector stops matching — for example after a markup change renames
-`#sign-in-btn`. When such a selector matches nothing, ProwlQA derives the intent from
+`#sign-in-btn`. When such a selector matches nothing, Prowl derives the intent from
 the selector text and tries, in order:
 
 1. **Fuzzy text** — an element containing the selector's words (e.g. "sign in")
@@ -504,10 +504,10 @@ Use `{{VAR_NAME}}` to inject dynamic values into your hunts.
 
 1. **Hunt vars** — defined in the hunt's `vars:` block (highest priority)
 2. **Environment variables** — from `process.env`
-3. **`.env` file** — from `.prowlqa/.env` (loaded automatically)
+3. **`.env` file** — from `.prowl/.env` (loaded automatically)
 
 ```yaml
-# .prowlqa/hunts/login-flow.yml
+# .prowl/hunts/login-flow.yml
 vars:
   EMAIL: "{{TEST_EMAIL}}"     # References env var TEST_EMAIL
   TIMEOUT: "5000"             # Static value
@@ -519,7 +519,7 @@ steps:
 
 ### .env File
 
-Create `.prowlqa/.env` for secrets:
+Create `.prowl/.env` for secrets:
 
 ```env
 TEST_EMAIL=user@example.com
@@ -556,7 +556,7 @@ Every shorthand has an explicit equivalent. Use shorthand for readability, expli
 
 ## Selector Best Practices
 
-ProwlQA uses Playwright's selector engine. For stable, maintainable selectors:
+Prowl uses Playwright's selector engine. For stable, maintainable selectors:
 
 1. **`data-testid`** (best) — explicit test hooks that don't change with UI refactors
    ```yaml
@@ -568,7 +568,7 @@ ProwlQA uses Playwright's selector engine. For stable, maintainable selectors:
    - click: { selector: "role=button[name='Submit']" }
    ```
 
-3. **Labels/placeholders** — via shorthand, ProwlQA resolves these automatically
+3. **Labels/placeholders** — via shorthand, Prowl resolves these automatically
    ```yaml
    - fill: { "Email": "user@test.com" }
    ```
@@ -587,15 +587,15 @@ ProwlQA uses Playwright's selector engine. For stable, maintainable selectors:
 
 ## Auth Setup
 
-For hunts that require authentication, use `prowlqa login` to capture browser state:
+For hunts that require authentication, use `prowl login` to capture browser state:
 
 ```bash
-prowlqa login
+prowl login
 ```
 
-This opens a headed Chromium window. Log in manually, then close the browser. ProwlQA saves cookies, localStorage, and sessionStorage to `.prowlqa/auth-state.json`.
+This opens a headed Chromium window. Log in manually, then close the browser. Prowl saves cookies, localStorage, and sessionStorage to `.prowl/auth-state.json`.
 
-All subsequent `prowlqa run` commands will load this auth state, so your hunts start already logged in.
+All subsequent `prowl run` commands will load this auth state, so your hunts start already logged in.
 
 ### Using Auth State in Hunts
 
@@ -603,21 +603,21 @@ No changes needed — auth state is loaded automatically from the path in `confi
 
 ```yaml
 auth:
-  storageStatePath: ".prowlqa/auth-state.json"
+  storageStatePath: ".prowl/auth-state.json"
 ```
 
 ### Refreshing Auth
 
-If your session expires, run `prowlqa login` again to re-capture.
+If your session expires, run `prowl login` again to re-capture.
 
 ---
 
 ## Artifacts
 
-Every hunt run generates artifacts in `.prowlqa/runs/<timestamp>/`:
+Every hunt run generates artifacts in `.prowl/runs/<timestamp>/`:
 
 ```
-.prowlqa/runs/2026-02-09_10-30-45/
+.prowl/runs/2026-02-09_10-30-45/
 ├── summary.md           # Human-readable report
 ├── result.json          # Machine-readable results
 ├── console.log          # Browser console output
@@ -633,12 +633,12 @@ Every hunt run generates artifacts in `.prowlqa/runs/<timestamp>/`:
 ### Viewing Traces
 
 ```bash
-npx playwright show-trace .prowlqa/runs/2026-02-09_10-30-45/trace.zip
+npx playwright show-trace .prowl/runs/2026-02-09_10-30-45/trace.zip
 ```
 
 ### Trace Correlation (link failures to your app's traces)
 
-When a hunt hits a failing request (HTTP status ≥ 400), ProwlQA reads the response's
+When a hunt hits a failing request (HTTP status ≥ 400), Prowl reads the response's
 `traceparent` header, extracts the W3C trace ID, and records it. This lets you pivot
 straight from a hunt failure to the matching distributed trace in your own
 observability stack (Datadog, Grafana/Tempo, Jaeger, etc.).
@@ -647,14 +647,14 @@ The trace IDs appear in:
 - `result.json` under a `traceCorrelations` array (`url`, `status`, `traceId`, `header`)
 - `summary.md` under a **Trace Correlations** section
 
-If your app uses a non-standard header, configure it in `.prowlqa/config.yml`:
+If your app uses a non-standard header, configure it in `.prowl/config.yml`:
 
 ```yaml
 tracing:
   header: "x-request-id"   # default: "traceparent"
 ```
 
-This is a correlation bridge only — ProwlQA does not generate or propagate its own
+This is a correlation bridge only — Prowl does not generate or propagate its own
 spans. When the app emits no trace headers, nothing is recorded (no noise).
 
 ---
@@ -663,39 +663,39 @@ spans. When the app emits no trace headers, nothing is recorded (no noise).
 
 ```bash
 # Run a hunt
-prowlqa run <hunt-name>
-prowlqa run <hunt-name> --headed          # Show browser window
-prowlqa run <hunt-name> --trace           # Capture Playwright trace
-prowlqa run <hunt-name> --slow-mo 500     # Slow down actions (ms)
-prowlqa run <hunt-name> --url <override>  # Override target URL
-prowlqa run <hunt-name> --config <path>   # Custom config path
+prowl run <hunt-name>
+prowl run <hunt-name> --headed          # Show browser window
+prowl run <hunt-name> --trace           # Capture Playwright trace
+prowl run <hunt-name> --slow-mo 500     # Slow down actions (ms)
+prowl run <hunt-name> --url <override>  # Override target URL
+prowl run <hunt-name> --config <path>   # Custom config path
 
 # Watch mode — re-runs on file changes
-prowlqa watch <hunt-name>
+prowl watch <hunt-name>
 
 # Auth — capture login state interactively
-prowlqa login
+prowl login
 
-# Initialize — create .prowlqa directory with examples
-prowlqa init
-prowlqa init --force                      # Overwrite existing
+# Initialize — create .prowl directory with examples
+prowl init
+prowl init --force                      # Overwrite existing
 
 # List available hunts
-prowlqa list
+prowl list
 
 # CI mode — run all hunts with aggregate status
-prowlqa ci
-prowlqa ci --json                        # Machine-readable CI output
-prowlqa ci --parallel 4                 # Run hunts with 4 workers
+prowl ci
+prowl ci --json                        # Machine-readable CI output
+prowl ci --parallel 4                 # Run hunts with 4 workers
 
 # History — show past runs of a hunt
-prowlqa history <hunt-name>
-prowlqa history <hunt-name> --limit 50   # Show the last 50 runs (default: 20)
-prowlqa history <hunt-name> --json       # Machine-readable history output
+prowl history <hunt-name>
+prowl history <hunt-name> --limit 50   # Show the last 50 runs (default: 20)
+prowl history <hunt-name> --json       # Machine-readable history output
 
-# MCP server — expose ProwlQA to AI agents over stdio
-prowlqa mcp
-prowlqa mcp --projects ~/.prowlqa/projects.yml   # Drive multiple repos via a registry
+# MCP server — expose Prowl to AI agents over stdio
+prowl mcp
+prowl mcp --projects ~/.prowl/projects.yml   # Drive multiple repos via a registry
 ```
 
 `--parallel <count>` details:
@@ -705,31 +705,31 @@ prowlqa mcp --projects ~/.prowlqa/projects.yml   # Drive multiple repos via a re
 
 ### Run History
 
-Every `prowlqa run` and `prowlqa ci` appends an entry to `.prowlqa/history.json`
+Every `prowl run` and `prowl ci` appends an entry to `.prowl/history.json`
 with the hunt name, status, start time, duration, and run directory. Retention
 is capped per hunt by `history.maxRuns` (default 100) — once a hunt exceeds the
 cap, its oldest entries are dropped on the next write. Other hunts are not
 affected.
 
 ```yaml
-# In .prowlqa/config.yml
+# In .prowl/config.yml
 history:
   maxRuns: 50  # keep the last 50 runs per hunt (default: 100)
 ```
 
-Use `prowlqa history <hunt-name>` for a quick status/duration table, or
+Use `prowl history <hunt-name>` for a quick status/duration table, or
 `--json` to feed the entries into dashboards, flake detectors, or agents.
 
 ### Failure Clustering
 
-When a `prowlqa ci` run has multiple failures that share a common cause — the same
-step type, selector, and (normalized) error — ProwlQA groups them into a single
+When a `prowl ci` run has multiple failures that share a common cause — the same
+step type, selector, and (normalized) error — Prowl groups them into a single
 **failure cluster**. Instead of triaging five separate failures, you see one root
 cause (for example, a renamed `#submit` selector that broke five hunts).
 
 Clusters appear in:
 - the **Failure clusters** section of the CI summary, with the cause and affected hunts
-- a `clusters` array in `ci-result.json` (and `prowlqa ci --json`), each entry with
+- a `clusters` array in `ci-result.json` (and `prowl ci --json`), each entry with
   `cause`, `stepType`, `selector`, `error`, `count`, and `hunts`
 
 Only causes shared by more than one hunt are reported as clusters. This pairs well
@@ -739,29 +739,29 @@ with self-healing selectors and flake detection to cut triage time on large suit
 
 ## MCP Server (AI Agent Integration)
 
-ProwlQA can run as an [MCP](https://modelcontextprotocol.io) server, exposing QA
+Prowl can run as an [MCP](https://modelcontextprotocol.io) server, exposing QA
 as a small set of named tools that any MCP-capable agent can call over stdio. The
 agent triggers runs and reads structured results through these tools — it never
 needs shell access to your repo.
 
 **Prerequisites:**
 
-- **`prowlqa` must be on your `PATH`.** Install it globally with `npm install -g prowlqa`, or launch it through `npx` (use `"command": "npx", "args": ["prowlqa", "mcp"]` in the client config below). If the binary can't be found, the MCP client fails to start the server with no hunt-specific error.
-- **The target project must be initialized** — a `.prowlqa/` directory with a valid config and hunts. Run `prowlqa init` and author hunts first. Pointed at an uninitialized repo, MCP tool calls fail with a missing `.prowlqa/config.yml` error.
+- **`prowl` must be on your `PATH`.** Install it globally with `npm install -g prowl-tools`, or launch it through `npx` (use `"command": "npx", "args": ["prowl-tools", "mcp"]` in the client config below). If the binary can't be found, the MCP client fails to start the server with no hunt-specific error.
+- **The target project must be initialized** — a `.prowl/` directory with a valid config and hunts. Run `prowl init` and author hunts first. Pointed at an uninitialized repo, MCP tool calls fail with a missing `.prowl/config.yml` error.
 
 ```bash
-prowlqa mcp
+prowl mcp
 ```
 
-This starts a stdio server for the current project (it discovers `.prowlqa/` from
+This starts a stdio server for the current project (it discovers `.prowl/` from
 the working directory, exactly like the other commands). Point your MCP client at
 it — for example:
 
 ```json
 {
   "mcpServers": {
-    "prowlqa": {
-      "command": "prowlqa",
+    "prowl": {
+      "command": "prowl",
       "args": ["mcp"],
       "cwd": "/path/to/your/project"
     }
@@ -781,11 +781,11 @@ it — for example:
 Existing guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`,
 `maxTotalTimeMs`) apply to every run the server triggers.
 
-**Controlling what the agent can do:** ProwlQA exposes only these four tools and
+**Controlling what the agent can do:** Prowl exposes only these four tools and
 never runs arbitrary shell. To restrict the agent further, allow-list tool names
 in your MCP client (e.g. OpenClaw) config — for example, allow `list_hunts` and
 `run_suite` but withhold `run_hunt`. That allow-listing is configured on the
-agent/client side, not in ProwlQA.
+agent/client side, not in Prowl.
 
 ### Logging bugs automatically
 
@@ -808,7 +808,7 @@ looks like this:
   "passed": 6,
   "failed": 2,
   "skipped": 0,
-  "resultPath": "/path/to/project/.prowlqa/runs/ci-2026-05-26_09-12-03-456/ci-result.json",
+  "resultPath": "/path/to/project/.prowl/runs/ci-2026-05-26_09-12-03-456/ci-result.json",
   "bugs": {
     "created": ["QA-014"],
     "regressions": ["QA-015"],
@@ -829,20 +829,20 @@ names to repo roots. This file lives *outside* any repo (it spans many), not
 inside a target project:
 
 ```yaml
-# ~/.prowlqa/projects.yml
+# ~/.prowl/projects.yml
 projects:
   coupe:
     root: /Users/you/projects/coupe
   storefront:
     root: /Users/you/projects/storefront
-    configPath: /custom/.prowlqa/config.yml   # optional; defaults to <root>/.prowlqa/config.yml
+    configPath: /custom/.prowl/config.yml   # optional; defaults to <root>/.prowl/config.yml
 ```
 
 The registry is resolved in priority order:
 
-1. `prowlqa mcp --projects <path>`
-2. the `PROWLQA_PROJECTS` environment variable
-3. `~/.prowlqa/projects.yml`
+1. `prowl mcp --projects <path>`
+2. the `PROWL_PROJECTS` environment variable
+3. `~/.prowl/projects.yml`
 
 With a registry loaded, every tool accepts an optional `project` argument that
 selects which repo to act on, and `list_projects` enumerates what's available.
@@ -899,9 +899,9 @@ Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS
 
 ## Troubleshooting
 
-### "Could not find .prowlqa/config.yml"
+### "Could not find .prowl/config.yml"
 
-Run `prowlqa init` in your project root to create the `.prowlqa/` directory.
+Run `prowl init` in your project root to create the `.prowl/` directory.
 
 ### "Navigation to disallowed domain"
 
@@ -922,7 +922,7 @@ The selector matches a pattern in `guardrails.forbiddenSelectors`. Either change
 
 The `{{VAR_NAME}}` in your hunt couldn't be resolved. Check:
 1. Is it defined in the hunt's `vars:` block?
-2. Is it set in your `.prowlqa/.env` file?
+2. Is it set in your `.prowl/.env` file?
 3. Is it set as an environment variable?
 
 ### Selectors not finding elements

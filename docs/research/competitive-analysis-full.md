@@ -1,6 +1,6 @@
-# ProwlQA — Full Competitive Analysis
+# Prowl — Full Competitive Analysis
 
-> Comprehensive comparison of ProwlQA against Playwright CLI, Cypress, Maestro, and MCP-based alternatives.
+> Comprehensive comparison of Prowl against Playwright CLI, Cypress, Maestro, and MCP-based alternatives.
 > Research date: 2026-02-16. Based on public docs, benchmarks, and hands-on analysis.
 
 ---
@@ -19,7 +19,7 @@
 
 ## Side-by-Side: Login Flow
 
-### ProwlQA (15 lines of steps)
+### Prowl (15 lines of steps)
 
 ```yaml
 name: login-flow
@@ -105,7 +105,7 @@ url: http://localhost:3000/login
 
 ## Verbosity & Complexity Table
 
-| Metric | ProwlQA | Playwright | Cypress | Maestro |
+| Metric | Prowl | Playwright | Cypress | Maestro |
 |--------|---------|-----------|---------|---------|
 | **Lines for login test** | 15 | 25 + config | 20 + config | 10 |
 | **Config file needed** | `config.yml` (simple) | `playwright.config.ts` (complex) | `cypress.config.ts` (moderate) | None |
@@ -120,7 +120,7 @@ url: http://localhost:3000/login
 
 ## CRUD Cycle Comparison
 
-ProwlQA's CRUD cycle example (`crud-cycle.yml`) handles login reuse via `runHunt`, create, read, update, delete with dialog handling, and cleanup verification in **~45 lines of YAML**.
+Prowl's CRUD cycle example (`crud-cycle.yml`) handles login reuse via `runHunt`, create, read, update, delete with dialog handling, and cleanup verification in **~45 lines of YAML**.
 
 The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowledge of:
 
@@ -131,15 +131,15 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 - Proper async/await chains
 - Error handling patterns
 
-**ProwlQA is ~50% shorter and requires zero programming knowledge.**
+**Prowl is ~50% shorter and requires zero programming knowledge.**
 
 ---
 
 ## Feature Matrix
 
-### ProwlQA vs Playwright vs Cypress
+### Prowl vs Playwright vs Cypress
 
-| Feature | ProwlQA | Playwright | Cypress |
+| Feature | Prowl | Playwright | Cypress |
 |---------|---------|-----------|---------|
 | **Language** | YAML | TS/JS/Python/Java/C# | JS/TS |
 | **Browser engines** | Chromium, Firefox, WebKit | Chromium, Firefox, WebKit | Chrome-family, Firefox (limited) |
@@ -155,9 +155,9 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 | **Architecture** | CLI on Playwright | Out-of-process | In-browser |
 | **NPM downloads** | New | 20-30M/week | Surpassed by Playwright mid-2024 |
 
-### ProwlQA vs Maestro (Web)
+### Prowl vs Maestro (Web)
 
-| Feature | ProwlQA | Maestro |
+| Feature | Prowl | Maestro |
 |---------|---------|---------|
 | **Web support maturity** | Core focus | Beta, afterthought |
 | **Selector precision** | Playwright engine (surgical) | Accessibility-based (simple but fragile) |
@@ -183,7 +183,7 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 | **Selenium IDE** | Web (recorded) | Chrome extension, records to JSON/code |
 | **Katalon** | Web + Mobile + API | Keyword-driven, GUI-based, commercial |
 
-**Key insight:** There is no widely-adopted, production-grade, YAML-based web testing tool with the depth of Playwright's browser automation. Maestro comes closest but is mobile-first. ProwlQA occupies a unique position.
+**Key insight:** There is no widely-adopted, production-grade, YAML-based web testing tool with the depth of Playwright's browser automation. Maestro comes closest but is mobile-first. Prowl occupies a unique position.
 
 ---
 
@@ -208,11 +208,11 @@ The equivalent Playwright test: **~70-90 lines of TypeScript** requiring knowled
 - Tag/grep filtering and annotations (slow, skip, fixme)
 - Learning curve: 1-2 weeks for devs, 3-4 weeks for QA
 
-**Weaknesses (ProwlQA's opportunity):**
+**Weaknesses (Prowl's opportunity):**
 - Requires TypeScript/JS knowledge — excludes non-developers
 - Config is complex (`playwright.config.ts` is 30-60 lines minimum)
 - Every line requires async/await understanding
-- AI agent token cost: ~3,700-7,800 tokens per test (vs ProwlQA's ~200-400)
+- AI agent token cost: ~3,700-7,800 tokens per test (vs Prowl's ~200-400)
 - No built-in guardrails or safety rails
 - No credential redaction in reports
 - No opinionated defaults (noConsoleErrors, noNetworkErrors must be manually coded)
@@ -253,18 +253,18 @@ AI agents (Claude Code, Codex, Cursor, etc.) are increasingly writing and runnin
 - How many tests fit in context
 - Agent autonomy (fewer tokens = more room for reasoning)
 
-### ProwlQA CLI Token Costs
+### Prowl CLI Token Costs
 
 | Operation | Tokens |
 |-----------|--------|
-| `prowlqa --help` | ~150 |
-| `prowlqa run --help` | ~100 |
-| `prowlqa ci --help` | ~120 |
-| `prowlqa list --help` | ~50 |
+| `prowl --help` | ~150 |
+| `prowl run --help` | ~100 |
+| `prowl ci --help` | ~120 |
+| `prowl list --help` | ~50 |
 | Full CLI discovery | ~500 |
 | Single run result (`--json`) | ~800-1,200 |
 | CI result (10 hunts, `--json`) | ~500-800 |
-| `prowlqa list --json` | ~50-200 |
+| `prowl list --json` | ~50-200 |
 
 **Total for single test run**: ~1,050-3,150 tokens
 Includes the full execution cycle: prompts, responses, and parsing/result processing.
@@ -292,7 +292,7 @@ The difference is architectural:
 
 Connecting to 5-10 MCP servers can consume 15-20% of an LLM's context window before any work begins. Best practice (2026): run agents only on failed tests during a second pass, cutting token spend by ~70%.
 
-### ProwlQA's MCP Decision
+### Prowl's MCP Decision
 
 MCP server (P5-001) was initially deprioritized on token-efficiency grounds, then **revived** (2026-05-24) as a planned epic — re-scoped from a generic MCP wrapper to a first-class agent QA interface with automated bug-logging (see the "Agent QA / MCP Server" epic in `docs/backlog.md`). The CLI + library API remains the token-efficient default for agents:
 - CLI is **pay-per-use** (~150 tokens for discovery, ~800-1,200 per run)
@@ -303,7 +303,7 @@ MCP server (P5-001) was initially deprioritized on token-efficiency grounds, the
 
 ## Honest Wins & Losses
 
-### Where ProwlQA Wins
+### Where Prowl Wins
 
 1. **No code required** — YAML vs TypeScript eliminates the biggest barrier to adoption
 2. **AI-agent friendly** — ~200-400 tokens per hunt vs ~3,700-7,800 for Playwright test + config
@@ -314,7 +314,7 @@ MCP server (P5-001) was initially deprioritized on token-efficiency grounds, the
 7. **Credential safety** — Automatic `{{VAR}}` redaction in reports
 8. **Artifact richness** — Screenshots every step, console logs, network errors, Playwright traces
 
-### Where ProwlQA Loses (Today)
+### Where Prowl Loses (Today)
 
 | Gap | Competitor with it | Backlog item |
 |-----|-------------------|--------------|
@@ -329,6 +329,6 @@ MCP server (P5-001) was initially deprioritized on token-efficiency grounds, the
 
 ### Strategic Position
 
-ProwlQA does not compete with Playwright — it is built **on top of** Playwright. The value proposition is a YAML abstraction layer that makes Playwright's power accessible to non-developers and token-efficient for AI agents, with safety guardrails that no competitor offers.
+Prowl does not compete with Playwright — it is built **on top of** Playwright. The value proposition is a YAML abstraction layer that makes Playwright's power accessible to non-developers and token-efficient for AI agents, with safety guardrails that no competitor offers.
 
-Maestro proved the YAML-declarative model works. ProwlQA applies it to web testing where Maestro is weakest.
+Maestro proved the YAML-declarative model works. Prowl applies it to web testing where Maestro is weakest.

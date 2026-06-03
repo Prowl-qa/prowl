@@ -1,10 +1,10 @@
-# ProwlQA Primary ICP
+# Prowl Primary ICP
 
 ## The First Adopter
 
 **QA engineers on small teams working alongside AI-assisted developers.**
 
-They are the person on a 5–25 person product team who owns test coverage. Their developers ship code produced in large part by AI agents. That code needs independent validation before it reaches production, and the QA engineer is the person accountable for that signal. ProwlQA exists for them.
+They are the person on a 5–25 person product team who owns test coverage. Their developers ship code produced in large part by AI agents. That code needs independent validation before it reaches production, and the QA engineer is the person accountable for that signal. Prowl exists for them.
 
 ## Persona Profile
 
@@ -31,21 +31,21 @@ They are the person on a 5–25 person product team who owns test coverage. Thei
 | **Manual regression** | Doesn't scale. Misses regressions. QA engineer spends hours on rote clicking instead of exploratory testing. |
 | **Skipping tests entirely** | Common in vibe-coded/AI-assisted projects. Works until it catastrophically doesn't. |
 
-## Why ProwlQA Wins for Them
+## Why Prowl Wins for Them
 
 1. **YAML hunts are readable by everyone on the team.** A developer, a QA engineer, a PM, and an AI agent can all read the same hunt file and agree on what it does. That shared substrate is the product.
-2. **Agents can author hunts as easily as humans can.** `prowlqa generate` lets an agent draft tests from a URL and intent. The QA engineer reviews the YAML, not a 200-line code change.
+2. **Agents can author hunts as easily as humans can.** `prowl generate` lets an agent draft tests from a URL and intent. The QA engineer reviews the YAML, not a 200-line code change.
 3. **Deterministic and CI-native by design.** JSON output, guardrails, exit codes — fits existing pipelines without bespoke glue.
-4. **The QA engineer becomes the reviewer, not the author.** ProwlQA lets agents do the heavy lifting while the QA engineer applies judgment — the role evolves from bottleneck to quality gatekeeper.
+4. **The QA engineer becomes the reviewer, not the author.** Prowl lets agents do the heavy lifting while the QA engineer applies judgment — the role evolves from bottleneck to quality gatekeeper.
 5. **Playwright underneath.** No fidelity tradeoff. Same browser, same selectors, same power — just a readable surface on top.
 
 ## The Positioning in One Sentence
 
-> **ProwlQA is the shared test layer for teams where AI agents write most of the code and humans stay accountable for what ships.**
+> **Prowl is the shared test layer for teams where AI agents write most of the code and humans stay accountable for what ships.**
 
 ## Secondary / Adjacent Audiences
 
-These will benefit from ProwlQA and may adopt over time, but they are not the first target. Messaging, onboarding, and feature priorities should be built for the primary ICP above — not averaged across everyone.
+These will benefit from Prowl and may adopt over time, but they are not the first target. Messaging, onboarding, and feature priorities should be built for the primary ICP above — not averaged across everyone.
 
 - **Junior developers** on AI-assisted teams who want to contribute tests without framework fluency
 - **Solo/indie developers** adding coverage to side projects or vibe-coded apps

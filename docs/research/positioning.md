@@ -1,4 +1,4 @@
-# ProwlQA — Positioning
+# Prowl — Positioning
 
 > Distilled from [competitive-analysis-full.md](./competitive-analysis-full.md). Last updated: 2026-02-16.
 
@@ -47,7 +47,7 @@
 
 ---
 
-## What ProwlQA Is
+## What Prowl Is
 
 - A **CLI tool** that runs YAML-defined browser tests using Playwright
 - A **YAML abstraction layer** over Playwright's browser automation engine
@@ -55,7 +55,7 @@
 - **Opinionated** — sensible defaults, built-in guardrails, structured artifacts
 - **Agent-native** — designed for AI consumption from day one (JSON output, token efficiency, structured exit codes)
 
-## What ProwlQA Is NOT
+## What Prowl Is NOT
 
 - Not a Playwright replacement — it's built on Playwright
 - Not an AI tester — it executes explicit steps (no NLP interpretation)
@@ -69,19 +69,19 @@
 
 **CLI-first agent efficiency.**
 
-Every competitor optimizes for human developers. ProwlQA optimizes for both humans AND AI agents:
+Every competitor optimizes for human developers. Prowl optimizes for both humans AND AI agents:
 
 - Humans get YAML (no code)
 - Agents get structured JSON (minimal tokens)
 - Both get guardrails (no other tool has them)
 
-As AI agents write more tests, the tool that costs the fewest tokens per test wins distribution. ProwlQA is 10-20x cheaper than Playwright for an AI agent to use.
+As AI agents write more tests, the tool that costs the fewest tokens per test wins distribution. Prowl is 10-20x cheaper than Playwright for an AI agent to use.
 
 ---
 
 ## Key Differentiators
 
-| | ProwlQA | Playwright | Cypress | Maestro |
+| | Prowl | Playwright | Cypress | Maestro |
 |---|---------|-----------|---------|---------|
 | **Language** | YAML | TypeScript | JavaScript | YAML |
 | **Web maturity** | Core focus | Gold standard | Established | Beta |
@@ -105,8 +105,8 @@ As AI agents write more tests, the tool that costs the fewest tokens per test wi
 
 ### Lead with Pain Points
 - "Your QA engineer doesn't know TypeScript? They don't need to."
-- "Your AI agent burns 7,800 tokens per Playwright test. ProwlQA uses 400."
-- "Cypress charges for parallelism. Playwright needs config. ProwlQA just works."
+- "Your AI agent burns 7,800 tokens per Playwright test. Prowl uses 400."
+- "Cypress charges for parallelism. Playwright needs config. Prowl just works."
 
 ### Lead with Safety
 - "The only testing tool with built-in guardrails"
@@ -114,6 +114,6 @@ As AI agents write more tests, the tool that costs the fewest tokens per test wi
 - "Credentials never leak into test reports"
 
 ### Lead with Philosophy
-- "Maestro proved YAML testing works. ProwlQA brings it to the web."
+- "Maestro proved YAML testing works. Prowl brings it to the web."
 - "Built on Playwright. Accessible to everyone."
 - "Opinionated defaults, escape hatches when you need them."
