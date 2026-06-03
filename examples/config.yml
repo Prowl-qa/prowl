@@ -36,6 +36,6 @@ guardrails:
     - "[data-danger]"
     - ".delete-btn"
 
-# Auth state — captured by `prowlqa login`, used to skip login in hunts
+# Auth state — captured by `prowl login`, used to skip login in hunts
 auth:
-  storageStatePath: ".prowlqa/auth-state.json"
+  storageStatePath: ".prowl/auth-state.json"
