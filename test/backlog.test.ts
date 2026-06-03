@@ -207,7 +207,7 @@ describe("updateBacklogFromSuite", () => {
   }
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-backlog-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-backlog-test-"));
     backlogPath = path.join(tmpDir, "docs", "backlog.md");
     resolvedPath = path.join(tmpDir, "docs", "resolved.md");
     fs.mkdirSync(path.join(tmpDir, "docs"), { recursive: true });

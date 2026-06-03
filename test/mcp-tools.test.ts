@@ -29,7 +29,7 @@ function suiteResult(overrides: Record<string, unknown> = {}) {
       hunts: [],
       ...overrides
     },
-    resultPath: "/tmp/.prowlqa/runs/ci-x/ci-result.json"
+    resultPath: "/tmp/.prowl/runs/ci-x/ci-result.json"
   };
 }
 
@@ -37,11 +37,11 @@ describe("listHuntsTool", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns hunt names from the discovered config dir", () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowl" });
     mockListHunts.mockReturnValue(["auth/login", "homepage"]);
 
     expect(listHuntsTool()).toEqual({ hunts: ["auth/login", "homepage"] });
-    expect(mockListHunts).toHaveBeenCalledWith("/proj/.prowlqa");
+    expect(mockListHunts).toHaveBeenCalledWith("/proj/.prowl");
   });
 });
 
@@ -50,7 +50,7 @@ describe("runSuiteTool", () => {
 
   it("runs the suite, logs bugs by default, and merges the summary", async () => {
     const suite = suiteResult();
-    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowl/config.yml", configDir: "/proj/.prowl" });
     mockRunSuite.mockResolvedValue(suite);
     mockUpdateBacklog.mockReturnValue({
       created: ["QA-001"],
@@ -62,7 +62,7 @@ describe("runSuiteTool", () => {
     const result = await runSuiteTool({ includeTags: ["smoke"], parallel: 2 });
 
     expect(mockRunSuite).toHaveBeenCalledWith(
-      expect.objectContaining({ configPath: "/proj/.prowlqa/config.yml", includeTags: ["smoke"], parallel: 2 })
+      expect.objectContaining({ configPath: "/proj/.prowl/config.yml", includeTags: ["smoke"], parallel: 2 })
     );
     expect(mockUpdateBacklog).toHaveBeenCalledTimes(1);
     expect(mockUpdateBacklog).toHaveBeenCalledWith(suite, {
@@ -76,7 +76,7 @@ describe("runSuiteTool", () => {
       passed: 1,
       failed: 1,
       skipped: 0,
-      resultPath: "/tmp/.prowlqa/runs/ci-x/ci-result.json",
+      resultPath: "/tmp/.prowl/runs/ci-x/ci-result.json",
       bugs: {
         created: ["QA-001"],
         regressions: ["QA-002"],
@@ -87,7 +87,7 @@ describe("runSuiteTool", () => {
   });
 
   it("skips bug-logging when logBugs is false", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowl/config.yml", configDir: "/proj/.prowl" });
     mockRunSuite.mockResolvedValue(suiteResult({ status: "pass", failed: 0, passed: 2 }));
 
     const result = await runSuiteTool({ logBugs: false });

@@ -50,7 +50,7 @@ function makeRunResult(huntName: string, status: "pass" | "fail"): { result: Run
       assertions: [],
       artifacts: {}
     },
-    runDir: `prowlqa/runs/${huntName}`
+    runDir: `prowl/runs/${huntName}`
   };
 }
 
@@ -115,39 +115,39 @@ describe("ci command", () => {
   });
 
   it("runs all hunts and exits 0 when all pass", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa"]);
+    await cmd.parseAsync(["node", "prowl"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(2);
     expect(process.exitCode).toBe(0);
   });
 
   it("exits 1 when any hunt fails", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "checkout"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("checkout", "fail"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa"]);
+    await cmd.parseAsync(["node", "prowl"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(2);
     expect(process.exitCode).toBe(1);
   });
 
   it("prints warning and exits 2 when no hunts found", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue([]);
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa"]);
+    await cmd.parseAsync(["node", "prowl"]);
 
     expect(mockRunHunt).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No hunts found"));
@@ -155,12 +155,12 @@ describe("ci command", () => {
   });
 
   it("exits 2 when all hunts are skipped by tag filters", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockLoadHuntTags.mockReturnValue(["regression"]);
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--include-tags", "smoke"]);
+    await cmd.parseAsync(["node", "prowl", "--include-tags", "smoke"]);
 
     expect(mockRunHunt).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("All hunts were skipped"));
@@ -168,7 +168,7 @@ describe("ci command", () => {
   });
 
   it("filters hunts with --include-tags", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow", "checkout"]);
     mockLoadHuntTags
       .mockReturnValueOnce(["smoke"])
@@ -179,7 +179,7 @@ describe("ci command", () => {
       .mockResolvedValueOnce(makeRunResult("checkout", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--include-tags", "smoke"]);
+    await cmd.parseAsync(["node", "prowl", "--include-tags", "smoke"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(2);
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "homepage" }));
@@ -191,7 +191,7 @@ describe("ci command", () => {
     const cmd = buildCiCommand();
 
     await expect(
-      cmd.parseAsync(["node", "prowlqa", "--include-tags", " , "])
+      cmd.parseAsync(["node", "prowl", "--include-tags", " , "])
     ).rejects.toThrow("--include-tags requires at least one non-empty tag");
   });
 
@@ -199,12 +199,12 @@ describe("ci command", () => {
     const cmd = buildCiCommand();
 
     await expect(
-      cmd.parseAsync(["node", "prowlqa", "--exclude-tags", " , "])
+      cmd.parseAsync(["node", "prowl", "--exclude-tags", " , "])
     ).rejects.toThrow("--exclude-tags requires at least one non-empty tag");
   });
 
   it("filters hunts with --exclude-tags", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "slow-test"]);
     mockLoadHuntTags
       .mockReturnValueOnce(["smoke"])
@@ -212,7 +212,7 @@ describe("ci command", () => {
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--exclude-tags", "slow"]);
+    await cmd.parseAsync(["node", "prowl", "--exclude-tags", "slow"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(1);
     expect(mockRunHunt).toHaveBeenCalledWith(expect.objectContaining({ huntName: "homepage" }));
@@ -220,7 +220,7 @@ describe("ci command", () => {
   });
 
   it("filters hunts with combined --include-tags and --exclude-tags", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["fast-smoke", "slow-smoke", "regression"]);
     mockLoadHuntTags
       .mockReturnValueOnce(["smoke", "fast"])
@@ -229,7 +229,7 @@ describe("ci command", () => {
     mockRunHunt.mockResolvedValueOnce(makeRunResult("fast-smoke", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--include-tags", "smoke", "--exclude-tags", "slow"]);
+    await cmd.parseAsync(["node", "prowl", "--include-tags", "smoke", "--exclude-tags", "slow"]);
 
     // "fast-smoke" matches include (smoke) and doesn't match exclude → runs
     // "slow-smoke" matches include (smoke) but also matches exclude (slow) → skipped
@@ -239,7 +239,7 @@ describe("ci command", () => {
   });
 
   it("continues running remaining hunts when one throws", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "broken", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
@@ -247,7 +247,7 @@ describe("ci command", () => {
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa"]);
+    await cmd.parseAsync(["node", "prowl"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(3);
     expect(process.exitCode).toBe(1);
@@ -255,28 +255,28 @@ describe("ci command", () => {
   });
 
   it("passes --config flag through to loadConfig", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/custom/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/custom/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--config", "/tmp/custom/.prowlqa/config.yml"]);
+    await cmd.parseAsync(["node", "prowl", "--config", "/tmp/custom/.prowl/config.yml"]);
 
-    expect(mockLoadConfig).toHaveBeenCalledWith("/tmp/custom/.prowlqa/config.yml");
+    expect(mockLoadConfig).toHaveBeenCalledWith("/tmp/custom/.prowl/config.yml");
     expect(mockRunHunt).toHaveBeenCalledWith(
-      expect.objectContaining({ configPath: "/tmp/custom/.prowlqa/config.yml" })
+      expect.objectContaining({ configPath: "/tmp/custom/.prowl/config.yml" })
     );
   });
 
   it("passes --url override to each runHunt call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--url", "http://staging.example.com"]);
+    await cmd.parseAsync(["node", "prowl", "--url", "http://staging.example.com"]);
 
     for (const call of mockRunHunt.mock.calls) {
       expect(call[0]).toMatchObject({ urlOverride: "http://staging.example.com" });
@@ -284,12 +284,12 @@ describe("ci command", () => {
   });
 
   it("passes --browser flag to each runHunt call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--browser", "firefox"]);
+    await cmd.parseAsync(["node", "prowl", "--browser", "firefox"]);
 
     expect(mockRunHunt).toHaveBeenCalledWith(
       expect.objectContaining({ browser: "firefox" })
@@ -297,12 +297,12 @@ describe("ci command", () => {
   });
 
   it("passes --channel flag to each runHunt call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--channel", "chrome"]);
+    await cmd.parseAsync(["node", "prowl", "--channel", "chrome"]);
 
     expect(mockRunHunt).toHaveBeenCalledWith(
       expect.objectContaining({ channel: "chrome" })
@@ -310,12 +310,12 @@ describe("ci command", () => {
   });
 
   it("passes --viewport flag to each runHunt call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--viewport", "1920x1080"]);
+    await cmd.parseAsync(["node", "prowl", "--viewport", "1920x1080"]);
 
     expect(mockRunHunt).toHaveBeenCalledWith(
       expect.objectContaining({ viewport: "1920x1080" })
@@ -323,14 +323,14 @@ describe("ci command", () => {
   });
 
   it("passes --junit flag to each runHunt call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--junit"]);
+    await cmd.parseAsync(["node", "prowl", "--junit"]);
 
     for (const call of mockRunHunt.mock.calls) {
       expect(call[0]).toMatchObject({ junit: true });
@@ -338,14 +338,14 @@ describe("ci command", () => {
   });
 
   it("outputs valid JSON with --json flag", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+    await cmd.parseAsync(["node", "prowl", "--json"]);
 
     // Find the JSON output call (the one with valid JSON)
     const jsonCall = logSpy.mock.calls.find((call) => {
@@ -364,11 +364,11 @@ describe("ci command", () => {
   });
 
   it("outputs JSON with no-hunts status when no hunts found with --json", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue([]);
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+    await cmd.parseAsync(["node", "prowl", "--json"]);
 
     const jsonCall = logSpy.mock.calls.find((call) => {
       try { JSON.parse(call[0]); return true; } catch { return false; }
@@ -382,7 +382,7 @@ describe("ci command", () => {
   });
 
   it("runs hunts in parallel with --parallel", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow", "checkout"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
@@ -390,33 +390,33 @@ describe("ci command", () => {
       .mockResolvedValueOnce(makeRunResult("checkout", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "2"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(3);
     expect(process.exitCode).toBe(0);
   });
 
   it("--parallel 1 is identical to default sequential", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "1"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "1"]);
 
     expect(mockRunHunt).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBe(0);
   });
 
   it("parallel mode suppresses per-step output", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "login-flow"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockResolvedValueOnce(makeRunResult("login-flow", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "2"]);
 
     // Parallel mode passes undefined for onStep
     for (const call of mockRunHunt.mock.calls) {
@@ -425,26 +425,26 @@ describe("ci command", () => {
   });
 
   it("prints failure reasons after a parallel run", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage", "checkout"]);
     mockRunHunt
       .mockResolvedValueOnce(makeRunResult("homepage", "pass"))
       .mockRejectedValueOnce(new Error("checkout timed out"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "2"]);
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("checkout timed out"));
     expect(process.exitCode).toBe(1);
   });
 
   it("prints returned failure details after a parallel run", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["checkout"]);
     mockRunHunt.mockResolvedValueOnce(makeFailedRunResult("checkout", "button was not visible"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "2"]);
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("button was not visible"));
     expect(process.exitCode).toBe(1);
@@ -453,26 +453,26 @@ describe("ci command", () => {
   it("rejects --parallel 0", async () => {
     const cmd = buildCiCommand();
     await expect(
-      cmd.parseAsync(["node", "prowlqa", "--parallel", "0"])
+      cmd.parseAsync(["node", "prowl", "--parallel", "0"])
     ).rejects.toThrow("--parallel must be a positive integer");
   });
 
   it("rejects non-integer --parallel values", async () => {
     const cmd = buildCiCommand();
     await expect(
-      cmd.parseAsync(["node", "prowlqa", "--parallel", "1.5"])
+      cmd.parseAsync(["node", "prowl", "--parallel", "1.5"])
     ).rejects.toThrow("--parallel must be a positive integer");
   });
 
   it("preserves hunt name when a parallel task is rejected", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunWithConcurrency.mockResolvedValueOnce([
       { status: "rejected", reason: new Error("Task crashed") }
     ]);
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--parallel", "2", "--json"]);
+    await cmd.parseAsync(["node", "prowl", "--parallel", "2", "--json"]);
 
     const jsonCall = logSpy.mock.calls.find((call) => {
       try { JSON.parse(call[0]); return true; } catch { return false; }
@@ -490,12 +490,12 @@ describe("ci command", () => {
     const { printHuntHeader, printStepResult, printHuntSummary } = await import("../src/cli/output.js");
     const { resultMascot } = await import("../src/cli/mascot.js");
 
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/tmp/.prowl" });
     mockListHunts.mockReturnValue(["homepage"]);
     mockRunHunt.mockResolvedValueOnce(makeRunResult("homepage", "pass"));
 
     const cmd = buildCiCommand();
-    await cmd.parseAsync(["node", "prowlqa", "--json"]);
+    await cmd.parseAsync(["node", "prowl", "--json"]);
 
     expect(printHuntHeader).not.toHaveBeenCalled();
     expect(printStepResult).not.toHaveBeenCalled();
@@ -592,7 +592,7 @@ describe("printCiSummary", () => {
 
 describe("writeCiResult", () => {
   it("writes ci-result.json with correct structure", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-ci-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ci-test-"));
     const ciRunDir = path.join(tmpDir, "ci-run");
 
     const results: CiHuntResult[] = [
@@ -622,7 +622,7 @@ describe("writeCiResult", () => {
   });
 
   it("writes pass status when all hunts pass", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-ci-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ci-test-"));
     const ciRunDir = path.join(tmpDir, "ci-run");
 
     const results: CiHuntResult[] = [
@@ -640,7 +640,7 @@ describe("writeCiResult", () => {
   });
 
   it("writes all-skipped status when every hunt is skipped", () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-ci-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ci-test-"));
     const ciRunDir = path.join(tmpDir, "ci-run");
 
     const results: CiHuntResult[] = [

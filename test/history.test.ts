@@ -17,7 +17,7 @@ type SpawnedWriter = {
 };
 
 function setupTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "prowl-history-"));
 }
 
 function spawnHistoryWriter(
@@ -259,7 +259,7 @@ describe("appendEntry", () => {
 
   it("serializes concurrent writers so entries are not lost", async () => {
     const dir = setupTempDir();
-    const gateDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-history-gate-"));
+    const gateDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-history-gate-"));
     try {
       fs.writeFileSync(path.join(dir, "history.json"), JSON.stringify({ entries: [] }));
       const helperPath = path.join(gateDir, "append-helper.ts");

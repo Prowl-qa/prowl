@@ -21,7 +21,7 @@ function createPng(width: number, height: number, color: [number, number, number
 
 describe("compareScreenshots", () => {
   it("identical images match", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-visual-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-visual-"));
     const baselinePath = path.join(dir, "baseline.png");
     const currentPath = path.join(dir, "current.png");
     const diffPath = path.join(dir, "diff.png");
@@ -38,7 +38,7 @@ describe("compareScreenshots", () => {
   });
 
   it("different images produce diff", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-visual-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-visual-"));
     const baselinePath = path.join(dir, "baseline.png");
     const currentPath = path.join(dir, "current.png");
     const diffPath = path.join(dir, "diff.png");
@@ -55,7 +55,7 @@ describe("compareScreenshots", () => {
   });
 
   it("threshold controls sensitivity", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-visual-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-visual-"));
     const baselinePath = path.join(dir, "baseline.png");
     const currentPath = path.join(dir, "current.png");
     const diffPath = path.join(dir, "diff.png");
@@ -93,7 +93,7 @@ describe("compareScreenshots", () => {
   });
 
   it("different dimensions fail", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-visual-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-visual-"));
     const baselinePath = path.join(dir, "baseline.png");
     const currentPath = path.join(dir, "current.png");
     const diffPath = path.join(dir, "diff.png");
@@ -111,7 +111,7 @@ describe("compareScreenshots", () => {
 
 describe("ensureBaselineDir", () => {
   it("creates baselines directory", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-visual-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-visual-"));
     const baselineDir = ensureBaselineDir(dir);
     expect(fs.existsSync(baselineDir)).toBe(true);
     expect(baselineDir).toBe(path.join(dir, "baselines"));

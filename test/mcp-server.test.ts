@@ -57,7 +57,7 @@ function payloadOf(res: { content: unknown }): unknown {
 describe("mcp server", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowlqa/config.yml", configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configPath: "/proj/.prowl/config.yml", configDir: "/proj/.prowl" });
   });
 
   it("exposes list_projects, list_hunts, run_suite, and run_hunt", async () => {
@@ -72,7 +72,7 @@ describe("mcp server", () => {
   });
 
   it("round-trips a list_hunts call", async () => {
-    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowlqa" });
+    mockLoadConfig.mockReturnValue({ config: {}, configDir: "/proj/.prowl" });
     mockListHunts.mockReturnValue(["auth/login", "homepage"]);
 
     const client = await connectClient();
@@ -151,7 +151,7 @@ describe("mcp server", () => {
     const client = await connectClient(registry);
     const res = await client.callTool({ name: "list_hunts", arguments: { project: "coupe" } });
     expect(payloadOf(res)).toEqual({ hunts: ["smoke"] });
-    expect(mockLoadConfig).toHaveBeenCalledWith("/repos/coupe/.prowlqa/config.yml");
+    expect(mockLoadConfig).toHaveBeenCalledWith("/repos/coupe/.prowl/config.yml");
     await client.close();
   });
 

@@ -4,12 +4,12 @@ import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildInitCommand } from "../src/cli/commands/init.js";
 
-describe("prowlqa init", () => {
+describe("prowl init", () => {
   let tempDir: string;
   let originalCwd: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-init-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-init-"));
     originalCwd = process.cwd();
     process.chdir(tempDir);
   });
@@ -21,23 +21,23 @@ describe("prowlqa init", () => {
 
   function runInit(args: string[] = []) {
     const cmd = buildInitCommand();
-    cmd.parse(["node", "prowlqa", ...args]);
+    cmd.parse(["node", "prowl", ...args]);
   }
 
-  it("creates .prowlqa directory with config, example hunt, and .gitignore", () => {
+  it("creates .prowl directory with config, example hunt, and .gitignore", () => {
     runInit();
 
-    const prowlqaDir = path.join(tempDir, ".prowlqa");
-    expect(fs.existsSync(path.join(prowlqaDir, "config.yml"))).toBe(true);
-    expect(fs.existsSync(path.join(prowlqaDir, "hunts", "hello.yml"))).toBe(true);
-    expect(fs.existsSync(path.join(prowlqaDir, ".gitignore"))).toBe(true);
+    const prowlDir = path.join(tempDir, ".prowl");
+    expect(fs.existsSync(path.join(prowlDir, "config.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(prowlDir, "hunts", "hello.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(prowlDir, ".gitignore"))).toBe(true);
   });
 
   it(".gitignore ignores runs, auth-state.json, and .env", () => {
     runInit();
 
     const gitignore = fs.readFileSync(
-      path.join(tempDir, ".prowlqa", ".gitignore"),
+      path.join(tempDir, ".prowl", ".gitignore"),
       "utf-8",
     );
     expect(gitignore).toContain("runs/");
@@ -49,25 +49,25 @@ describe("prowlqa init", () => {
     runInit();
 
     const gitignore = fs.readFileSync(
-      path.join(tempDir, ".prowlqa", ".gitignore"),
+      path.join(tempDir, ".prowl", ".gitignore"),
       "utf-8",
     );
     expect(gitignore).not.toContain("hunts");
     expect(gitignore).not.toContain("config");
   });
 
-  it("--force recreates .prowlqa including .gitignore", () => {
+  it("--force recreates .prowl including .gitignore", () => {
     runInit();
 
     // Remove .gitignore to simulate old init without it
-    fs.unlinkSync(path.join(tempDir, ".prowlqa", ".gitignore"));
-    expect(fs.existsSync(path.join(tempDir, ".prowlqa", ".gitignore"))).toBe(false);
+    fs.unlinkSync(path.join(tempDir, ".prowl", ".gitignore"));
+    expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(false);
 
     runInit(["--force"]);
-    expect(fs.existsSync(path.join(tempDir, ".prowlqa", ".gitignore"))).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(true);
   });
 
-  it("shows non-destructive guidance when .prowlqa exists without --force", () => {
+  it("shows non-destructive guidance when .prowl exists without --force", () => {
     runInit();
     const originalExitCode = process.exitCode;
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -89,12 +89,12 @@ describe("prowlqa init", () => {
   it("--force preserves user-created files not in templates", () => {
     runInit();
 
-    // Create a user-owned file inside .prowlqa
-    const userFile = path.join(tempDir, ".prowlqa", "my-notes.txt");
+    // Create a user-owned file inside .prowl
+    const userFile = path.join(tempDir, ".prowl", "my-notes.txt");
     fs.writeFileSync(userFile, "user data");
 
     // Create a user-owned hunt file
-    const userHunt = path.join(tempDir, ".prowlqa", "hunts", "my-custom.yml");
+    const userHunt = path.join(tempDir, ".prowl", "hunts", "my-custom.yml");
     fs.writeFileSync(userHunt, "steps:\n  - navigate: /custom");
 
     runInit(["--force"]);
@@ -106,7 +106,7 @@ describe("prowlqa init", () => {
     expect(fs.readFileSync(userHunt, "utf-8")).toBe("steps:\n  - navigate: /custom");
 
     // Template files should be refreshed
-    expect(fs.existsSync(path.join(tempDir, ".prowlqa", "config.yml"))).toBe(true);
-    expect(fs.existsSync(path.join(tempDir, ".prowlqa", ".gitignore"))).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, ".prowl", "config.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(true);
   });
 });

@@ -39,7 +39,7 @@ function makeRunResult(huntName: string, status: "pass" | "fail"): { result: Run
       assertions: [],
       artifacts: {}
     },
-    runDir: `prowlqa/runs/${huntName}`
+    runDir: `prowl/runs/${huntName}`
   };
 }
 
@@ -61,7 +61,7 @@ describe("runSuite", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowlqa-suite-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-suite-test-"));
     mockLoadConfig.mockReturnValue({ config: {}, configDir: tmpDir });
     mockRunWithConcurrency.mockImplementation(
       async (tasks: Array<() => Promise<unknown>>) => {
