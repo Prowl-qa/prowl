@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import type { CiFlakyHunt, CiHuntResult, CiResult, CiStatus } from "../types/index.js";
+import type { CiFailureCluster, CiFlakyHunt, CiHuntResult, CiResult, CiStatus } from "../types/index.js";
 
 export type CiCounts = {
   passed: number;
@@ -28,7 +28,8 @@ export function resolveCiStatus(results: CiHuntResult[]): CiStatus {
 export function printCiSummary(
   results: CiHuntResult[],
   totalDurationMs: number,
-  flaky: CiFlakyHunt[] = []
+  flaky: CiFlakyHunt[] = [],
+  clusters: CiFailureCluster[] = []
 ): void {
   const { passed, failed, skipped } = countCiResults(results);
 
@@ -59,6 +60,13 @@ export function printCiSummary(
       console.log(`  ${chalk.yellow("~")} ${entry.hunt} ${chalk.gray(`(score ${entry.score.toFixed(2)})`)}`);
     }
   }
+
+  if (clusters.length > 0) {
+    console.log(`\n  ${chalk.red("Failure clusters")} (shared root causes):`);
+    for (const cluster of clusters) {
+      console.log(`  ${chalk.red("✗")} ${cluster.cause} ${chalk.gray(`(${cluster.count} hunts: ${cluster.hunts.join(", ")})`)}`);
+    }
+  }
 }
 
 export function writeCiResult(
@@ -66,7 +74,8 @@ export function writeCiResult(
   results: CiHuntResult[],
   startedAt: string,
   totalDurationMs: number,
-  flaky: CiFlakyHunt[] = []
+  flaky: CiFlakyHunt[] = [],
+  clusters: CiFailureCluster[] = []
 ): string {
   const { passed, failed, skipped } = countCiResults(results);
 
@@ -79,7 +88,8 @@ export function writeCiResult(
     failed,
     skipped,
     hunts: results,
-    ...(flaky.length > 0 ? { flaky } : {})
+    ...(flaky.length > 0 ? { flaky } : {}),
+    ...(clusters.length > 0 ? { clusters } : {})
   };
 
   fs.mkdirSync(ciRunDir, { recursive: true });

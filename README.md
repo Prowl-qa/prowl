@@ -720,6 +720,21 @@ history:
 Use `prowlqa history <hunt-name>` for a quick status/duration table, or
 `--json` to feed the entries into dashboards, flake detectors, or agents.
 
+### Failure Clustering
+
+When a `prowlqa ci` run has multiple failures that share a common cause — the same
+step type, selector, and (normalized) error — ProwlQA groups them into a single
+**failure cluster**. Instead of triaging five separate failures, you see one root
+cause (for example, a renamed `#submit` selector that broke five hunts).
+
+Clusters appear in:
+- the **Failure clusters** section of the CI summary, with the cause and affected hunts
+- a `clusters` array in `ci-result.json` (and `prowlqa ci --json`), each entry with
+  `cause`, `stepType`, `selector`, `error`, `count`, and `hunts`
+
+Only causes shared by more than one hunt are reported as clusters. This pairs well
+with self-healing selectors and flake detection to cut triage time on large suites.
+
 ---
 
 ## MCP Server (AI Agent Integration)

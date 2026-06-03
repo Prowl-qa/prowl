@@ -3,7 +3,7 @@ export type {
   Config, Hunt, Step, Assertion,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
-  CiResult, CiHuntResult, CiStatus, CiFlakyHunt,
+  CiResult, CiHuntResult, CiStatus, CiFlakyHunt, CiFailureCluster,
   ReliabilityConfig,
   IfStep, RepeatStep, MockRouteStep, UnmockRouteStep,
   EvalScriptStep, RunScriptStep, AssertScreenshotStep,
@@ -32,6 +32,10 @@ export type { FlakyScore, RankFlakyOptions } from "./runner/flaky.js";
 // Re-export self-healing selectors
 export { healSelector, buildHealCandidates, extractSelectorIntent } from "./runner/healing.js";
 export type { HealResult } from "./runner/healing.js";
+
+// Re-export failure clustering
+export { clusterFailures } from "./runner/clustering.js";
+export type { FailureCluster } from "./runner/clustering.js";
 
 // Re-export config utilities
 export {

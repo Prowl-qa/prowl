@@ -116,6 +116,35 @@ describe("runSuite", () => {
     expect(result.hunts[1]).toMatchObject({ hunt: "broken", status: "fail", error: "Hunt file not found" });
   });
 
+  it("clusters multiple hunts that fail with the same cause (PROWL-034)", async () => {
+    mockListHunts.mockReturnValue(["a", "b", "c"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeFailedRunResult("a", "Timeout 5000ms waiting for selector"))
+      .mockResolvedValueOnce(makeFailedRunResult("b", "Timeout 9000ms waiting for selector"))
+      .mockResolvedValueOnce(makeFailedRunResult("c", "Timeout 30000ms waiting for selector"));
+
+    const { result, resultPath } = await runSuite({});
+
+    expect(result.status).toBe("fail");
+    expect(result.clusters).toHaveLength(1);
+    expect(result.clusters?.[0]).toMatchObject({ count: 3, hunts: ["a", "b", "c"] });
+    // clusters also persisted to ci-result.json
+    const onDisk: CiResult = JSON.parse(fs.readFileSync(resultPath!, "utf-8"));
+    expect(onDisk.clusters?.[0].count).toBe(3);
+  });
+
+  it("omits clusters when failures do not share a cause", async () => {
+    mockListHunts.mockReturnValue(["a", "b"]);
+    mockRunHunt
+      .mockResolvedValueOnce(makeFailedRunResult("a", "Timeout waiting for #submit"))
+      .mockResolvedValueOnce(makeFailedRunResult("b", "Element #email not found"));
+
+    const { result } = await runSuite({});
+
+    // Two distinct single-hunt causes -> no multi-hunt cluster surfaced
+    expect(result.clusters).toBeUndefined();
+  });
+
   it("returns no-hunts status with a null resultPath and never runs hunts", async () => {
     mockListHunts.mockReturnValue([]);
 

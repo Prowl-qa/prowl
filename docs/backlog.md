@@ -154,17 +154,6 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - `prowlqa history` shows retry frequency per hunt over time
 - Helps distinguish "flaky test" from "slow environment" from "real regression"
 
-{PROWL-034} **P7-004: Failure Clustering**
-   Group failures across hunts by common cause. If 5 hunts fail because the same selector changed, surface that as one root cause instead of 5 independent failures. Reduces triage time for large test suites.
-
-**Found during**: Gap analysis (2026-02-16)
-**Acceptance Criteria**:
-- After `prowlqa ci`, analyze failed hunts for common error patterns
-- Group failures by: same error message, same selector, same step type, same URL
-- CI summary includes "Failure clusters" section showing grouped failures with count
-- `ci-result.json` includes `clusters` array with grouped failure details
-- `--json` output includes cluster data for agent consumption
-
 {PROWL-037} **GTM-002: Competitive Positioning Matrix**
    Sharpen the comparison table on prowlqa.dev beyond feature checkmarks. Define what ProwlQA uniquely does better than Playwright Test, Cypress, Maestro, and Selenium — and be honest about where it's weaker. Current comparison table exists but isn't grounded in user feedback or win/loss data.
 

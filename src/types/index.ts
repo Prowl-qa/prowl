@@ -264,6 +264,15 @@ export type CiFlakyHunt = {
   score: number;
 };
 
+export type CiFailureCluster = {
+  cause: string;
+  stepType?: string;
+  selector?: string;
+  error: string;
+  count: number;
+  hunts: string[];
+};
+
 export type CiResult = {
   status: CiStatus;
   startedAt: string;
@@ -275,4 +284,6 @@ export type CiResult = {
   hunts: CiHuntResult[];
   /** Hunts whose flake score is at/above the configured threshold (omitted when none). */
   flaky?: CiFlakyHunt[];
+  /** Groups of failed hunts sharing a common cause (omitted when none). */
+  clusters?: CiFailureCluster[];
 };
