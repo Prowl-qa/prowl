@@ -1,7 +1,7 @@
 import type { AnalysisResult } from "../analyzer/index.js";
 
 const STEP_REFERENCE = `
-## ProwlQA Step Types
+## Prowl Step Types
 
 ### Navigation & Waiting
 - navigate: "/path" — navigate to URL (relative to target)
@@ -53,7 +53,7 @@ const STEP_REFERENCE = `
 `.trim();
 
 export function buildGenerationPrompt(analysis: AnalysisResult, intent: string): string {
-  return `You are a QA test generator for ProwlQA. Generate a YAML hunt file that tests the described intent using the page analysis data below.
+  return `You are a QA test generator for Prowl. Generate a YAML hunt file that tests the described intent using the page analysis data below.
 
 ${STEP_REFERENCE}
 
@@ -66,7 +66,7 @@ ${JSON.stringify(analysis, null, 2)}
 ${intent}
 
 ## Instructions
-1. Output ONLY a valid ProwlQA YAML hunt between \`\`\`yaml fences
+1. Output ONLY a valid Prowl YAML hunt between \`\`\`yaml fences
 2. Use shorthand syntax when possible (click: "Text", fill: { "Label": "value" })
 3. Prefer stable selectors: data-testid > aria-label > text > CSS selectors
 4. Include assertions to verify expected outcomes

@@ -12,18 +12,18 @@ import {
 
 let tmpDir: string;
 let registryPath: string;
-const savedEnv = process.env.PROWLQA_PROJECTS;
+const savedEnv = process.env.PROWL_PROJECTS;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-projects-test-"));
   registryPath = path.join(tmpDir, "projects.yml");
-  delete process.env.PROWLQA_PROJECTS;
+  delete process.env.PROWL_PROJECTS;
 });
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
-  if (savedEnv === undefined) delete process.env.PROWLQA_PROJECTS;
-  else process.env.PROWLQA_PROJECTS = savedEnv;
+  if (savedEnv === undefined) delete process.env.PROWL_PROJECTS;
+  else process.env.PROWL_PROJECTS = savedEnv;
 });
 
 function writeRegistry(body: string): void {
@@ -57,12 +57,12 @@ describe("loadProjectRegistry", () => {
 
 describe("resolveRegistryPath", () => {
   it("prefers an explicit path over the env var", () => {
-    process.env.PROWLQA_PROJECTS = "/from/env.yml";
+    process.env.PROWL_PROJECTS = "/from/env.yml";
     expect(resolveRegistryPath("/explicit/reg.yml")).toBe(path.resolve("/explicit/reg.yml"));
   });
 
   it("falls back to the env var when no explicit path is given", () => {
-    process.env.PROWLQA_PROJECTS = "/from/env.yml";
+    process.env.PROWL_PROJECTS = "/from/env.yml";
     expect(resolveRegistryPath()).toBe(path.resolve("/from/env.yml"));
   });
 });

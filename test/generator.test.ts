@@ -64,7 +64,7 @@ describe("buildGenerationPrompt", () => {
   it("includes YAML format instructions", () => {
     const prompt = buildGenerationPrompt(mockAnalysis, "test login");
     expect(prompt).toContain("```yaml");
-    expect(prompt).toContain("valid ProwlQA YAML");
+    expect(prompt).toContain("valid Prowl YAML");
   });
 });
 
