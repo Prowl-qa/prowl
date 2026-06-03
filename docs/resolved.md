@@ -128,7 +128,7 @@
 
 ### ~~P1.6-006: npm Publish Readiness~~
 **Resolved**: 2026-02-09
-**Description**: Added Apache 2.0 LICENSE, package metadata (keywords, repository, homepage, bugs, author, license). Package name set to `prowl` (`prowl` taken on npm). Verified full install flow: `npm pack` → `npm install -g` → `prowl init` → `prowl --help`. Clean tarball with only dist/, examples/, LICENSE, README.
+**Description**: Added Apache 2.0 LICENSE, package metadata (keywords, repository, homepage, bugs, author, license). Package name set to `prowlqa` (`prowl` taken on npm). Verified full install flow: `npm pack` → `npm install -g` → `prowl init` → `prowl --help`. Clean tarball with only dist/, examples/, LICENSE, README.
 
 ### ~~P1.6-007: Documentation / Comprehensive README~~
 **Resolved**: 2026-02-09

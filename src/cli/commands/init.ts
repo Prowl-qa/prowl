@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import chalk from "chalk";
 import { welcomeBanner } from "../mascot.js";
+import { CONFIG_DIR } from "../../config/loader.js";
 
 function getPackageRoot(): string {
   const currentFile = fileURLToPath(import.meta.url);
@@ -31,14 +32,14 @@ function copyFile(source: string, destination: string): void {
 
 export function buildInitCommand(): Command {
   const command = new Command("init")
-    .option("--force", "Overwrite existing .prowl directory")
+    .option("--force", `Overwrite existing ${CONFIG_DIR} directory`)
     .action((options) => {
       const root = process.cwd();
-      const prowlDir = path.join(root, ".prowl");
+      const prowlDir = path.join(root, CONFIG_DIR);
       if (fs.existsSync(prowlDir) && !options.force) {
         console.error(
           chalk.red(
-            ".prowl already exists. Run with --force to reinitialize prowl configuration without deleting existing files."
+            `${CONFIG_DIR} already exists. Run with --force to reinitialize prowl configuration without deleting existing files.`
           )
         );
         process.exitCode = 1;
@@ -81,7 +82,7 @@ export function buildInitCommand(): Command {
       fs.writeFileSync(path.join(prowlDir, ".gitignore"), gitignore);
 
       console.log(welcomeBanner());
-      console.log(chalk.green("  Initialized .prowl directory."));
+      console.log(chalk.green(`  Initialized ${CONFIG_DIR} directory.`));
       console.log(chalk.gray("  Run ") + chalk.bold("prowl run hello") + chalk.gray(" to get started."));
       console.log(chalk.gray("  Browse hunt templates at ") + chalk.cyan("https://hub.prowl.tools") + "\n");
     });

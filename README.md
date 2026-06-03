@@ -66,7 +66,7 @@ prowl init
 
 This creates a `.prowl/` directory with a config file and 8 example hunts:
 
-```
+```text
 .prowl/
 ├── config.yml              # Target URL, browser settings, guardrails
 └── hunts/
@@ -616,7 +616,7 @@ If your session expires, run `prowl login` again to re-capture.
 
 Every hunt run generates artifacts in `.prowl/runs/<timestamp>/`:
 
-```
+```text
 .prowl/runs/2026-02-09_10-30-45/
 ├── summary.md           # Human-readable report
 ├── result.json          # Machine-readable results

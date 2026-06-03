@@ -4,7 +4,7 @@ This file is the single source of truth for agent behavior on this repo. Follow 
 
 ## Project Summary (MVP)
 - CLI-first QA tool that executes explicit Playwright steps (no LLM/agent reasoning in Phase 1).
-- Package name: `prowl` (global install via npm).
+- Package name: `prowl-tools` (global install via npm).
 - Node.js 20+ / TypeScript.
 - Chromium only for MVP.
 - Config: `.prowl/config.yml`; hunts: `.prowl/hunts/*.yml`; artifacts: `.prowl/runs/<timestamp>/`.
