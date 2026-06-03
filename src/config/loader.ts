@@ -36,19 +36,39 @@ const DEFAULT_CONFIG: Config = {
     selfHealing: false
   },
   auth: {
-    storageStatePath: ".prowlqa/auth-state.json"
+    storageStatePath: ".prowl/auth-state.json"
   },
   history: {
     maxRuns: 100
   }
 };
 
+export const CONFIG_DIR = ".prowl";
+export const LEGACY_CONFIG_DIR = ".prowlqa";
+
+let legacyDirWarned = false;
+
+/** Warn (once per process) when a project still uses the legacy .prowlqa/ directory. */
+export function warnLegacyConfigDir(): void {
+  if (legacyDirWarned) {
+    return;
+  }
+  legacyDirWarned = true;
+  console.warn(
+    'Warning: the ".prowlqa/" config directory is deprecated; rename it to ".prowl/". ' +
+      'Support for ".prowlqa/" will be removed in a future release.'
+  );
+}
+
 export function findConfigPath(startDir: string): string | null {
   let current = startDir;
   while (current) {
-    const candidate = path.join(current, ".prowlqa", "config.yml");
-    if (fs.existsSync(candidate)) {
-      return candidate;
+    // Prefer the new .prowl/ directory; fall back to the legacy .prowlqa/ at the same level.
+    for (const dir of [CONFIG_DIR, LEGACY_CONFIG_DIR]) {
+      const candidate = path.join(current, dir, "config.yml");
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
     }
     const parent = path.dirname(current);
     if (parent === current) {
@@ -152,7 +172,7 @@ export function loadConfig(configPath?: string): {
     : findConfigPath(process.cwd());
 
   if (!resolvedPath) {
-    throw new Error("Could not find .prowlqa/config.yml. Run `prowlqa init` first.");
+    throw new Error("Could not find .prowl/config.yml. Run `prowl init` first.");
   }
 
   if (!fs.existsSync(resolvedPath)) {
@@ -160,6 +180,9 @@ export function loadConfig(configPath?: string): {
   }
 
   const configDir = path.dirname(resolvedPath);
+  if (path.basename(configDir) === LEGACY_CONFIG_DIR) {
+    warnLegacyConfigDir();
+  }
   dotenv.config({ path: path.join(configDir, ".env"), override: false });
 
   const raw = fs.readFileSync(resolvedPath, "utf-8");

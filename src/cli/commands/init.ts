@@ -21,7 +21,7 @@ function getPackageRoot(): string {
     return root;
   }
 
-  throw new Error("Cannot find package root. Reinstall prowlqa.");
+  throw new Error("Cannot find package root. Reinstall prowl-tools.");
 }
 
 function copyFile(source: string, destination: string): void {
@@ -31,14 +31,14 @@ function copyFile(source: string, destination: string): void {
 
 export function buildInitCommand(): Command {
   const command = new Command("init")
-    .option("--force", "Overwrite existing .prowlqa directory")
+    .option("--force", "Overwrite existing .prowl directory")
     .action((options) => {
       const root = process.cwd();
-      const prowlqaDir = path.join(root, ".prowlqa");
-      if (fs.existsSync(prowlqaDir) && !options.force) {
+      const prowlDir = path.join(root, ".prowl");
+      if (fs.existsSync(prowlDir) && !options.force) {
         console.error(
           chalk.red(
-            ".prowlqa already exists. Run with --force to reinitialize prowlqa configuration without deleting existing files."
+            ".prowl already exists. Run with --force to reinitialize prowl configuration without deleting existing files."
           )
         );
         process.exitCode = 1;
@@ -51,18 +51,18 @@ export function buildInitCommand(): Command {
       const exampleHuntsDir = path.join(examplesDir, "hunts");
 
       if (!fs.existsSync(exampleConfig) || !fs.existsSync(exampleHuntsDir)) {
-        console.error(chalk.red("Examples not found in package. Reinstall prowlqa."));
+        console.error(chalk.red("Examples not found in package. Reinstall prowl-tools."));
         process.exitCode = 1;
         return;
       }
 
-      copyFile(exampleConfig, path.join(prowlqaDir, "config.yml"));
+      copyFile(exampleConfig, path.join(prowlDir, "config.yml"));
 
       const huntFiles = fs.readdirSync(exampleHuntsDir).filter((f) => f.endsWith(".yml"));
       for (const huntFile of huntFiles) {
         copyFile(
           path.join(exampleHuntsDir, huntFile),
-          path.join(prowlqaDir, "hunts", huntFile)
+          path.join(prowlDir, "hunts", huntFile)
         );
       }
 
@@ -78,12 +78,12 @@ export function buildInitCommand(): Command {
         ".env",
         "",
       ].join("\n");
-      fs.writeFileSync(path.join(prowlqaDir, ".gitignore"), gitignore);
+      fs.writeFileSync(path.join(prowlDir, ".gitignore"), gitignore);
 
       console.log(welcomeBanner());
-      console.log(chalk.green("  Initialized .prowlqa directory."));
-      console.log(chalk.gray("  Run ") + chalk.bold("prowlqa run hello") + chalk.gray(" to get started."));
-      console.log(chalk.gray("  Browse hunt templates at ") + chalk.cyan("https://hub.prowlqa.dev") + "\n");
+      console.log(chalk.green("  Initialized .prowl directory."));
+      console.log(chalk.gray("  Run ") + chalk.bold("prowl run hello") + chalk.gray(" to get started."));
+      console.log(chalk.gray("  Browse hunt templates at ") + chalk.cyan("https://hub.prowl.tools") + "\n");
     });
 
   return command;
