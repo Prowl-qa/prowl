@@ -4,6 +4,8 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-03
+
 ### Changed
 - **Rebrand to Prowl.** The project is now **Prowl**, one tool in the Prowl suite under Genkei Labs.
   - npm package renamed `prowlqa` → **`prowl-tools`** (the bare `prowl` name was already taken on npm); the CLI command/binary is now **`prowl`** (e.g. `prowl run`, `prowl ci`). Install with `npm install -g prowl-tools`.
