@@ -245,3 +245,7 @@
 ### ~~P6-004: Random Data Generators~~
 **Resolved**: 2026-03-21 (branch: feature/copytext-random-download)
 **Description**: Added built-in `{{RANDOM_*}}` variables generated once per hunt run: `RANDOM_EMAIL` (prowl_<hex>@test.com), `RANDOM_NAME` (random first+last), `RANDOM_NUMBER` (4-digit integer), `RANDOM_UUID` (v4 UUID), `RANDOM_TEXT` (8-char alphanumeric). Generated at lowest priority so env vars and hunt vars can override. Consistent within a single hunt run.
+
+### ~~Rebrand: Prowl QA → Prowl (Phase 1, CLI)~~
+**Resolved**: 2026-06-03 (branch: rename-prowlqa-to-prowl)
+**Description**: First phase of the suite rebrand under the Genkei Labs umbrella. Renamed the npm package `prowlqa` → `prowl-tools` (bare `prowl` was already taken on npm) and the CLI command/binary → `prowl`. Project config directory moved `.prowlqa/` → `.prowl/` with a back-compatible fallback and one-time deprecation warning; MCP project registry gained `PROWL_PROJECTS` + `~/.prowl/projects.yml` with legacy `PROWLQA_PROJECTS`/`~/.prowlqa/` fallbacks. Updated repo/homepage/docs references to the `prowl-tools` org and `prowl.tools`/`docs.prowl.tools`, fixed the `prowlai` install typo, and refreshed all docs/examples/tests. No pre-existing backlog row (strategic rename); 587 tests pass, lint + build green. Remaining rebrand work (other repos, npm publish, brew tap, DNS/redirects) tracked outside this repo.
