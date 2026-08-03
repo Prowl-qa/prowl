@@ -44,6 +44,75 @@
 
 ## Medium Priority
 
+{PROWL-047} **CLI-004: `assert.visible` treats YAML text `name:` as an invalid CSS selector**
+   Prowl Hub's committed `preview-modal` hunt fails when asserting that preview YAML contains `name:`. The modal opens and renders a code block, but the CLI passes the bare assertion string to Playwright as a CSS selector.
+
+**Observed**:
+- Command: `prowlqa run preview-modal --config .prowl/config.yml --json`
+- Target: `http://localhost:3003` from `prowl-tools/prowl-hub`
+- Failure: `locator.count: Unexpected token "" while parsing css selector "name:". Did you mean to CSS.escape it?`
+- Prior steps passed: `/browse`, `.hunt-card`, `Preview YAML`, `[role='dialog']`, `#preview-title`, and `[role='dialog'] pre code`
+- `noConsoleErrors` and `noNetworkErrors` passed
+
+**Expected**:
+- Plain string visible assertions should be evaluated as text, or the CLI should require an explicit selector/text mode without sending unescaped text to CSS selector parsing.
+
+**Likely area**:
+- Prowl CLI assertion locator resolution for `assert.visible` string values containing CSS-special characters such as `:`.
+
+**Suggested fix direction**:
+- Normalize bare `assert.visible` strings through text locator semantics, or document and support explicit `text=` / selector syntax consistently across `wait`, `click`, and `assert`.
+- Add regression coverage for text values like `name:`, punctuation, and YAML field labels.
+
+**Run context**:
+- Found during Prowl Hub audit on 2026-08-03, branch `qa-prowl-hub-site-audit-20260803`
+- Artifact path in audit clone: `.prowl/runs/2026-08-03_03-30-11-741/`
+
+{PROWL-048} **CLI-005: `assert.visible` treats validation sentence as an invalid CSS selector**
+   Prowl Hub's committed `submit-form` hunt fails when asserting the required-fields validation sentence. The form renders, partial input works, and the submit button click succeeds, but the CLI interprets the expected visible sentence as a CSS selector.
+
+**Observed**:
+- Command: `prowlqa run submit-form --config .prowl/config.yml --json`
+- Target: `http://localhost:3003` from `prowl-tools/prowl-hub`
+- Failure: `locator.count: Unexpected token "" while parsing css selector "Complete all required fields before opening a pull request.". Did you mean to CSS.escape it?`
+- Prior steps passed: heading, fields, compliance checkbox text, button visibility, partial form fills, and `Open Pull Request Flow` click
+- `noConsoleErrors`, `noNetworkErrors`, and `urlIncludes: "#submit"` passed
+
+**Expected**:
+- Sentence-like assertion values should be checked as visible page text, or rejected with a clear authoring error before Playwright CSS parsing.
+
+**Likely area**:
+- Prowl CLI `assert.visible` locator construction for bare strings with spaces and punctuation.
+
+**Suggested fix direction**:
+- Reuse the text-locator behavior already used by `wait: "Submit a hunt through pull request"` style steps, or require explicit selector prefixes with actionable validation errors.
+- Add regression coverage for full-sentence assertions with spaces and punctuation.
+
+**Run context**:
+- Found during Prowl Hub audit on 2026-08-03, branch `qa-prowl-hub-site-audit-20260803`
+- Artifact path in audit clone: `.prowl/runs/2026-08-03_03-30-13-124/`
+
+{PROWL-049} **CLI-006: Default config discovery misses repos using `.prowl/config.yml`**
+   Running Prowl Hub's committed hunts without an explicit config flag fails before browser execution because the CLI still looks for `.prowlqa/config.yml`, while the current repo layout uses `.prowl/config.yml` and `.prowl/hunts/`.
+
+**Observed**:
+- Command pattern: `prowlqa run <hunt> --json`
+- Result for all eight committed Hub hunts: `Could not find .prowlqa/config.yml. Run prowlqa init first.`
+- Retrying with `--config .prowl/config.yml` allowed execution to proceed
+
+**Expected**:
+- CLI config discovery should support the current committed `.prowl/config.yml` layout, or the error should clearly tell users to pass `--config .prowl/config.yml` when a `.prowl/` directory is present.
+
+**Likely area**:
+- Prowl CLI config path discovery and backward compatibility between `.prowlqa/` and `.prowl/`.
+
+**Suggested fix direction**:
+- Add `.prowl/config.yml` to the discovery order, or align repo/docs/templates with the CLI's expected default path.
+- Add a CLI test covering a repo with `.prowl/config.yml` and `.prowl/hunts/`.
+
+**Run context**:
+- Found during Prowl Hub audit on 2026-08-03 from `prowl-tools/prowl-hub`
+
 {PROWL-011} **LEGAL-002: Add Dependency License Audit to CI**
    All direct dependencies are confirmed clean — MIT (commander, chalk, zod, ora), ISC (yaml), BSD-2-Clause (dotenv), Apache 2.0 (playwright, typescript). However, transitive dependencies can introduce GPL-licensed packages. Research shows 7.3% of npm packages have license incompatibilities through transitive deps.
 
