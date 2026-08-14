@@ -4,6 +4,24 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Internal
+- Driver abstraction extracted from the Playwright runner (ARCH-001 / PROWL-047).
+  A new engine-neutral `SessionDriver` interface (`src/browser/driver.ts`) now
+  sits between the step runner and Playwright, with `createPlaywrightDriver`
+  (`src/browser/playwright-driver.ts`) as its sole implementation and the only
+  runtime importer of Playwright. `executeSteps` is now a per-step handler
+  registry whose handlers declare the driver capabilities they need, and the
+  guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`, self-healing)
+  are lifted into a policy layer (`src/runner/policy.ts`) that wraps the driver;
+  the forbidden-selector check uses a driver-supplied selector parser. The
+  `login`, `analyze`, and `generate` commands launch through the controller/
+  driver instead of Playwright directly. This is a pure refactor — no hunt YAML,
+  config, or behavior changes, and all existing tests pass unchanged. It is the
+  prerequisite for non-browser execution targets (macOS native, Electron,
+  mobile — PROWL-048). Residual coupling: `src/runner/steps.ts` keeps a
+  type-only `import type { Page }` for the context's `page` field (the entrypoint
+  the runner hands in); it carries no runtime Playwright dependency.
+
 ## [0.1.3] - 2026-06-03
 
 ### Changed
