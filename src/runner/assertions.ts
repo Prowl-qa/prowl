@@ -1,5 +1,14 @@
-import type { Page } from "playwright";
 import type { Assertion, AssertionResult, Config } from "../types/index.js";
+
+/**
+ * The minimal session surface assertions read from. Both a live Playwright page
+ * and a {@link SessionDriver}-backed page satisfy it structurally, so
+ * `evaluateAssertions` has no Playwright dependency.
+ */
+type AssertionSession = {
+  url(): string;
+  locator(selector: string): { count(): Promise<number> };
+};
 
 export type ConsoleEntry = {
   type: string;
@@ -55,7 +64,7 @@ function mergeAssertions(config: Config, huntAssertions: Assertion[] = []): Asse
 }
 
 export async function evaluateAssertions(options: {
-  page: Page;
+  page: AssertionSession;
   config: Config;
   huntAssertions?: Assertion[];
   consoleEntries: ConsoleEntry[];
