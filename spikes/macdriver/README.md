@@ -14,6 +14,7 @@ The ~6 verbs a `MacDriver` needs, against a real `NSStatusItem` + `NSMenu` app:
 | `axspike status-items` | find the app's status item |
 | `axspike open-menu` | click status item, read menu (roles/titles/enabled as JSON) |
 | `axspike click-menu <title>` | click a menu item by title substring |
+| `axspike close-menu` | dismiss an open status-item menu |
 | `axspike windows` / `assert-window <title>` | `assert: visible` against window labels |
 | `axspike tree --depth N` | selector resolution / `prowl analyze` equivalent |
 | `axspike check` | Accessibility permission preflight |

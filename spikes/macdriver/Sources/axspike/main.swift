@@ -27,6 +27,11 @@ func attr(_ el: AXUIElement, _ name: String) -> CFTypeRef? {
     return value
 }
 
+func axElement(_ value: CFTypeRef) -> AXUIElement? {
+    guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    return unsafeBitCast(value, to: AXUIElement.self)
+}
+
 func stringAttr(_ el: AXUIElement, _ name: String) -> String? {
     attr(el, name) as? String
 }
@@ -73,23 +78,23 @@ func appElement(bundleId: String) -> AXUIElement {
 }
 
 func statusItems(_ app: AXUIElement) -> [AXUIElement] {
-    guard let bar = attr(app, "AXExtrasMenuBar") else { return [] }
-    // swiftlint:disable:next force_cast
-    return children(bar as! AXUIElement)
+    guard let value = attr(app, "AXExtrasMenuBar"), let bar = axElement(value) else { return [] }
+    return children(bar)
 }
 
-func openMenu(_ app: AXUIElement) -> (status: AXUIElement, menu: AXUIElement) {
+func openMenu(_ app: AXUIElement, timeout: TimeInterval) -> (status: AXUIElement, menu: AXUIElement) {
     guard let status = statusItems(app).first else {
         fail("no status item found (AXExtrasMenuBar empty)")
     }
     press(status)
-    for _ in 0..<30 {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
         if let menu = children(status).first(where: { stringAttr($0, kAXRoleAttribute as String) == "AXMenu" }) {
             return (status, menu)
         }
         usleep(100_000)
     }
-    fail("menu did not open within 3s")
+    fail("menu did not open within \(timeout)s")
 }
 
 func closeMenu(_ app: AXUIElement) {
@@ -119,8 +124,14 @@ func takeOption(_ name: String) -> String? {
 }
 
 if let v = takeOption("--bundle-id") { bundleId = v }
-if let v = takeOption("--timeout"), let t = Double(v) { timeoutSecs = t }
-if let v = takeOption("--depth"), let d = Int(v) { depth = d }
+if let v = takeOption("--timeout") {
+    guard let t = Double(v), t > 0 else { fail("--timeout must be a positive number, got \"\(v)\"") }
+    timeoutSecs = t
+}
+if let v = takeOption("--depth") {
+    guard let d = Int(v), d >= 0 else { fail("--depth must be a non-negative integer, got \"\(v)\"") }
+    depth = d
+}
 
 guard let command = args.first else {
     fail("""
@@ -150,7 +161,7 @@ case "status-items":
 case "open-menu":
     requireTrust()
     let app = appElement(bundleId: bundleId)
-    let (_, menu) = openMenu(app)
+    let (_, menu) = openMenu(app, timeout: timeoutSecs)
     printJSON(children(menu).map { info($0) })
 
 case "click-menu":
@@ -158,7 +169,7 @@ case "click-menu":
     guard args.count >= 2 else { fail("usage: axspike click-menu <title-substring>") }
     let title = args[1]
     let app = appElement(bundleId: bundleId)
-    let (_, menu) = openMenu(app)
+    let (_, menu) = openMenu(app, timeout: timeoutSecs)
     let items = children(menu)
     guard let target = items.first(where: {
         (stringAttr($0, kAXTitleAttribute as String) ?? "").localizedCaseInsensitiveContains(title)
@@ -170,7 +181,12 @@ case "click-menu":
         closeMenu(app)
         fail("menu item \"\(title)\" is disabled")
     }
-    press(target)
+    let err = press(target)
+    // .cannotComplete is expected while the app is in its menu-tracking loop.
+    guard err == .success || err == .cannotComplete else {
+        closeMenu(app)
+        fail("AXPress failed on \"\(title)\": \(err.rawValue)")
+    }
     printJSON(["clicked": stringAttr(target, kAXTitleAttribute as String) ?? title])
 
 case "close-menu":
