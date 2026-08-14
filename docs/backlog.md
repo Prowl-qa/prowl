@@ -295,18 +295,6 @@ steps:
 
 ---
 
-{PROWL-047} **ARCH-001: Extract a driver abstraction from the Playwright runner**
-   Prerequisite for any non-browser execution target (macOS native, Electron, mobile). Today the Playwright `Page` object is the de facto driver interface, threaded through the entire runner: `src/runner/steps.ts` (~1,300 lines) is a monolithic if/else chain calling raw Playwright APIs at ~40 sites, and guardrails are enforced inline with those calls. This item is a pure refactor with zero behavior change.
-
-**Found during**: macOS menu bar app testing feasibility analysis (2026-08-14)
-**Acceptance Criteria**:
-- Define a `SessionDriver` interface covering the ~20 verbs `steps.ts` actually uses (navigate, click, fill, press, hover, scroll, waitForSelector, count/exists, url, screenshot, evaluate, route, dialog, setInputFiles, waitForDownload, textContent, …)
-- `src/browser/controller.ts` + `src/browser/actions.ts` become the `PlaywrightDriver` implementation — the only module importing Playwright
-- Refactor `executeSteps` from the if/else chain into a per-step handler registry; handlers declare which driver capabilities they need
-- Lift guardrails (`allowedDomains`, `forbiddenSelectors`, `maxSteps`, self-healing) out of `steps.ts` into a policy layer wrapping the driver; `forbiddenSelectors` uses a driver-supplied selector parser
-- Route the three call sites that launch Playwright directly (`src/cli/commands/login.ts`, `src/cli/commands/analyze.ts`, `src/generator/index.ts`) through the driver
-- All existing tests pass unchanged; no hunt YAML or config changes required
-
 {PROWL-048} **ARCH-002: macOS native app testing target (menu bar apps first)**
    Add a second execution target so hunts can test native macOS apps — starting with menu bar apps (`NSStatusItem` + popover/menu) — via Apple's Accessibility API (AXUIElement). Differentiator: neither Maestro (Android/iOS/web only) nor Playwright covers native macOS; accessibility identifiers map directly onto Prowl's stable-selectors principle (`data-testid` ↔ `accessibilityIdentifier`). Depends on PROWL-047.
 
