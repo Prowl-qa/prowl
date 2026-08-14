@@ -1,11 +1,9 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { chromium, firefox, webkit } from "playwright";
 import type { BrowserEngine, BrowserChannel, Viewport } from "../../types/index.js";
+import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../../browser/controller.js";
 import { analyzePage } from "../../analyzer/index.js";
 import { resolveViewport } from "../../config/loader.js";
-
-const ENGINES = { chromium, firefox, webkit } as const;
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
   const match = /^(\d+)x(\d+)$/i.exec(value);
@@ -33,18 +31,22 @@ export function buildAnalyzeCommand(): Command {
           ? resolveViewport(parseViewportFlag(options.viewport as string))
           : { width: 1280, height: 720 };
 
-        const browserEngine = ENGINES[engine];
-        const browser = await browserEngine.launch({
+        const session = await launchBrowser({
           headless: !options.headed,
-          channel
+          slowMo: 0,
+          timeout: 30000,
+          trace: false,
+          recordHar: false,
+          runDir: process.cwd(),
+          engine,
+          channel,
+          viewport
         });
-
-        const context = await browser.newContext({ viewport });
-        const page = await context.newPage();
+        const driver = createPlaywrightDriver(session.page);
 
         try {
-          await page.goto(url, { waitUntil: "networkidle" });
-          const result = await analyzePage(page);
+          await driver.goto(url, { waitUntil: "networkidle" });
+          const result = await analyzePage(driver);
 
           if (options.json) {
             console.log(JSON.stringify(result, null, 2));
@@ -96,8 +98,7 @@ export function buildAnalyzeCommand(): Command {
             console.log(chalk.gray(`  ${result.elements.length} elements, ${result.forms.length} forms, ${result.links.length} links\n`));
           }
         } finally {
-          await context.close();
-          await browser.close();
+          await closeBrowser(session);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Analysis failed";

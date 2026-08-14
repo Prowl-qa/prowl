@@ -1,5 +1,5 @@
 import yaml from "yaml";
-import { chromium } from "playwright";
+import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
 import type { AnalysisResult } from "../analyzer/index.js";
 import { analyzePage } from "../analyzer/index.js";
 import { buildGenerationPrompt, extractYamlFromResponse } from "./prompt.js";
@@ -20,15 +20,20 @@ export async function generateHunt(options: GenerateOptions): Promise<string> {
   let analysis = options.analysis;
 
   if (!analysis && options.url) {
-    const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
-    const page = await context.newPage();
+    const session = await launchBrowser({
+      headless: true,
+      slowMo: 0,
+      timeout: 30000,
+      trace: false,
+      recordHar: false,
+      runDir: process.cwd()
+    });
+    const driver = createPlaywrightDriver(session.page);
     try {
-      await page.goto(options.url, { waitUntil: "networkidle" });
-      analysis = await analyzePage(page);
+      await driver.goto(options.url, { waitUntil: "networkidle" });
+      analysis = await analyzePage(driver);
     } finally {
-      await context.close();
-      await browser.close();
+      await closeBrowser(session);
     }
   }
 
