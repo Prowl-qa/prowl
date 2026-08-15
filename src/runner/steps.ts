@@ -9,6 +9,7 @@ import type { DriverCapability, DriverDownload, SessionDriver } from "../browser
 import type { Step, StepResult } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
+import { assertStepsSupportedByTarget } from "../config/target.js";
 import { createRunPolicy, type RunPolicy } from "./policy.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
@@ -769,6 +770,13 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         redactedFillSteps: subRedacted,
         randomVars
       } = interpolateHunt(subHunt, process.env, h.context.randomVars);
+      // Sub-hunts bypass the top-level target check, so re-run it here against
+      // the sub-hunt's own steps. The target type is derived from the driver: a
+      // driver without the `navigate` capability is the (non-web) macOS target,
+      // where web-only steps — including `assert: urlIncludes`/`urlEquals`
+      // against a bundle-id `currentUrl()` — must be rejected, not silently run.
+      const subTargetType = h.driver.capabilities.has("navigate") ? "web" : "macos";
+      assertStepsSupportedByTarget(interpolatedSubHunt.steps, subTargetType);
       h.policy.assertWithinMaxSteps(interpolatedSubHunt.steps.length, huntName);
       const subResult = await h.executeNested({
         steps: interpolatedSubHunt.steps,

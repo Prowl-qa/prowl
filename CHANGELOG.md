@@ -17,7 +17,9 @@ All notable changes to Prowl will be documented in this file.
   `screenshot`, `assertScreenshot`, `repeat`, `runHunt`, `if`, `copyText`, `hover`,
   `scrollTo`, `waitForSelector`) work on both targets; web-only steps are rejected up
   front on the macOS target. A native guardrail (`guardrails.allowedApps`) is the
-  scope analog of `allowedDomains`. **Experimental and not distributed:** the helper
+  scope analog of `allowedDomains`. Sub-hunt steps are validated against the target
+  too (web-only steps in a sub-hunt fail fast on the macOS target instead of running).
+  **Experimental and not distributed:** the helper
   binary is not bundled in the npm package — build it locally with `swift build` in
   `macdriver/`. Prowl gives a clear "build the helper" error if it is missing. See the
   README "macOS Target (Experimental)" section for the selector dialect, step

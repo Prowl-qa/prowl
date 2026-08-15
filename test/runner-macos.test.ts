@@ -88,6 +88,54 @@ describe("runHunt — macOS target (PROWL-048)", () => {
     }
   });
 
+  it("rejects a sub-hunt containing a web-only step (macOS target)", async () => {
+    const project = setupProject(MAC_CONFIG, "parent", "steps:\n  - runHunt: sub\n");
+    fs.writeFileSync(
+      path.join(project, ".prowl", "hunts", "sub.yml"),
+      "steps:\n  - navigate: '/'\n"
+    );
+    const client = new FakeClient(macResponder);
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({ huntName: "parent", macClientFactory: () => client });
+      expect(result.status).toBe("fail");
+      expect(
+        result.steps.some(
+          (s) => s.status === "fail" && (s.error ?? "").includes("not supported by the macOS target")
+        )
+      ).toBe(true);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a sub-hunt with a URL assertion (the silent-false-PASS scenario)", async () => {
+    const project = setupProject(MAC_CONFIG, "parent", "steps:\n  - runHunt: sub\n");
+    // Without the sub-hunt check this would compare against currentUrl()
+    // "macos:com.example.App" — and pass if the substring appeared in the id.
+    fs.writeFileSync(
+      path.join(project, ".prowl", "hunts", "sub.yml"),
+      "steps:\n  - assert: { urlIncludes: 'com.example' }\n"
+    );
+    const client = new FakeClient(macResponder);
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({ huntName: "parent", macClientFactory: () => client });
+      expect(result.status).toBe("fail");
+      expect(
+        result.steps.some(
+          (s) => s.status === "fail" && (s.error ?? "").includes("not supported by the macOS target")
+        )
+      ).toBe(true);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
   it("rejects when the target app is excluded by allowedApps", async () => {
     const project = setupProject(
       "target:\n  type: macos\n  app: 'com.example.App'\nguardrails:\n  allowedApps: ['com.other.App']\n",
