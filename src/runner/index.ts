@@ -3,7 +3,11 @@ import path from "node:path";
 import type { AssertionResult, BrowserChannel, Config, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
-import { assertStepsSupportedByTarget, assertTargetAppAllowed } from "../config/target.js";
+import {
+  assertHuntAssertionsSupportedByTarget,
+  assertStepsSupportedByTarget,
+  assertTargetAppAllowed
+} from "../config/target.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
 import { launchMacSession, closeMacSession } from "../browser/mac-helper.js";
 import type { MacHelperClient } from "../browser/mac-driver.js";
@@ -427,8 +431,9 @@ async function runMacHunt(
   const hunt = loadHunt(options.huntName, configDir);
   const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
 
-  // Fail fast on web-only steps and out-of-scope apps before launching anything.
+  // Fail fast on web-only steps/assertions and out-of-scope apps before launching anything.
   assertStepsSupportedByTarget(interpolatedHunt.steps, "macos");
+  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, "macos");
   assertTargetAppAllowed(config.guardrails.allowedApps, target.app);
 
   const maxSteps = config.guardrails.maxSteps;

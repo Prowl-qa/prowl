@@ -9,7 +9,7 @@ import type { DriverCapability, DriverDownload, SessionDriver } from "../browser
 import type { Step, StepResult } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
-import { assertStepsSupportedByTarget } from "../config/target.js";
+import { assertHuntAssertionsSupportedByTarget, assertStepsSupportedByTarget } from "../config/target.js";
 import { createRunPolicy, type RunPolicy } from "./policy.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
@@ -777,6 +777,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       // against a bundle-id `currentUrl()` — must be rejected, not silently run.
       const subTargetType = h.driver.capabilities.has("navigate") ? "web" : "macos";
       assertStepsSupportedByTarget(interpolatedSubHunt.steps, subTargetType);
+      assertHuntAssertionsSupportedByTarget(interpolatedSubHunt.assertions, subTargetType);
       h.policy.assertWithinMaxSteps(interpolatedSubHunt.steps.length, huntName);
       const subResult = await h.executeNested({
         steps: interpolatedSubHunt.steps,
@@ -1325,7 +1326,6 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
     }
     driver = createPlaywrightDriver(context.page);
   }
-  context.driver = driver;
   const policy = createRunPolicy(driver, {
     forbiddenSelectors: context.forbiddenSelectors,
     allowedDomains: context.allowedDomains,
@@ -1354,7 +1354,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
 
   const executeNested = (
     overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
-  ): Promise<StepExecutionResult> => executeNestedSteps(context, overrides);
+  ): Promise<StepExecutionResult> => executeNestedSteps(context, { driver, ...overrides });
 
   for (let index = 0; index < context.steps.length; index += 1) {
     const currentStepPath = stepPath(context.stepPathPrefix, index);

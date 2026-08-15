@@ -16,10 +16,20 @@
 import ApplicationServices
 import Foundation
 
-func writeStdoutLine(_ object: [String: Any]) {
+func writeStdoutLine(_ object: [String: Any], fallbackId: Any? = nil) {
     guard let data = try? JSONSerialization.data(withJSONObject: object, options: []) else {
-        let fallback = "{\"ok\":false,\"error\":\"failed to encode response\"}\n"
-        FileHandle.standardError.write(Data(fallback.utf8))
+        var fallback: [String: Any] = ["ok": false, "error": "failed to encode response"]
+        if let fallbackId {
+            fallback["id"] = fallbackId
+        }
+        guard let fallbackData = try? JSONSerialization.data(withJSONObject: fallback, options: []) else {
+            let stderr = "failed to encode response and fallback response\n"
+            FileHandle.standardError.write(Data(stderr.utf8))
+            return
+        }
+        var line = fallbackData
+        line.append(0x0A) // newline
+        FileHandle.standardOutput.write(line)
         return
     }
     var line = data
@@ -101,22 +111,22 @@ func serve() {
         if (request["cmd"] as? String) == "shutdown" {
             var response: [String: Any] = ["ok": true, "result": ["shutdown": true]]
             if let id { response["id"] = id }
-            writeStdoutLine(response)
+            writeStdoutLine(response, fallbackId: id)
             return
         }
         do {
             let result = try handle(request)
             var response: [String: Any] = ["ok": true, "result": result]
             if let id { response["id"] = id }
-            writeStdoutLine(response)
+            writeStdoutLine(response, fallbackId: id)
         } catch let failure as AXFailure {
             var response: [String: Any] = ["ok": false, "error": failure.message]
             if let id { response["id"] = id }
-            writeStdoutLine(response)
+            writeStdoutLine(response, fallbackId: id)
         } catch {
             var response: [String: Any] = ["ok": false, "error": error.localizedDescription]
             if let id { response["id"] = id }
-            writeStdoutLine(response)
+            writeStdoutLine(response, fallbackId: id)
         }
     }
 }

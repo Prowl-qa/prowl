@@ -21,6 +21,8 @@ export type WebTarget = {
 /**
  * macOS native execution target (experimental, PROWL-048). `app` is a bundle
  * identifier (e.g. `com.example.App`) or an absolute path to a `.app` bundle.
+ * App-path guardrails are matched against the path, bundle name, and
+ * `CFBundleIdentifier` from `Contents/Info.plist` when it is readable.
  */
 export type MacosTarget = {
   type: "macos";
@@ -54,7 +56,7 @@ export type Config = {
   guardrails: {
     maxSteps: number;
     allowedDomains: string[];
-    /** Native scope analog of `allowedDomains`: allowed bundle IDs / process names (macOS target). */
+    /** Native scope analog of `allowedDomains`: allowed bundle IDs, app bundle names, or `.app` paths. */
     allowedApps: string[];
     forbiddenSelectors: string[];
     selfHealing: boolean;

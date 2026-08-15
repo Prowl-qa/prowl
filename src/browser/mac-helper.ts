@@ -90,6 +90,7 @@ export class SpawnMacHelperClient implements MacHelperClient {
   private stderrBuffer = "";
   private nextId = 1;
   private closed = false;
+  private terminalError: Error | undefined;
 
   constructor(binaryPath: string, options: SpawnMacHelperOptions = {}) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -100,11 +101,11 @@ export class SpawnMacHelperClient implements MacHelperClient {
     this.child.stderr?.on("data", (chunk: string) => {
       this.stderrBuffer = (this.stderrBuffer + chunk).slice(-4000);
     });
-    this.child.on("error", (error) => this.failAll(error));
+    this.child.on("error", (error) => this.recordTerminalFailure(error));
     this.child.on("exit", (code) => {
       if (!this.closed) {
         const detail = this.stderrBuffer.trim();
-        this.failAll(
+        this.recordTerminalFailure(
           new Error(`prowl-macdriver exited unexpectedly (code ${code ?? "null"})${detail ? `: ${detail}` : ""}`)
         );
       }
@@ -156,12 +157,21 @@ export class SpawnMacHelperClient implements MacHelperClient {
     this.pending.clear();
   }
 
+  private recordTerminalFailure(error: Error): void {
+    this.terminalError ??= error;
+    this.closed = true;
+    this.failAll(this.terminalError);
+  }
+
   /** Number of in-flight requests awaiting a response (for teardown/tests). */
   get pendingCount(): number {
     return this.pending.size;
   }
 
   request(cmd: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    if (this.terminalError) {
+      return Promise.reject(this.terminalError);
+    }
     if (this.closed) {
       return Promise.reject(new Error("prowl-macdriver client is closed"));
     }

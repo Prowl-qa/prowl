@@ -105,6 +105,7 @@ describe("runHunt — macOS target (PROWL-048)", () => {
           (s) => s.status === "fail" && (s.error ?? "").includes("not supported by the macOS target")
         )
       ).toBe(true);
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });
@@ -130,6 +131,51 @@ describe("runHunt — macOS target (PROWL-048)", () => {
           (s) => s.status === "fail" && (s.error ?? "").includes("not supported by the macOS target")
         )
       ).toBe(true);
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects top-level hunt assertions before launching the helper", async () => {
+    const project = setupProject(
+      MAC_CONFIG,
+      "with-assertions",
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+    );
+    const client = new FakeClient(macResponder);
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      await expect(runHunt({ huntName: "with-assertions", macClientFactory: () => client })).rejects.toThrow(
+        "Hunt-level assertions are not supported by the macOS target"
+      );
+      expect(client.calls).toHaveLength(0);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects sub-hunts with hunt-level assertions and still quits the helper", async () => {
+    const project = setupProject(MAC_CONFIG, "parent", "steps:\n  - runHunt: sub\n");
+    fs.writeFileSync(
+      path.join(project, ".prowl", "hunts", "sub.yml"),
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+    );
+    const client = new FakeClient(macResponder);
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({ huntName: "parent", macClientFactory: () => client });
+      expect(result.status).toBe("fail");
+      expect(
+        result.steps.some(
+          (s) => s.status === "fail" && (s.error ?? "").includes("Hunt-level assertions are not supported")
+        )
+      ).toBe(true);
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });

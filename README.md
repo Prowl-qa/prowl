@@ -434,7 +434,7 @@ target:
 browser:
   headless: true                       # false = show the browser window
   slowMo: 0                           # ms delay between actions (debugging)
-  timeout: 30000                       # default page operation timeout
+  timeout: 30000                       # default page operation timeout; macOS app launch timeout
 
 # What gets saved per run
 artifacts:
@@ -458,7 +458,7 @@ guardrails:
   forbiddenSelectors:                  # selectors that steps cannot use
     - "[data-danger]"
     - ".delete-btn"
-  allowedApps: []                      # macOS target only: allowed bundle IDs / app paths
+  allowedApps: []                      # macOS target only: bundle IDs, bundle names, or .app paths
 
 # Auth state from `prowl login`
 auth:
@@ -933,6 +933,10 @@ Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS
      allowedApps:                   # optional scope; empty = allow the target app
        - "com.example.App"
    ```
+
+   When `target.app` is an app path, `allowedApps` may list the exact `.app`
+   path, the app bundle name (`Example` for `Example.app`), or the bundle id
+   from `Contents/Info.plist` when that file is readable.
 
 3. **Grant Accessibility permission** (see below), then run a hunt as usual:
    `prowl run my-macos-hunt`.

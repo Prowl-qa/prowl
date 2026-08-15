@@ -92,6 +92,31 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("does not attach a derived driver to the caller context", async () => {
+    const page = createMockPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const context = {
+      page: page as unknown as Page,
+      steps: [{ click: { selector: "button" } }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure" as const,
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set<string>(),
+      configDir: runDir
+    };
+
+    try {
+      await executeSteps(context);
+      expect("driver" in context).toBe(false);
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
   it("fails on forbidden selector", async () => {
     const page = createMockPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));

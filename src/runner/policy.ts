@@ -19,7 +19,11 @@ const ALWAYS_ALLOWED_PROTOCOLS = ["about:", "data:"];
 export type RunPolicyOptions = {
   forbiddenSelectors: string[];
   allowedDomains: string[];
-  /** Allow-listed bundle IDs / process names for the macOS target (default []). */
+  /**
+   * Allow-listed bundle IDs / process names for the macOS target. Defaults to
+   * `[]`, which denies every app. This is the inverse of
+   * `assertTargetAppAllowed`, where an empty list allows the configured target.
+   */
   allowedApps?: string[];
   maxSteps: number;
   selfHealing?: boolean;
@@ -30,7 +34,7 @@ export type RunPolicy = {
   assertWithinMaxSteps(stepCount: number, huntName?: string): void;
   /** Throw if navigating/landing on a URL whose host is not allow-listed. */
   ensureUrlAllowed(urlValue: string): void;
-  /** Throw if a bundle id / process name is not allow-listed (macOS target). */
+  /** Throw if a bundle id / process name is not allow-listed; an empty list denies all apps. */
   ensureAppAllowed(app: string): void;
   /**
    * Re-assert scope after an action, in a target-aware way: on a URL-capable

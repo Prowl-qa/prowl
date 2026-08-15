@@ -45,7 +45,7 @@ Preflight from the command line:
 `serve` reads one JSON request per line on stdin and writes one JSON response per
 line on stdout. State (the attached app, open menus) persists across requests.
 
-```
+```text
 → {"id":1,"cmd":"launch","app":"com.example.App","timeout":10}
 ← {"id":1,"ok":true,"result":{"bundleId":"com.example.App","pid":1234}}
 → {"id":2,"cmd":"click","query":{"by":"role","role":"button","name":"Save"}}

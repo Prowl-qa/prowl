@@ -1,5 +1,9 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  assertHuntAssertionsSupportedByTarget,
   assertStepsSupportedByTarget,
   assertTargetAppAllowed,
   webOnlyReason
@@ -58,6 +62,13 @@ describe("assertStepsSupportedByTarget", () => {
     ];
     expect(() => assertStepsSupportedByTarget(nestedRepeat, "macos")).toThrow('Step "waitForUrl"');
   });
+
+  it("recurses into if else bodies", () => {
+    const nestedIfElse: Step[] = [
+      { if: { visible: "X", then: [{ click: "Save" }], else: [{ setInputFiles: { selector: "input", files: "x.txt" } }] } }
+    ];
+    expect(() => assertStepsSupportedByTarget(nestedIfElse, "macos")).toThrow('Step "setInputFiles"');
+  });
 });
 
 describe("assertTargetAppAllowed", () => {
@@ -69,9 +80,48 @@ describe("assertTargetAppAllowed", () => {
     expect(() => assertTargetAppAllowed(["com.example.App"], "com.example.App")).not.toThrow();
   });
 
+  it("allows an app-path target by bundle id, bundle name, or path", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-app-"));
+    const appPath = path.join(root, "Example.app");
+    const contentsPath = path.join(appPath, "Contents");
+    fs.mkdirSync(contentsPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(contentsPath, "Info.plist"),
+      [
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+        "<plist version=\"1.0\">",
+        "<dict>",
+        "<key>CFBundleIdentifier</key>",
+        "<string>com.example.App</string>",
+        "</dict>",
+        "</plist>"
+      ].join("\n")
+    );
+
+    try {
+      expect(() => assertTargetAppAllowed(["com.example.App"], appPath)).not.toThrow();
+      expect(() => assertTargetAppAllowed(["Example"], appPath)).not.toThrow();
+      expect(() => assertTargetAppAllowed([appPath], `${appPath}/`)).not.toThrow();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a target excluded by a non-empty allowedApps", () => {
     expect(() => assertTargetAppAllowed(["com.other.App"], "com.example.App")).toThrow(
       'Target app "com.example.App" is not in guardrails.allowedApps'
     );
+  });
+});
+
+describe("assertHuntAssertionsSupportedByTarget", () => {
+  it("rejects hunt-level assertions on the macos target", () => {
+    expect(() => assertHuntAssertionsSupportedByTarget([{ selectorExists: "Saved" }], "macos")).toThrow(
+      "Hunt-level assertions are not supported by the macOS target"
+    );
+  });
+
+  it("allows hunt-level assertions on the web target", () => {
+    expect(() => assertHuntAssertionsSupportedByTarget([{ selectorExists: "Saved" }], "web")).not.toThrow();
   });
 });

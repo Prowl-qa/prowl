@@ -27,6 +27,7 @@ class FakeClient implements MacHelperClient {
 describe("parseMacSelector (PROWL-048 selector dialect)", () => {
   it("parses id selectors", () => {
     expect(parseMacSelector("id=openSettings")).toEqual({ by: "id", value: "openSettings" });
+    expect(parseMacSelector('id="openSettings"')).toEqual({ by: "id", value: "openSettings" });
   });
 
   it("parses role selectors with and without a name", () => {
@@ -99,6 +100,20 @@ describe("createMacDriver", () => {
     expect(client.last()).toEqual({ cmd: "fill", params: { query: { by: "focused" }, value: "hello" } });
   });
 
+  it("keeps clickFirst and fillFirst stable when methods are destructured", async () => {
+    const client = new FakeClient();
+    const driver = createMacDriver(client);
+    const { clickFirst, fillFirst } = driver;
+
+    await clickFirst("statusItem");
+    await fillFirst(":focus", "hello");
+
+    expect(client.calls).toEqual([
+      { cmd: "openMenu", params: {} },
+      { cmd: "fill", params: { query: { by: "focused" }, value: "hello" } }
+    ]);
+  });
+
   it("sends role/label helper queries", async () => {
     const client = new FakeClient(() => ({ count: 1 }));
     const driver = createMacDriver(client);
@@ -120,6 +135,14 @@ describe("createMacDriver", () => {
     expect(driver.currentUrl()).toBe("macos:com.example.App");
     expect(driver.parseTextSelector('text="Delete"')).toBe("Delete");
     expect(driver.parseTextSelector("id=x")).toBeNull();
+  });
+
+  it("returns null when the helper omits or nulls text", async () => {
+    const omittedDriver = createMacDriver(new FakeClient(() => ({})));
+    await expect(omittedDriver.textContent("id=empty")).resolves.toBeNull();
+
+    const nullDriver = createMacDriver(new FakeClient(() => ({ text: null })));
+    await expect(nullDriver.textContent("id=empty")).resolves.toBeNull();
   });
 
   it("rejects web-only verbs with a clear message", async () => {

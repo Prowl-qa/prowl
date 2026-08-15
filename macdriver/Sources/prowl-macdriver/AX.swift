@@ -58,8 +58,8 @@ func axFrame(_ el: AXUIElement) -> CGRect? {
           CFGetTypeID(sizeRef) == AXValueGetTypeID() else { return nil }
     var point = CGPoint.zero
     var size = CGSize.zero
-    AXValueGetValue(posRef as! AXValue, .cgPoint, &point)
-    AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+    guard AXValueGetValue(posRef as! AXValue, .cgPoint, &point),
+          AXValueGetValue(sizeRef as! AXValue, .cgSize, &size) else { return nil }
     return CGRect(origin: point, size: size)
 }
 

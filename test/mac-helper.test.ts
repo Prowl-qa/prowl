@@ -95,6 +95,13 @@ describe("SpawnMacHelperClient request timeout", () => {
     return scriptPath;
   }
 
+  function writeCrashAfterRequestScript(): string {
+    const scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "prowl-crash-")), "crash.sh");
+    fs.writeFileSync(scriptPath, "#!/bin/sh\nread line\necho fatal helper >&2\nexit 7\n");
+    fs.chmodSync(scriptPath, 0o755);
+    return scriptPath;
+  }
+
   it("rejects a hung request with a named-command timeout and does not leak the pending entry", async () => {
     const scriptPath = writeHangScript();
     const client = new SpawnMacHelperClient(scriptPath, { requestTimeoutMs: 150 });
@@ -108,6 +115,23 @@ describe("SpawnMacHelperClient request timeout", () => {
         'prowl-macdriver request "waitFor" timed out after 150ms'
       );
       expect(client.pendingCount).toBe(0);
+    } finally {
+      await client.close();
+      fs.rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+    }
+  });
+
+  it("rejects later requests with the helper's terminal failure", async () => {
+    const scriptPath = writeCrashAfterRequestScript();
+    const client = new SpawnMacHelperClient(scriptPath, { requestTimeoutMs: 1000 });
+    try {
+      await expect(client.request("count")).rejects.toThrow(
+        "prowl-macdriver exited unexpectedly (code 7): fatal helper"
+      );
+      expect(client.pendingCount).toBe(0);
+      await expect(client.request("click")).rejects.toThrow(
+        "prowl-macdriver exited unexpectedly (code 7): fatal helper"
+      );
     } finally {
       await client.close();
       fs.rmSync(path.dirname(scriptPath), { recursive: true, force: true });

@@ -74,7 +74,7 @@ export function parseMacSelector(selector: string): MacQuery {
 
   const idMatch = /^id=(.+)$/s.exec(trimmed);
   if (idMatch) {
-    return { by: "id", value: idMatch[1].trim() };
+    return { by: "id", value: unquote(idMatch[1]) };
   }
 
   const roleMatch = /^role=([A-Za-z][\w-]*)(?:\[name=(.+)\])?$/s.exec(trimmed);
@@ -120,6 +120,27 @@ export function createMacDriver(client: MacHelperClient, options: MacDriverOptio
     return client.request(cmd, { query: parseMacSelector(selector), ...extra });
   }
 
+  async function clickSelector(selector: string): Promise<void> {
+    const trimmed = selector.trim();
+    if (trimmed.toLowerCase() === STATUS_ITEM_SELECTOR) {
+      await client.request("openMenu");
+      return;
+    }
+    if (trimmed.toLowerCase().startsWith(MENU_PREFIX)) {
+      await client.request("clickMenu", { title: trimmed.slice(MENU_PREFIX.length).trim() });
+      return;
+    }
+    await query("click", selector);
+  }
+
+  async function fillSelector(selector: string, value: string): Promise<void> {
+    if (selector.trim() === ":focus") {
+      await client.request("fill", { query: { by: "focused" } as MacQuery, value });
+      return;
+    }
+    await query("fill", selector, { value });
+  }
+
   return {
     capabilities: MAC_CAPABILITIES,
 
@@ -142,31 +163,10 @@ export function createMacDriver(client: MacHelperClient, options: MacDriverOptio
     },
 
     // interactions ---------------------------------------------------------
-    async click(selector: string): Promise<void> {
-      const trimmed = selector.trim();
-      if (trimmed.toLowerCase() === STATUS_ITEM_SELECTOR) {
-        await client.request("openMenu");
-        return;
-      }
-      if (trimmed.toLowerCase().startsWith(MENU_PREFIX)) {
-        await client.request("clickMenu", { title: trimmed.slice(MENU_PREFIX.length).trim() });
-        return;
-      }
-      await query("click", selector);
-    },
-    async clickFirst(selector: string): Promise<void> {
-      await this.click(selector);
-    },
-    async fill(selector: string, value: string): Promise<void> {
-      if (selector.trim() === ":focus") {
-        await client.request("fill", { query: { by: "focused" } as MacQuery, value });
-        return;
-      }
-      await query("fill", selector, { value });
-    },
-    async fillFirst(selector: string, value: string): Promise<void> {
-      await this.fill(selector, value);
-    },
+    click: clickSelector,
+    clickFirst: clickSelector,
+    fill: fillSelector,
+    fillFirst: fillSelector,
     async press(selector: string, key: string): Promise<void> {
       await query("press", selector, { key });
     },

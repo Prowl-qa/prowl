@@ -94,8 +94,9 @@ func matches(_ el: AXUIElement, _ query: Query) -> Bool {
     }
 }
 
-/// Depth-bounded pre-order walk collecting every element matching `query`.
-func resolveAll(root: AXUIElement, query: Query, maxDepth: Int = 20) -> [AXUIElement] {
+/// Depth-bounded pre-order walk collecting elements matching `query`.
+/// `limit` caps the number of matches collected.
+func resolveAll(root: AXUIElement, query: Query, maxDepth: Int = 20, limit: Int = .max) -> [AXUIElement] {
     if case .focused = query {
         // The focused element is read directly off the app root.
         if let value = axAttr(root, kAXFocusedUIElementAttribute as String), let el = axAsElement(value) {
@@ -105,14 +106,18 @@ func resolveAll(root: AXUIElement, query: Query, maxDepth: Int = 20) -> [AXUIEle
     }
     var found: [AXUIElement] = []
     func visit(_ el: AXUIElement, _ depth: Int) {
+        if found.count >= limit { return }
         if matches(el, query) { found.append(el) }
         if depth <= 0 { return }
-        for child in axChildren(el) { visit(child, depth - 1) }
+        for child in axChildren(el) {
+            if found.count >= limit { return }
+            visit(child, depth - 1)
+        }
     }
     visit(root, maxDepth)
     return found
 }
 
 func resolveFirst(root: AXUIElement, query: Query, maxDepth: Int = 20) -> AXUIElement? {
-    resolveAll(root: root, query: query, maxDepth: maxDepth).first
+    resolveAll(root: root, query: query, maxDepth: maxDepth, limit: 1).first
 }

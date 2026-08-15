@@ -51,16 +51,25 @@ final class Session {
             }
             let config = NSWorkspace.OpenConfiguration()
             let semaphore = DispatchSemaphore(value: 0)
+            let lock = NSLock()
             var launchError: Error?
             ws.openApplication(at: url, configuration: config) { started, error in
+                lock.lock()
                 running = started
                 launchError = error
+                lock.unlock()
                 semaphore.signal()
             }
-            _ = semaphore.wait(timeout: .now() + timeout)
-            if let launchError {
-                throw AXFailure("failed to launch \(appRef): \(launchError.localizedDescription)")
+            guard semaphore.wait(timeout: .now() + timeout) == .success else {
+                throw AXFailure("timed out after \(timeout)s launching \(appRef)")
             }
+            lock.lock()
+            let launchOutcome = (app: running, error: launchError)
+            lock.unlock()
+            if let error = launchOutcome.error {
+                throw AXFailure("failed to launch \(appRef): \(error.localizedDescription)")
+            }
+            running = launchOutcome.app
         }
 
         let deadline = Date().addingTimeInterval(timeout)
@@ -108,7 +117,11 @@ final class Session {
         let value = axString(element, kAXValueAttribute as String)
             ?? axString(element, kAXTitleAttribute as String)
             ?? axString(element, kAXDescriptionAttribute as String)
-        return ["text": value as Any]
+        var result: [String: Any] = [:]
+        if let value {
+            result["text"] = value
+        }
+        return result
     }
 
     func click(_ queryDict: [String: Any]) throws -> [String: Any] {
@@ -233,7 +246,10 @@ final class Session {
     func clickMenu(title: String, timeout: TimeInterval) throws -> [String: Any] {
         let (_, menu) = try openStatusMenu(timeout: timeout)
         let items = axChildren(menu)
-        guard let target = items.first(where: {
+        let exact = items.first {
+            axString($0, kAXTitleAttribute as String)?.caseInsensitiveCompare(title) == .orderedSame
+        }
+        guard let target = exact ?? items.first(where: {
             (axString($0, kAXTitleAttribute as String) ?? "").localizedCaseInsensitiveContains(title)
         }) else {
             _ = try? closeMenu()
