@@ -1,0 +1,130 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it, vi } from "vitest";
+import {
+  closeMacSession,
+  launchMacSession,
+  macdriverBuildInstructions,
+  resolveHelperBinary
+} from "../src/browser/mac-helper.js";
+import type { MacHelperClient } from "../src/browser/mac-driver.js";
+import { executeSteps } from "../src/runner/steps.js";
+import type { Step } from "../src/types/index.js";
+
+class FakeClient implements MacHelperClient {
+  calls: { cmd: string; params: Record<string, unknown> }[] = [];
+  closed = false;
+  constructor(
+    private readonly responder: (
+      cmd: string,
+      params: Record<string, unknown>
+    ) => Record<string, unknown> = () => ({})
+  ) {}
+  async request(cmd: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    this.calls.push({ cmd, params });
+    return this.responder(cmd, params);
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+  }
+}
+
+describe("resolveHelperBinary", () => {
+  it("returns an explicit PROWL_MACDRIVER_BIN when it exists", () => {
+    const self = fileURLToPath(import.meta.url);
+    expect(resolveHelperBinary({ PROWL_MACDRIVER_BIN: self } as NodeJS.ProcessEnv)).toBe(self);
+  });
+
+  it("throws build instructions when PROWL_MACDRIVER_BIN is missing", () => {
+    const missing = path.join(os.tmpdir(), "definitely-not-here-prowl-macdriver");
+    expect(() => resolveHelperBinary({ PROWL_MACDRIVER_BIN: missing } as NodeJS.ProcessEnv)).toThrow(
+      "swift build"
+    );
+  });
+
+  it("build instructions mention the local build and the env override", () => {
+    const text = macdriverBuildInstructions();
+    expect(text).toContain("swift build");
+    expect(text).toContain("PROWL_MACDRIVER_BIN");
+  });
+});
+
+describe("launchMacSession", () => {
+  it("checks trust, launches the app, and builds a driver", async () => {
+    const client = new FakeClient((cmd) => {
+      if (cmd === "check") return { trusted: true };
+      if (cmd === "launch") return { bundleId: "com.example.App", pid: 42 };
+      return {};
+    });
+    const session = await launchMacSession({ app: "com.example.App", clientFactory: () => client });
+    expect(session.bundleId).toBe("com.example.App");
+    expect(session.driver.capabilities.has("interact")).toBe(true);
+    expect(client.calls[0].cmd).toBe("check");
+    expect(client.calls[1]).toEqual({ cmd: "launch", params: { app: "com.example.App", timeout: 10 } });
+  });
+
+  it("rejects and closes the client when Accessibility is not trusted", async () => {
+    const client = new FakeClient((cmd) => (cmd === "check" ? { trusted: false } : {}));
+    await expect(
+      launchMacSession({ app: "com.example.App", clientFactory: () => client })
+    ).rejects.toThrow("not trusted for Accessibility");
+    expect(client.closed).toBe(true);
+  });
+});
+
+describe("closeMacSession", () => {
+  it("quits the app then closes the client", async () => {
+    const client = new FakeClient((cmd) => (cmd === "check" ? { trusted: true } : {}));
+    const session = await launchMacSession({ app: "com.example.App", clientFactory: () => client });
+    await closeMacSession(session);
+    expect(client.calls.some((c) => c.cmd === "quit")).toBe(true);
+    expect(client.closed).toBe(true);
+  });
+});
+
+describe("MacDriver end-to-end through executeSteps (fake helper)", () => {
+  it("runs portable steps and records the expected helper traffic", async () => {
+    const client = new FakeClient((cmd) => {
+      if (cmd === "check") return { trusted: true };
+      if (cmd === "launch") return { bundleId: "com.example.App" };
+      if (cmd === "count") return { count: 1 }; // assert visible passes
+      return {};
+    });
+    const { driver } = await launchMacSession({ app: "com.example.App", clientFactory: () => client });
+
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mac-steps-"));
+    const steps: Step[] = [
+      { click: { selector: "id=save" } },
+      { type: "hello" },
+      { assert: { visible: "Saved" } }
+    ];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const result = await executeSteps({
+        driver,
+        steps,
+        targetUrl: "macos:com.example.App",
+        runDir,
+        screenshotsMode: "on-failure",
+        forbiddenSelectors: [],
+        allowedDomains: [],
+        allowedApps: ["com.example.App"],
+        maxTotalTimeMs: 30000,
+        maxSteps: 50,
+        redactedFillSteps: new Set(),
+        configDir: runDir
+      });
+
+      expect(result.failed).toBe(false);
+      expect(client.calls).toContainEqual({ cmd: "click", params: { query: { by: "id", value: "save" } } });
+      expect(client.calls).toContainEqual({ cmd: "fill", params: { query: { by: "focused" }, value: "hello" } });
+      // assert visible "Saved" → count query by text
+      expect(client.calls).toContainEqual({ cmd: "count", params: { query: { by: "text", value: "Saved" } } });
+    } finally {
+      warn.mockRestore();
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+});

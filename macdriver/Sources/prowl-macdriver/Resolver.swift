@@ -13,6 +13,7 @@ enum Query {
     case role(role: String, name: String?)
     case text(String)
     case label(String)
+    case focused
 
     /// Build a query from the decoded JSON `query` object.
     static func from(_ dict: [String: Any]) throws -> Query {
@@ -20,6 +21,8 @@ enum Query {
             throw AXFailure("query is missing a \"by\" discriminant")
         }
         switch by {
+        case "focused":
+            return .focused
         case "id":
             guard let value = dict["value"] as? String else { throw AXFailure("id query requires value") }
             return .identifier(value)
@@ -73,6 +76,10 @@ private func nameFields(_ el: AXUIElement) -> [String?] {
 
 func matches(_ el: AXUIElement, _ query: Query) -> Bool {
     switch query {
+    case .focused:
+        // `focused` is an app-level attribute, not a per-element predicate; it is
+        // resolved directly in resolveAll and never matched during the tree walk.
+        return false
     case .identifier(let id):
         return axString(el, "AXIdentifier") == id
     case .role(let role, let name):
@@ -89,6 +96,13 @@ func matches(_ el: AXUIElement, _ query: Query) -> Bool {
 
 /// Depth-bounded pre-order walk collecting every element matching `query`.
 func resolveAll(root: AXUIElement, query: Query, maxDepth: Int = 20) -> [AXUIElement] {
+    if case .focused = query {
+        // The focused element is read directly off the app root.
+        if let value = axAttr(root, kAXFocusedUIElementAttribute as String), let el = axAsElement(value) {
+            return [el]
+        }
+        return []
+    }
     var found: [AXUIElement] = []
     func visit(_ el: AXUIElement, _ depth: Int) {
         if matches(el, query) { found.append(el) }
