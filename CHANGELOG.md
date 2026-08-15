@@ -4,6 +4,28 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Experimental macOS native target (ARCH-002 / PROWL-048).** Prowl can now drive
+  native macOS apps — including menu bar extras (`NSStatusItem` + `NSMenu`) — through
+  Apple's Accessibility API, alongside the web target. The `target` config gains a
+  discriminant: `type: "web"` (default — existing configs are unchanged) or
+  `type: "macos"` with `app` (a bundle id or `.app` path). A new `MacDriver`
+  implements the engine-neutral `SessionDriver` over a long-lived JSON-over-stdio
+  Swift helper (`prowl-macdriver`), with a native selector dialect (`id=…`,
+  `role=…[name="…"]`, `label=…`, bare text, plus `statusItem` / `menu=…` for the menu
+  bar). Portable steps (`click`, `fill`, `type`, `press`, `wait`, `assert visible`,
+  `screenshot`, `assertScreenshot`, `repeat`, `runHunt`, `if`, `copyText`, `hover`,
+  `scrollTo`, `waitForSelector`) work on both targets; web-only steps are rejected up
+  front on the macOS target. A native guardrail (`guardrails.allowedApps`) is the
+  scope analog of `allowedDomains`. **Experimental and not distributed:** the helper
+  binary is not bundled in the npm package — build it locally with `swift build` in
+  `macdriver/`. Prowl gives a clear "build the helper" error if it is missing. See the
+  README "macOS Target (Experimental)" section for the selector dialect, step
+  compatibility matrix, and Accessibility-permission setup (incl. CI notes). Library
+  exports: `createMacDriver`, `parseMacSelector`, `launchMacSession`,
+  `closeMacSession`, `resolveHelperBinary`, `assertStepsSupportedByTarget`, and the
+  `Target` / `WebTarget` / `MacosTarget` types (PROWL-048)
+
 ### Internal
 - Driver abstraction extracted from the Playwright runner (ARCH-001 / PROWL-047).
   A new engine-neutral `SessionDriver` interface (`src/browser/driver.ts`) now
