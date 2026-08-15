@@ -26,6 +26,7 @@ import type {
   DialogAction,
   DriverCapability,
   DriverDownload,
+  DriverResponse,
   DriverRoute,
   NavigateOptions,
   SessionDriver
@@ -54,51 +55,71 @@ export type BrowserOptions = {
 };
 
 export async function launchBrowser(options: BrowserOptions): Promise<BrowserSession> {
-  const engine = ENGINES[options.engine ?? "chromium"];
+  const engineName = options.engine ?? "chromium";
+  const engine = Object.prototype.hasOwnProperty.call(ENGINES, engineName)
+    ? ENGINES[engineName as keyof typeof ENGINES]
+    : undefined;
+  if (!engine) {
+    throw new Error(
+      `Unsupported browser engine "${String(engineName)}". Available engines: ${Object.keys(ENGINES).join(", ")}.`
+    );
+  }
   const browser = await engine.launch({
     headless: options.headless,
     slowMo: options.slowMo,
     channel: options.channel
   });
 
-  const contextOptions: Parameters<typeof browser.newContext>[0] = {};
+  try {
+    const contextOptions: Parameters<typeof browser.newContext>[0] = {};
 
-  if (options.viewport) {
-    contextOptions.viewport = options.viewport;
-  }
-
-  if (options.storageStatePath) {
-    if (fs.existsSync(options.storageStatePath)) {
-      contextOptions.storageState = options.storageStatePath;
-    } else {
-      console.warn(`Auth state file not found: ${options.storageStatePath}. Run "prowl login" to create it.`);
+    if (options.viewport) {
+      contextOptions.viewport = options.viewport;
     }
+
+    if (options.storageStatePath) {
+      if (fs.existsSync(options.storageStatePath)) {
+        contextOptions.storageState = options.storageStatePath;
+      } else {
+        console.warn(`Auth state file not found: ${options.storageStatePath}. Run "prowl login" to create it.`);
+      }
+    }
+
+    if (options.recordHar) {
+      contextOptions.recordHar = { path: path.join(options.runDir, "network.har") };
+    }
+
+    const context = await browser.newContext(contextOptions);
+    const page = await context.newPage();
+    page.setDefaultTimeout(options.timeout);
+    page.setDefaultNavigationTimeout(options.timeout);
+
+    let tracePath: string | undefined;
+    if (options.trace) {
+      tracePath = path.join(options.runDir, "trace.zip");
+      await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    }
+
+    return { browser, context, page, tracePath };
+  } catch (error) {
+    try {
+      await browser.close();
+    } catch (closeError) {
+      console.warn(`Failed to close browser after setup error: ${formatError(closeError)}`);
+    }
+    throw error;
   }
-
-  if (options.recordHar) {
-    contextOptions.recordHar = { path: path.join(options.runDir, "network.har") };
-  }
-
-  const context = await browser.newContext(contextOptions);
-  const page = await context.newPage();
-  page.setDefaultTimeout(options.timeout);
-  page.setDefaultNavigationTimeout(options.timeout);
-
-  let tracePath: string | undefined;
-  if (options.trace) {
-    tracePath = path.join(options.runDir, "trace.zip");
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
-  }
-
-  return { browser, context, page, tracePath };
 }
 
 export async function closeBrowser(session: BrowserSession): Promise<void> {
-  if (session.tracePath) {
-    await session.context.tracing.stop({ path: session.tracePath });
+  try {
+    if (session.tracePath) {
+      await session.context.tracing.stop({ path: session.tracePath });
+    }
+    await session.context.close();
+  } finally {
+    await session.browser.close();
   }
-  await session.context.close();
-  await session.browser.close();
 }
 
 /** Persist the session's storage state (cookies + localStorage) to disk. */
@@ -113,6 +134,7 @@ const ALL_CAPABILITIES: ReadonlySet<DriverCapability> = new Set<DriverCapability
   "wait",
   "screenshot",
   "evaluate",
+  "response",
   "route",
   "dialog",
   "files",
@@ -121,18 +143,22 @@ const ALL_CAPABILITIES: ReadonlySet<DriverCapability> = new Set<DriverCapability
 
 type PlaywrightRole = Parameters<Page["getByRole"]>[0];
 
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function unwrapTextSelector(value: string): string | null {
   const trimmed = value.trim();
-  if (trimmed.startsWith('text="') && trimmed.endsWith('"')) {
-    return trimmed.slice(6, -1);
+  if (!trimmed.startsWith("text=")) {
+    return null;
   }
-  if (trimmed.startsWith("text='") && trimmed.endsWith("'")) {
-    return trimmed.slice(6, -1);
+  const raw = trimmed.slice(5);
+  const first = raw[0];
+  if (first === '"' || first === "'") {
+    const unquoted = raw.slice(1);
+    return unquoted.endsWith(first) ? unquoted.slice(0, -1) : unquoted;
   }
-  if (trimmed.startsWith("text=")) {
-    return trimmed.slice(5);
-  }
-  return null;
+  return raw;
 }
 
 /**
@@ -250,11 +276,26 @@ export function createPlaywrightDriver(page: Page): SessionDriver {
       await page.screenshot({ path: options.path, fullPage: options.fullPage });
     },
 
+    onResponse(handler: (response: DriverResponse) => void): void {
+      page.on("response", handler);
+    },
+
     async route(url: string, handler: (route: DriverRoute) => void | Promise<void>): Promise<void> {
-      await page.route(url, (pwRoute) => {
-        void handler({
-          fulfill: (response) => pwRoute.fulfill(response)
-        });
+      await page.route(url, async (pwRoute) => {
+        try {
+          await handler({
+            fulfill: (response) => pwRoute.fulfill(response)
+          });
+        } catch (error) {
+          try {
+            await pwRoute.abort("failed");
+          } catch (abortError) {
+            throw new Error(
+              `Route handler failed for ${url}: ${formatError(error)}. Route abort also failed: ${formatError(abortError)}`
+            );
+          }
+          throw new Error(`Route handler failed for ${url}: ${formatError(error)}`);
+        }
       });
     },
 
@@ -263,12 +304,13 @@ export function createPlaywrightDriver(page: Page): SessionDriver {
     },
 
     onDialog(action: DialogAction): void {
-      page.once("dialog", async (dialog) => {
-        if (action === "accept") {
-          await dialog.accept();
-        } else {
-          await dialog.dismiss();
-        }
+      page.once("dialog", (dialog) => {
+        const response = action === "accept"
+          ? dialog.accept()
+          : dialog.dismiss();
+        response.catch((error: unknown) => {
+          console.warn(`Failed to ${action} dialog: ${formatError(error)}`);
+        });
       });
     },
 

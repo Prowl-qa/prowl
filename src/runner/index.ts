@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AssertionResult, BrowserChannel, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
-import { launchBrowser, closeBrowser } from "../browser/controller.js";
+import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
@@ -123,6 +123,7 @@ async function executeHuntAttempt(
 
   let result: RunResult;
   try {
+    const driver = createPlaywrightDriver(session.page);
     const consoleEntries: ConsoleEntry[] = [];
     const networkEntries: NetworkEntry[] = [];
     const traceCorrelations: TraceCorrelation[] = [];
@@ -136,7 +137,7 @@ async function executeHuntAttempt(
       });
     });
 
-    session.page.on("response", (response) => {
+    driver.onResponse((response) => {
       if (response.status() >= 400) {
         networkEntries.push({ url: response.url(), status: response.status() });
         captureTraceCorrelation(response, traceHeader, traceCorrelations, redactionValues);
@@ -153,6 +154,7 @@ async function executeHuntAttempt(
     try {
       const stepExecution = await executeSteps({
         page: session.page,
+        driver,
         steps: interpolatedHunt.steps,
         targetUrl,
         runDir,
@@ -187,7 +189,7 @@ async function executeHuntAttempt(
 
     let finalScreenshot: string | undefined;
     try {
-      finalScreenshot = await captureFinalScreenshot(session.page, runDir);
+      finalScreenshot = await captureFinalScreenshot(driver, runDir);
     } catch {
       finalScreenshot = undefined;
     }

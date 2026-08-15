@@ -100,7 +100,7 @@ export function buildHealCandidates(selector: string): Array<{ selector: string;
  * is unit-testable with a fake page.
  */
 export async function healSelector(
-  page: SelectorProbe,
+  probe: SelectorProbe,
   selector: string,
   options: { enabled: boolean }
 ): Promise<HealResult | null> {
@@ -109,10 +109,10 @@ export async function healSelector(
   for (const candidate of buildHealCandidates(selector)) {
     let count: number;
     try {
-      const locator = page.locator(candidate.selector);
+      const locator = probe.locator(candidate.selector);
       count = await locator.count();
     } catch {
-      continue; // ignore candidates Playwright can't parse
+      continue; // ignore candidates the engine cannot parse
     }
     if (count === 1) {
       return { selector: candidate.selector, healedFrom: selector, strategy: candidate.strategy };

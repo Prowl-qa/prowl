@@ -1,4 +1,6 @@
-export type BrowserEngine = "chromium" | "firefox" | "webkit";
+export const SUPPORTED_BROWSER_ENGINES = ["chromium", "firefox", "webkit"] as const;
+
+export type BrowserEngine = (typeof SUPPORTED_BROWSER_ENGINES)[number];
 
 export type BrowserChannel =
   | "chromium"

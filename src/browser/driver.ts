@@ -20,6 +20,7 @@ export type DriverCapability =
   | "wait"
   | "screenshot"
   | "evaluate"
+  | "response"
   | "route"
   | "dialog"
   | "files"
@@ -37,12 +38,13 @@ export type NavigateOptions = {
 export type DriverResponse = {
   url(): string;
   status(): number;
+  /** Header names MUST be lowercased by the driver; consumers look up lowercase keys. */
   headers(): Record<string, string>;
 };
 
 /** A route intercepted via `route()`; the handler fulfills it with a canned response. */
 export type DriverRoute = {
-  fulfill(response: { status: number; contentType?: string; body?: string }): Promise<void> | void;
+  fulfill(response: { status: number; contentType?: string; body?: string }): Promise<void>;
 };
 
 /** A file download surfaced by `waitForDownloadEvent()`. */
@@ -99,6 +101,9 @@ export interface SessionDriver {
     arg?: A
   ): Promise<R>;
   screenshot(options: { path: string; fullPage?: boolean }): Promise<void>;
+
+  // network observation -----------------------------------------------------
+  onResponse(handler: (response: DriverResponse) => void): void;
 
   // network mocking ---------------------------------------------------------
   route(url: string, handler: (route: DriverRoute) => void | Promise<void>): Promise<void>;

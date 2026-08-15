@@ -584,7 +584,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   click: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("click" in h.step)) unknownStep();
       let selector: string;
@@ -612,7 +612,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   fill: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("fill" in h.step)) unknownStep();
       let selector: string;
@@ -645,7 +645,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   type: {
-    capabilities: ["interact"],
+    capabilities: ["navigate", "interact"],
     run: async (h) => {
       if (!("type" in h.step)) unknownStep();
       h.policy.assertAllowedSelector(":focus");
@@ -665,7 +665,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   selectOption: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("selectOption" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.selectOption.selector);
@@ -686,7 +686,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   select: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("select" in h.step)) unknownStep();
       const [label, value] = getSinglePair(h.step.select, "select");
@@ -723,7 +723,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   setInputFiles: {
-    capabilities: ["interact", "query", "files"],
+    capabilities: ["navigate", "interact", "query", "files"],
     run: async (h) => {
       if (!("setInputFiles" in h.step)) unknownStep();
       const resolvedInput = await h.policy.resolveActionSelector(h.step.setInputFiles.selector);
@@ -790,7 +790,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   press: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("press" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.press.selector);
@@ -810,7 +810,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   assert: {
-    capabilities: ["query"],
+    capabilities: ["navigate", "query"],
     run: async (h) => {
       if (!("assert" in h.step)) unknownStep();
       const value = await runInlineAssert(h.driver, h.policy, h.step.assert);
@@ -858,7 +858,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   waitForUrl: {
-    capabilities: ["wait"],
+    capabilities: ["navigate", "wait"],
     run: async (h) => {
       if (!("waitForUrl" in h.step)) unknownStep();
       const value = h.step.waitForUrl.value;
@@ -884,7 +884,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   hover: {
-    capabilities: ["interact", "query"],
+    capabilities: ["navigate", "interact", "query"],
     run: async (h) => {
       if (!("hover" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.hover.selector);
@@ -1130,8 +1130,8 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       const contentType = mock.response.contentType ?? "application/json";
       const status = mock.response.status;
 
-      await h.driver.route(mock.url, (route) => {
-        route.fulfill({
+      await h.driver.route(mock.url, async (route) => {
+        await route.fulfill({
           status,
           contentType,
           body: responseBody

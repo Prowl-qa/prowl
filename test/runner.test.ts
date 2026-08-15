@@ -4,6 +4,7 @@ import type { RunResult, StepResult, AssertionResult } from "../src/types/index.
 
 const mockLaunchBrowser = vi.fn();
 const mockCloseBrowser = vi.fn();
+const mockCreatePlaywrightDriver = vi.fn();
 const mockExecuteSteps = vi.fn();
 const mockCaptureFinalScreenshot = vi.fn();
 const mockEvaluateAssertions = vi.fn();
@@ -17,7 +18,8 @@ const mockAppendHistoryEntry = vi.fn();
 
 vi.mock("../src/browser/controller.js", () => ({
   launchBrowser: (...args: unknown[]) => mockLaunchBrowser(...args),
-  closeBrowser: (...args: unknown[]) => mockCloseBrowser(...args)
+  closeBrowser: (...args: unknown[]) => mockCloseBrowser(...args),
+  createPlaywrightDriver: (...args: unknown[]) => mockCreatePlaywrightDriver(...args)
 }));
 
 vi.mock("../src/runner/steps.js", () => ({
@@ -79,6 +81,14 @@ function mockSession() {
   };
 }
 
+function mockDriver() {
+  return {
+    capabilities: new Set(["navigate", "query", "interact", "wait", "screenshot", "evaluate", "response"]),
+    onResponse: vi.fn(),
+    screenshot: vi.fn(async () => undefined)
+  };
+}
+
 function setupMocks(overrides?: {
   stepResults?: StepResult[];
   stepFailed?: boolean;
@@ -106,8 +116,10 @@ function setupMocks(overrides?: {
   });
 
   const session = mockSession();
+  const driver = mockDriver();
   mockLaunchBrowser.mockResolvedValue(session);
   mockCloseBrowser.mockResolvedValue(undefined);
+  mockCreatePlaywrightDriver.mockReturnValue(driver);
 
   const stepResults = overrides?.stepResults ?? [
     { type: "navigate", status: "pass" as const, durationMs: 100 }
@@ -132,7 +144,7 @@ function setupMocks(overrides?: {
   vi.spyOn(fs, "mkdirSync").mockImplementation(originalMkdirSync);
   vi.spyOn(fs, "writeFileSync").mockImplementation(() => undefined);
 
-  return { config, configDir, session };
+  return { config, configDir, session, driver };
 }
 
 describe("runHunt", () => {
@@ -142,7 +154,7 @@ describe("runHunt", () => {
   });
 
   it("returns pass result for successful run", async () => {
-    setupMocks();
+    const { session, driver } = setupMocks();
 
     const { result } = await runHunt({ huntName: "test-hunt" });
 
@@ -150,7 +162,50 @@ describe("runHunt", () => {
     expect(result.exitCode).toBe(0);
     expect(result.hunt).toBe("test-hunt");
     expect(mockLaunchBrowser).toHaveBeenCalled();
+    expect(mockCreatePlaywrightDriver).toHaveBeenCalledWith(session.page);
+    expect(driver.onResponse).toHaveBeenCalledWith(expect.any(Function));
+    expect(mockExecuteSteps).toHaveBeenCalledWith(expect.objectContaining({ driver }));
+    expect(mockCaptureFinalScreenshot).toHaveBeenCalledWith(driver, expect.any(String));
     expect(mockCloseBrowser).toHaveBeenCalled();
+  });
+
+  it("captures network errors through the session driver response listener", async () => {
+    const { driver } = setupMocks();
+    mockExecuteSteps.mockImplementation(async () => {
+      const onResponse = driver.onResponse.mock.calls[0][0] as (response: {
+        url(): string;
+        status(): number;
+        headers(): Record<string, string>;
+      }) => void;
+      onResponse({
+        url: () => "http://localhost:3000/api/orders",
+        status: () => 500,
+        headers: () => ({
+          traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"
+        })
+      });
+      return {
+        results: [{ type: "navigate", status: "pass", durationMs: 100 }],
+        screenshots: [],
+        failed: false
+      };
+    });
+
+    const { result } = await runHunt({ huntName: "test-hunt" });
+
+    expect(mockEvaluateAssertions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        networkEntries: [{ url: "http://localhost:3000/api/orders", status: 500 }]
+      })
+    );
+    expect(result.traceCorrelations).toEqual([
+      {
+        url: "http://localhost:3000/api/orders",
+        status: 500,
+        traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        header: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"
+      }
+    ]);
   });
 
   it("returns fail result when step fails", async () => {

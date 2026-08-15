@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import type { BrowserEngine, BrowserChannel, Viewport } from "../../types/index.js";
+import type { BrowserChannel, Viewport } from "../../types/index.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../../browser/controller.js";
+import { parseBrowserEngine } from "../../browser/engines.js";
 import { analyzePage } from "../../analyzer/index.js";
 import { resolveViewport } from "../../config/loader.js";
 
@@ -25,7 +26,7 @@ export function buildAnalyzeCommand(): Command {
     .option("--config <path>", "Custom config path")
     .action(async (url: string, options) => {
       try {
-        const engine = (options.browser as BrowserEngine) ?? "chromium";
+        const engine = parseBrowserEngine(options.browser as string | undefined);
         const channel = options.channel as BrowserChannel | undefined;
         const viewport: Viewport = options.viewport
           ? resolveViewport(parseViewportFlag(options.viewport as string))

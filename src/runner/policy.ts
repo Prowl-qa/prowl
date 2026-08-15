@@ -87,7 +87,12 @@ export function createRunPolicy(driver: SessionDriver, options: RunPolicyOptions
         return;
       }
     }
-    const url = new URL(urlValue);
+    let url: URL;
+    try {
+      url = new URL(urlValue);
+    } catch {
+      throw new Error(`Navigation target is not a valid absolute URL: ${urlValue}`);
+    }
     if (!allowedDomains.includes(url.hostname)) {
       throw new Error(`Navigation to disallowed domain: ${url.hostname}`);
     }
