@@ -142,11 +142,50 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
-  it("requires navigate capability for click steps that re-check the current URL", async () => {
+  it("runs portable click on a driver without navigate and skips the URL re-check (macOS target)", async () => {
     const page = createMockPage();
+    const clickSpy = vi.fn(async () => undefined);
     const driver = {
       capabilities: new Set(["interact", "query"]),
-      parseTextSelector: () => null
+      parseTextSelector: () => null,
+      click: clickSpy,
+      // ensureLocationAllowed must NOT consult the URL for a non-navigating driver.
+      currentUrl: () => {
+        throw new Error("currentUrl should not be read for a driver without the navigate capability");
+      }
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ click: { selector: "id=save" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(clickSpy).toHaveBeenCalledWith("id=save");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("still enforces the allowed-domain re-check after click on a navigating (web) driver", async () => {
+    const page = createMockPage();
+    // A navigate-capable driver whose click lands the page on a disallowed host.
+    const driver = {
+      capabilities: new Set(["navigate", "interact", "query"]),
+      parseTextSelector: () => null,
+      click: vi.fn(async () => undefined),
+      currentUrl: () => "https://evil.test/pwned",
+      screenshot: vi.fn(async () => undefined)
     } as unknown as SessionDriver;
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
     const steps: Step[] = [{ click: { selector: "button" } }];
@@ -157,7 +196,7 @@ describe("executeSteps", () => {
       steps,
       targetUrl: "http://localhost",
       runDir,
-      screenshotsMode: "all",
+      screenshotsMode: "on-failure",
       forbiddenSelectors: [],
       allowedDomains: ["localhost"],
       maxTotalTimeMs: 30000,
@@ -167,7 +206,7 @@ describe("executeSteps", () => {
     });
 
     expect(result.failed).toBe(true);
-    expect(result.error).toBe('Driver does not support capability "navigate" required by step "click"');
+    expect(result.error).toBe("Navigation to disallowed domain: evil.test");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
