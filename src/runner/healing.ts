@@ -1,4 +1,11 @@
-import type { Locator, Page } from "playwright";
+/**
+ * The minimal probe surface healing needs: count matches for a candidate
+ * selector. A live Playwright page and a {@link SessionDriver}-backed adapter
+ * both satisfy it, so healing carries no Playwright dependency.
+ */
+export type SelectorProbe = {
+  locator(selector: string): { count(): Promise<number> };
+};
 
 /**
  * Self-healing selectors (PROWL-023). When an explicit selector matches nothing,
@@ -93,7 +100,7 @@ export function buildHealCandidates(selector: string): Array<{ selector: string;
  * is unit-testable with a fake page.
  */
 export async function healSelector(
-  page: Pick<Page, "locator">,
+  probe: SelectorProbe,
   selector: string,
   options: { enabled: boolean }
 ): Promise<HealResult | null> {
@@ -102,10 +109,10 @@ export async function healSelector(
   for (const candidate of buildHealCandidates(selector)) {
     let count: number;
     try {
-      const locator: Pick<Locator, "count"> = page.locator(candidate.selector);
+      const locator = probe.locator(candidate.selector);
       count = await locator.count();
     } catch {
-      continue; // ignore candidates Playwright can't parse
+      continue; // ignore candidates the engine cannot parse
     }
     if (count === 1) {
       return { selector: candidate.selector, healedFrom: selector, strategy: candidate.strategy };

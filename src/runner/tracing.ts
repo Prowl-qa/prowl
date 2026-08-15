@@ -1,4 +1,4 @@
-import type { Response } from "playwright";
+import type { DriverResponse } from "../browser/driver.js";
 import type { TraceCorrelation } from "../types/index.js";
 
 /** Default response header carrying a distributed-trace id (W3C Trace Context). */
@@ -44,7 +44,7 @@ function redactValues(text: string, values: readonly string[]): string {
  * or empty, so passing apps produce no noise.
  */
 export function captureTraceCorrelation(
-  response: Pick<Response, "url" | "status" | "headers">,
+  response: DriverResponse,
   headerName: string,
   sink: TraceCorrelation[],
   redactionValues: readonly string[] = []

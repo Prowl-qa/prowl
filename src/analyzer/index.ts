@@ -1,4 +1,12 @@
-import type { Page } from "playwright";
+/**
+ * The minimal surface `analyzePage` needs: a way to evaluate a DOM-scraping
+ * function in the page. Both a live Playwright page and a {@link SessionDriver}
+ * satisfy it (the driver's `evaluate` verb), so the analyzer has no direct
+ * Playwright dependency — its DOM scraping runs through the driver.
+ */
+export type DomEvaluator = {
+  evaluate(pageFunction: () => unknown): Promise<unknown>;
+};
 
 export type PageElement = {
   tag: string;
@@ -62,7 +70,7 @@ type RawAnalysis = {
   forms: RawForm[];
 };
 
-export async function analyzePage(page: Page): Promise<AnalysisResult> {
+export async function analyzePage(page: DomEvaluator): Promise<AnalysisResult> {
   const raw = await page.evaluate(() => {
     const forms = Array.from(document.querySelectorAll("form"));
     const formData = forms.map((form, index) => ({

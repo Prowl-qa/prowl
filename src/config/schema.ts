@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Step } from "../types/index.js";
+import { SUPPORTED_BROWSER_ENGINES, type Step } from "../types/index.js";
 import { isValidHuntName } from "./hunt-name.js";
 
 export const configSchema = z
@@ -12,7 +12,7 @@ export const configSchema = z
         headless: z.boolean().optional(),
         slowMo: z.number().optional(),
         timeout: z.number().optional(),
-        engine: z.enum(["chromium", "firefox", "webkit"]).optional(),
+        engine: z.enum(SUPPORTED_BROWSER_ENGINES).optional(),
         channel: z.enum([
           "chromium",
           "chrome", "chrome-beta", "chrome-canary", "chrome-dev",

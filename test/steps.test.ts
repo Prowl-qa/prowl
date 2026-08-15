@@ -8,6 +8,7 @@ import { executeSteps } from "../src/runner/steps.js";
 import { interpolateHunt } from "../src/config/interpolate.js";
 import type { Page } from "playwright";
 import type { Step } from "../src/types/index.js";
+import type { DriverRoute, SessionDriver } from "../src/browser/driver.js";
 
 function createMockPage(options?: {
   roleCounts?: Record<string, number>;
@@ -138,6 +139,35 @@ describe("executeSteps", () => {
     expect(result.results[0].type).toBe("onDialog");
     expect(result.results[0].value).toBe("accept");
     expect(page.once).toHaveBeenCalledWith("dialog", expect.any(Function));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("requires navigate capability for click steps that re-check the current URL", async () => {
+    const page = createMockPage();
+    const driver = {
+      capabilities: new Set(["interact", "query"]),
+      parseTextSelector: () => null
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ click: { selector: "button" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "all",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.error).toBe('Driver does not support capability "navigate" required by step "click"');
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
@@ -1759,6 +1789,49 @@ describe("executeSteps", () => {
     expect(result.results[0].type).toBe("mockRoute");
     expect(result.results[0].value).toBe("**/api/users");
     expect(page.route).toHaveBeenCalledWith("**/api/users", expect.any(Function));
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails mockRoute when route fulfillment rejects", async () => {
+    const page = createMockPage();
+    const driver = {
+      capabilities: new Set(["route"]),
+      parseTextSelector: () => null,
+      route: vi.fn(async (_url: string, handler: (route: DriverRoute) => void | Promise<void>) => {
+        await handler({
+          fulfill: vi.fn(async () => {
+            throw new Error("fulfill failed");
+          })
+        });
+      })
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps = [
+      {
+        mockRoute: {
+          url: "**/api/users",
+          response: { status: 200, body: '{"users": []}' }
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "all",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.error).toBe("fulfill failed");
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 

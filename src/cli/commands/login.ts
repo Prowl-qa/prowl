@@ -2,7 +2,13 @@ import path from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
 import { Command } from "commander";
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import {
+  launchBrowser,
+  closeBrowser,
+  saveStorageState,
+  createPlaywrightDriver,
+  type BrowserSession
+} from "../../browser/controller.js";
 import { loadConfig } from "../../config/loader.js";
 
 function resolvePath(configDir: string, inputPath: string): string {
@@ -28,8 +34,7 @@ export function buildLoginCommand(): Command {
     .option("--url <target>", "Override target URL")
     .option("--config <path>", "Custom config path")
     .action(async (options) => {
-      let browser: Browser | null = null;
-      let context: BrowserContext | null = null;
+      let session: BrowserSession | null = null;
       try {
         const { config, configDir } = loadConfig(options.config);
         const targetUrl = options.url ?? config.target.url;
@@ -37,26 +42,29 @@ export function buildLoginCommand(): Command {
           ? resolvePath(configDir, config.auth.storageStatePath)
           : resolvePath(configDir, ".prowl/auth-state.json");
 
-        browser = await chromium.launch({ headless: false });
-        context = await browser.newContext();
-        const page = await context.newPage();
-        await page.goto(targetUrl);
+        session = await launchBrowser({
+          headless: false,
+          slowMo: 0,
+          timeout: config.browser.timeout,
+          trace: false,
+          recordHar: false,
+          runDir: configDir
+        });
+        const driver = createPlaywrightDriver(session.page);
+        await driver.goto(targetUrl);
 
         console.log(chalk.green("Browser opened. Log in manually."));
         await waitForEnter("Press Enter to save auth state and close the browser... ");
 
-        await context.storageState({ path: storageStatePath });
+        await saveStorageState(session, storageStatePath);
         console.log(chalk.green(`Saved auth state to ${storageStatePath}`));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Login failed";
         console.error(chalk.red(`Error: ${message}`));
         process.exitCode = 1;
       } finally {
-        if (context) {
-          await context.close();
-        }
-        if (browser) {
-          await browser.close();
+        if (session) {
+          await closeBrowser(session);
         }
       }
     });

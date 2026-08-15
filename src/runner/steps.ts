@@ -1,23 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Download, Page } from "playwright";
-import {
-  clickElement,
-  fillElement,
-  pressKey,
-  selectOption,
-  setupDialogHandler,
-  setInputFiles
-} from "../browser/actions.js";
+// Type-only: the runner hands executeSteps a live Playwright page as the
+// driver entrypoint. All *runtime* Playwright use lives in the driver
+// (src/browser/playwright-driver.ts); this import is erased at build.
+import type { Page } from "playwright";
+import { createPlaywrightDriver } from "../browser/controller.js";
+import type { DriverCapability, DriverDownload, SessionDriver } from "../browser/driver.js";
 import type { Step, StepResult } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
-import { healSelector } from "./healing.js";
+import { createRunPolicy, type RunPolicy } from "./policy.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
 export type StepExecutionContext = {
   page: Page;
+  /** Optional pre-built driver; when omitted one is created from `page`. */
+  driver?: SessionDriver;
   steps: Step[];
   targetUrl: string;
   runDir: string;
@@ -34,7 +33,7 @@ export type StepExecutionContext = {
   activeMocks?: Map<string, () => Promise<void>>;
   runtimeVars?: Map<string, string>;
   randomVars?: Record<string, string>;
-  pendingDownload?: Promise<Download>;
+  pendingDownload?: Promise<DriverDownload>;
   runStartedAtMs?: number;
   stepPathPrefix?: string;
 };
@@ -46,103 +45,10 @@ export type StepExecutionResult = {
   error?: string;
 };
 
-const ALWAYS_ALLOWED_PROTOCOLS = ["about:", "data:"];
-
-function unwrapTextSelector(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('text="') && trimmed.endsWith('"')) {
-    return trimmed.slice(6, -1);
-  }
-  if (trimmed.startsWith("text='") && trimmed.endsWith("'")) {
-    return trimmed.slice(6, -1);
-  }
-  if (trimmed.startsWith("text=")) {
-    return trimmed.slice(5);
-  }
-  return null;
-}
-
-// Substring match: if both the selector and forbidden pattern are text= selectors,
-// the selector's text is checked for whether it *contains* the forbidden text.
-// For example, forbidden 'text="Delete"' would match selector 'text="Delete All"'.
-function matchesForbiddenPattern(selector: string, forbidden: string): boolean {
-  const selectorText = unwrapTextSelector(selector);
-  if (selectorText === null) {
-    return false;
-  }
-
-  const forbiddenText = unwrapTextSelector(forbidden);
-  if (forbiddenText !== null) {
-    return selectorText.includes(forbiddenText);
-  }
-
-  return selectorText.includes(forbidden);
-}
-
-// Uses substring matching: a selector is forbidden if it contains any forbidden
-// pattern as a substring (e.g., forbidden "[data-danger]" matches "[data-danger].active"),
-// or if the text-based pattern match above succeeds.
-function isForbiddenSelector(selector: string, forbiddenSelectors: string[]): boolean {
-  return forbiddenSelectors.some(
-    (forbidden) => selector.includes(forbidden) || matchesForbiddenPattern(selector, forbidden)
-  );
-}
-
-function assertAllowedSelector(selector: string, forbiddenSelectors: string[]): void {
-  if (isForbiddenSelector(selector, forbiddenSelectors)) {
-    throw new Error(`Forbidden selector: ${selector}`);
-  }
-}
-
-/**
- * Resolve the selector an explicit-selector action should operate on. Asserts it
- * is allowed, then — when `guardrails.selfHealing` is on and the selector matches
- * nothing — attempts to heal to an equivalent selector. A healed selector is also
- * re-checked against the forbidden list. Returns the selector to use plus, when
- * healing occurred, the original selector for reporting.
- */
-async function resolveActionSelector(
-  context: StepExecutionContext,
-  selector: string
-): Promise<{ selector: string; healedFrom?: string }> {
-  assertAllowedSelector(selector, context.forbiddenSelectors);
-
-  if (!context.selfHealing) {
-    return { selector };
-  }
-
-  let matched = false;
-  try {
-    matched = (await context.page.locator(selector).count()) > 0;
-  } catch {
-    // Unparseable/odd selector — let the real action surface the error.
-    return { selector };
-  }
-  if (matched) {
-    return { selector };
-  }
-
-  const healed = await healSelector(context.page, selector, { enabled: true });
-  if (!healed) {
-    return { selector };
-  }
-
-  assertAllowedSelector(healed.selector, context.forbiddenSelectors);
-  console.warn(
-    `Self-healed selector: "${selector}" → "${healed.selector}" (${healed.strategy}). ` +
-      "Update your hunt to use a stable selector."
-  );
-  return { selector: healed.selector, healedFrom: healed.healedFrom };
-}
-
-function assertWithinMaxSteps(stepCount: number, maxSteps: number, huntName?: string): void {
-  if (stepCount > maxSteps) {
-    if (huntName) {
-      throw new Error(`Hunt "${huntName}" has ${stepCount} steps. Max allowed is ${maxSteps}.`);
-    }
-    throw new Error(`Hunt has ${stepCount} steps. Max allowed is ${maxSteps}.`);
-  }
-}
+/** Anything that can take a full-page screenshot (a driver or a Playwright page). */
+type ScreenshotTaker = {
+  screenshot(options: { path: string; fullPage?: boolean }): Promise<unknown>;
+};
 
 function getStepType(step: Step): string {
   if ("navigate" in step) return "navigate";
@@ -258,18 +164,6 @@ function isExplicitFillStep(
   );
 }
 
-function ensureAllowedUrl(urlValue: string, allowedDomains: string[]): void {
-  for (const protocol of ALWAYS_ALLOWED_PROTOCOLS) {
-    if (urlValue.startsWith(protocol)) {
-      return;
-    }
-  }
-  const url = new URL(urlValue);
-  if (!allowedDomains.includes(url.hostname)) {
-    throw new Error(`Navigation to disallowed domain: ${url.hostname}`);
-  }
-}
-
 function resolveNavigationTarget(targetUrl: string, value: string): string {
   try {
     return new URL(value, targetUrl).toString();
@@ -303,43 +197,40 @@ function getSinglePair(value: Record<string, string>, stepType: string): [string
 }
 
 async function clickByTextWithFallback(
-  page: Page,
-  text: string,
-  forbiddenSelectors: string[]
+  driver: SessionDriver,
+  policy: RunPolicy,
+  text: string
 ): Promise<string> {
   const roleSelector = `role=button[name="${escapeForAttribute(text)}"]`;
-  assertAllowedSelector(roleSelector, forbiddenSelectors);
-  const button = page.getByRole("button", { name: text });
-  if (await button.count()) {
-    await button.first().click();
+  policy.assertAllowedSelector(roleSelector);
+  if (await driver.countByRole("button", text)) {
+    await driver.clickFirstByRole("button", text);
     return roleSelector;
   }
 
   const selector = exactTextSelector(text);
-  assertAllowedSelector(selector, forbiddenSelectors);
-  await page.locator(selector).first().click();
+  policy.assertAllowedSelector(selector);
+  await driver.clickFirst(selector);
   return selector;
 }
 
 async function fillByLabelOrPlaceholder(
-  page: Page,
+  driver: SessionDriver,
+  policy: RunPolicy,
   label: string,
-  value: string,
-  forbiddenSelectors: string[]
+  value: string
 ): Promise<string> {
   const labelSelector = `label="${escapeForAttribute(label)}"`;
-  assertAllowedSelector(labelSelector, forbiddenSelectors);
-  const byLabel = page.getByLabel(label, { exact: true });
-  if (await byLabel.count()) {
-    await byLabel.first().fill(value);
+  policy.assertAllowedSelector(labelSelector);
+  if (await driver.countByLabel(label)) {
+    await driver.fillFirstByLabel(label, value);
     return labelSelector;
   }
 
   const placeholder = `input[placeholder="${escapeForAttribute(label)}"], textarea[placeholder="${escapeForAttribute(label)}"]`;
-  assertAllowedSelector(placeholder, forbiddenSelectors);
-  const byPlaceholder = page.locator(placeholder);
-  if (await byPlaceholder.count()) {
-    await byPlaceholder.first().fill(value);
+  policy.assertAllowedSelector(placeholder);
+  if (await driver.count(placeholder)) {
+    await driver.fillFirst(placeholder, value);
     return placeholder;
   }
 
@@ -347,32 +238,29 @@ async function fillByLabelOrPlaceholder(
 }
 
 async function selectByLabelOrFallback(
-  page: Page,
+  driver: SessionDriver,
+  policy: RunPolicy,
   label: string,
-  value: string,
-  forbiddenSelectors: string[]
+  value: string
 ): Promise<string> {
   const labelSelector = `label="${escapeForAttribute(label)}"`;
-  assertAllowedSelector(labelSelector, forbiddenSelectors);
-  const byLabel = page.getByLabel(label, { exact: true });
-  if (await byLabel.count()) {
-    await byLabel.first().selectOption(value);
+  policy.assertAllowedSelector(labelSelector);
+  if (await driver.countByLabel(label)) {
+    await driver.selectOptionFirstByLabel(label, value);
     return labelSelector;
   }
 
   const ariaSelector = `select[aria-label="${escapeForAttribute(label)}"]`;
-  assertAllowedSelector(ariaSelector, forbiddenSelectors);
-  const byAria = page.locator(ariaSelector);
-  if (await byAria.count()) {
-    await byAria.first().selectOption(value);
+  policy.assertAllowedSelector(ariaSelector);
+  if (await driver.count(ariaSelector)) {
+    await driver.selectOptionFirst(ariaSelector, value);
     return ariaSelector;
   }
 
   const placeholderSelector = `select[placeholder="${escapeForAttribute(label)}"]`;
-  assertAllowedSelector(placeholderSelector, forbiddenSelectors);
-  const byPlaceholder = page.locator(placeholderSelector);
-  if (await byPlaceholder.count()) {
-    await byPlaceholder.first().selectOption(value);
+  policy.assertAllowedSelector(placeholderSelector);
+  if (await driver.count(placeholderSelector)) {
+    await driver.selectOptionFirst(placeholderSelector, value);
     return placeholderSelector;
   }
 
@@ -532,19 +420,19 @@ export function toVisibilitySelector(value: string): string {
 }
 
 async function runInlineAssert(
-  page: Page,
+  driver: SessionDriver,
+  policy: RunPolicy,
   assertion: {
     visible?: string;
     notVisible?: string;
     urlIncludes?: string;
     urlEquals?: string;
-  },
-  forbiddenSelectors: string[]
+  }
 ): Promise<string> {
   if (assertion.visible !== undefined) {
     const selector = toVisibilitySelector(assertion.visible);
-    assertAllowedSelector(selector, forbiddenSelectors);
-    const count = await page.locator(selector).count();
+    policy.assertAllowedSelector(selector);
+    const count = await driver.count(selector);
     if (count === 0) {
       throw new Error(`Expected visible: ${assertion.visible}`);
     }
@@ -553,8 +441,8 @@ async function runInlineAssert(
 
   if (assertion.notVisible !== undefined) {
     const selector = toVisibilitySelector(assertion.notVisible);
-    assertAllowedSelector(selector, forbiddenSelectors);
-    const count = await page.locator(selector).count();
+    policy.assertAllowedSelector(selector);
+    const count = await driver.count(selector);
     if (count > 0) {
       throw new Error(`Expected not visible: ${assertion.notVisible}`);
     }
@@ -562,7 +450,7 @@ async function runInlineAssert(
   }
 
   if (assertion.urlIncludes !== undefined) {
-    const current = page.url();
+    const current = driver.currentUrl();
     if (!current.includes(assertion.urlIncludes)) {
       throw new Error(`URL did not include ${assertion.urlIncludes}`);
     }
@@ -570,7 +458,7 @@ async function runInlineAssert(
   }
 
   if (assertion.urlEquals !== undefined) {
-    const current = page.url();
+    const current = driver.currentUrl();
     if (current !== assertion.urlEquals) {
       throw new Error(`URL did not equal ${assertion.urlEquals}`);
     }
@@ -592,8 +480,8 @@ function isWaitForDownloadStep(step: Step | undefined): step is Extract<Step, { 
   return step !== undefined && "waitForDownload" in step;
 }
 
-function armDownloadListener(page: Page, timeout: number): Promise<Download> {
-  const downloadPromise = page.waitForEvent("download", { timeout });
+function armDownloadListener(driver: SessionDriver, timeout: number): Promise<DriverDownload> {
+  const downloadPromise = driver.waitForDownloadEvent({ timeout });
   void downloadPromise.catch(() => undefined);
   return downloadPromise;
 }
@@ -618,9 +506,9 @@ function validateDownloadFilename(suggestedFilename: string): string {
   return safeFilename;
 }
 
-async function captureScreenshot(page: Page, filePath: string): Promise<void> {
+async function captureScreenshot(taker: ScreenshotTaker, filePath: string): Promise<void> {
   try {
-    await page.screenshot({ path: filePath, fullPage: true });
+    await taker.screenshot({ path: filePath, fullPage: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Screenshot failed";
     throw new Error(`Failed to capture screenshot at ${filePath}: ${message}`);
@@ -644,11 +532,794 @@ async function executeNestedSteps(
   return result;
 }
 
+/**
+ * A step handler's outcome. `result` is a single completed step (which goes
+ * through the common tail — "all"-mode screenshot + onStep callback). `abort`
+ * signals that a nested execution failed and the whole run must stop; the
+ * handler has already pushed its nested results/screenshots.
+ */
+type HandlerOutcome =
+  | { kind: "result"; result: StepResult }
+  | { kind: "abort"; error?: string };
+
+/** Everything a step handler needs from the executing loop. */
+type StepHandlerContext = {
+  driver: SessionDriver;
+  policy: RunPolicy;
+  context: StepExecutionContext;
+  step: Step;
+  index: number;
+  stepPath: string;
+  stepStart: number;
+  runtimeVars: Map<string, string>;
+  results: StepResult[];
+  screenshots: string[];
+  addScreenshot: (fileName: string) => Promise<string>;
+  executeNested: (
+    overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
+  ) => Promise<StepExecutionResult>;
+};
+
+type StepHandler = {
+  /** Driver capabilities this handler requires; checked before dispatch. */
+  capabilities: DriverCapability[];
+  run: (h: StepHandlerContext) => Promise<HandlerOutcome>;
+};
+
+function unknownStep(): never {
+  throw new Error("Unknown step type");
+}
+
+const STEP_HANDLERS: Record<string, StepHandler> = {
+  navigate: {
+    capabilities: ["navigate"],
+    run: async (h) => {
+      if (!("navigate" in h.step)) unknownStep();
+      const destination = resolveNavigationTarget(h.context.targetUrl, h.step.navigate);
+      h.policy.ensureUrlAllowed(destination);
+      await h.driver.goto(destination);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return { kind: "result", result: { type: "navigate", status: "pass", durationMs: Date.now() - h.stepStart } };
+    }
+  },
+
+  click: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("click" in h.step)) unknownStep();
+      let selector: string;
+      let healedFrom: string | undefined;
+      if (typeof h.step.click === "string") {
+        selector = await clickByTextWithFallback(h.driver, h.policy, h.step.click);
+      } else {
+        const resolved = await h.policy.resolveActionSelector(h.step.click.selector);
+        await h.driver.click(resolved.selector);
+        selector = resolved.selector;
+        healedFrom = resolved.healedFrom;
+      }
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "click",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector,
+          ...(healedFrom ? { healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  fill: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("fill" in h.step)) unknownStep();
+      let selector: string;
+      let value: string;
+      let healedFrom: string | undefined;
+      if (isExplicitFillStep(h.step.fill)) {
+        const resolved = await h.policy.resolveActionSelector(h.step.fill.selector);
+        await h.driver.fill(resolved.selector, h.step.fill.value);
+        selector = resolved.selector;
+        healedFrom = resolved.healedFrom;
+        value = h.step.fill.value;
+      } else {
+        const [label, shorthandValue] = getSinglePair(h.step.fill, "fill");
+        selector = await fillByLabelOrPlaceholder(h.driver, h.policy, label, shorthandValue);
+        value = shorthandValue;
+      }
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "fill",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector,
+          value: h.context.redactedFillSteps.has(h.stepPath) ? "[REDACTED]" : value,
+          ...(healedFrom ? { healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  type: {
+    capabilities: ["navigate", "interact"],
+    run: async (h) => {
+      if (!("type" in h.step)) unknownStep();
+      h.policy.assertAllowedSelector(":focus");
+      await h.driver.fill(":focus", h.step.type);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "type",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: ":focus",
+          value: h.context.redactedFillSteps.has(h.stepPath) ? "[REDACTED]" : h.step.type
+        }
+      };
+    }
+  },
+
+  selectOption: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("selectOption" in h.step)) unknownStep();
+      const resolved = await h.policy.resolveActionSelector(h.step.selectOption.selector);
+      await h.driver.selectOption(resolved.selector, h.step.selectOption.value);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "selectOption",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: resolved.selector,
+          value: h.step.selectOption.value,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  select: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("select" in h.step)) unknownStep();
+      const [label, value] = getSinglePair(h.step.select, "select");
+      const selector = await selectByLabelOrFallback(h.driver, h.policy, label, value);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "select",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector,
+          value
+        }
+      };
+    }
+  },
+
+  onDialog: {
+    capabilities: ["dialog"],
+    run: async (h) => {
+      if (!("onDialog" in h.step)) unknownStep();
+      h.driver.onDialog(h.step.onDialog.action);
+      return {
+        kind: "result",
+        result: {
+          type: "onDialog",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: h.step.onDialog.action
+        }
+      };
+    }
+  },
+
+  setInputFiles: {
+    capabilities: ["navigate", "interact", "query", "files"],
+    run: async (h) => {
+      if (!("setInputFiles" in h.step)) unknownStep();
+      const resolvedInput = await h.policy.resolveActionSelector(h.step.setInputFiles.selector);
+      const rawFiles = h.step.setInputFiles.files;
+      const resolveFile = (f: string) => (path.isAbsolute(f) ? f : path.join(h.context.configDir, f));
+      const resolvedFiles = Array.isArray(rawFiles) ? rawFiles.map(resolveFile) : resolveFile(rawFiles);
+      await h.driver.setInputFiles(resolvedInput.selector, resolvedFiles);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      const filesLabel = Array.isArray(rawFiles) ? rawFiles.join(", ") : rawFiles;
+      return {
+        kind: "result",
+        result: {
+          type: "setInputFiles",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: resolvedInput.selector,
+          ...(resolvedInput.healedFrom ? { healedFrom: resolvedInput.healedFrom } : {}),
+          value: filesLabel
+        }
+      };
+    }
+  },
+
+  runHunt: {
+    capabilities: [],
+    run: async (h) => {
+      if (!("runHunt" in h.step)) unknownStep();
+      const huntName = typeof h.step.runHunt === "string" ? h.step.runHunt : h.step.runHunt.name;
+      const overrideVars = typeof h.step.runHunt === "string" ? undefined : h.step.runHunt.vars;
+      const stack = h.context.huntStack ?? [];
+      if (stack.includes(huntName)) {
+        throw new Error(`Circular hunt dependency: ${[...stack, huntName].join(" → ")}`);
+      }
+      const subHunt = loadHunt(huntName, h.context.configDir);
+      if (overrideVars) {
+        subHunt.vars = { ...subHunt.vars, ...overrideVars };
+      }
+      const {
+        hunt: interpolatedSubHunt,
+        redactedFillSteps: subRedacted,
+        randomVars
+      } = interpolateHunt(subHunt, process.env, h.context.randomVars);
+      h.policy.assertWithinMaxSteps(interpolatedSubHunt.steps.length, huntName);
+      const subResult = await h.executeNested({
+        steps: interpolatedSubHunt.steps,
+        redactedFillSteps: subRedacted,
+        randomVars,
+        stepPathPrefix: undefined,
+        huntStack: [...stack, huntName],
+        onStep: h.context.onStep
+      });
+      for (const sr of subResult.results) {
+        h.results.push({ ...sr, type: `${huntName} > ${sr.type}` });
+      }
+      h.screenshots.push(...subResult.screenshots);
+      if (subResult.failed) {
+        return { kind: "abort", error: `Sub-hunt "${huntName}" failed: ${subResult.error}` };
+      }
+      return {
+        kind: "result",
+        result: { type: "runHunt", status: "pass", durationMs: Date.now() - h.stepStart, value: huntName }
+      };
+    }
+  },
+
+  press: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("press" in h.step)) unknownStep();
+      const resolved = await h.policy.resolveActionSelector(h.step.press.selector);
+      await h.driver.press(resolved.selector, h.step.press.key);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "press",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  assert: {
+    capabilities: ["navigate", "query"],
+    run: async (h) => {
+      if (!("assert" in h.step)) unknownStep();
+      const value = await runInlineAssert(h.driver, h.policy, h.step.assert);
+      return {
+        kind: "result",
+        result: { type: "assert", status: "pass", durationMs: Date.now() - h.stepStart, value }
+      };
+    }
+  },
+
+  wait: {
+    capabilities: ["wait"],
+    run: async (h) => {
+      if (!("wait" in h.step)) unknownStep();
+      const text = typeof h.step.wait === "string" ? h.step.wait : h.step.wait.for;
+      const timeout = typeof h.step.wait === "string" ? undefined : h.step.wait.timeout;
+      const selector = `text=${escapeForText(text)}`;
+      h.policy.assertAllowedSelector(selector);
+      await h.driver.waitForSelector(selector, { timeout });
+      return {
+        kind: "result",
+        result: { type: "wait", status: "pass", durationMs: Date.now() - h.stepStart, selector }
+      };
+    }
+  },
+
+  waitForSelector: {
+    capabilities: ["wait"],
+    run: async (h) => {
+      if (!("waitForSelector" in h.step)) unknownStep();
+      h.policy.assertAllowedSelector(h.step.waitForSelector.selector);
+      await h.driver.waitForSelector(h.step.waitForSelector.selector, {
+        timeout: h.step.waitForSelector.timeout
+      });
+      return {
+        kind: "result",
+        result: {
+          type: "waitForSelector",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: h.step.waitForSelector.selector
+        }
+      };
+    }
+  },
+
+  waitForUrl: {
+    capabilities: ["navigate", "wait"],
+    run: async (h) => {
+      if (!("waitForUrl" in h.step)) unknownStep();
+      const value = h.step.waitForUrl.value;
+      await h.driver.waitForUrl((url) => url.includes(value), { timeout: h.step.waitForUrl.timeout });
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: { type: "waitForUrl", status: "pass", durationMs: Date.now() - h.stepStart, value }
+      };
+    }
+  },
+
+  waitForNetworkIdle: {
+    capabilities: ["wait"],
+    run: async (h) => {
+      if (!("waitForNetworkIdle" in h.step)) unknownStep();
+      await h.driver.waitForNetworkIdle({ timeout: h.step.waitForNetworkIdle.timeout });
+      return {
+        kind: "result",
+        result: { type: "waitForNetworkIdle", status: "pass", durationMs: Date.now() - h.stepStart }
+      };
+    }
+  },
+
+  hover: {
+    capabilities: ["navigate", "interact", "query"],
+    run: async (h) => {
+      if (!("hover" in h.step)) unknownStep();
+      const resolved = await h.policy.resolveActionSelector(h.step.hover.selector);
+      await h.driver.hover(resolved.selector);
+      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      return {
+        kind: "result",
+        result: {
+          type: "hover",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  scroll: {
+    capabilities: ["evaluate"],
+    run: async (h) => {
+      if (!("scroll" in h.step)) unknownStep();
+      const amount = h.step.scroll.amount ?? 500;
+      const scrollMap: Record<string, [number, number]> = {
+        up: [0, -amount],
+        down: [0, amount],
+        left: [-amount, 0],
+        right: [amount, 0]
+      };
+      const [x, y] = scrollMap[h.step.scroll.direction];
+      await h.driver.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
+      return {
+        kind: "result",
+        result: {
+          type: "scroll",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: `${h.step.scroll.direction} ${amount}px`
+        }
+      };
+    }
+  },
+
+  scrollTo: {
+    capabilities: ["interact", "query"],
+    run: async (h) => {
+      if (!("scrollTo" in h.step)) unknownStep();
+      const resolved = await h.policy.resolveActionSelector(h.step.scrollTo.selector);
+      await h.driver.scrollIntoView(resolved.selector);
+      return {
+        kind: "result",
+        result: {
+          type: "scrollTo",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: resolved.selector,
+          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
+        }
+      };
+    }
+  },
+
+  screenshot: {
+    capabilities: ["screenshot"],
+    run: async (h) => {
+      if (!("screenshot" in h.step)) unknownStep();
+      const name = h.step.screenshot.name ?? `manual_step_${h.index + 1}.png`;
+      if (/[/\\]|\.\./.test(name)) {
+        throw new Error(`Invalid screenshot name: "${name}" must not contain path separators or ".."`);
+      }
+      const fileName = name.endsWith(".png") ? name : `${name}.png`;
+      const relative = await h.addScreenshot(fileName);
+      return {
+        kind: "result",
+        result: { type: "screenshot", status: "pass", durationMs: Date.now() - h.stepStart, screenshot: relative }
+      };
+    }
+  },
+
+  if: {
+    capabilities: ["query"],
+    run: async (h) => {
+      if (!("if" in h.step)) unknownStep();
+      const condition = h.step.if;
+      const selector = condition.visible ?? condition.notVisible!;
+      h.policy.assertAllowedSelector(selector);
+      const count = await h.driver.count(selector);
+      const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
+
+      if (conditionMet) {
+        const subResult = await h.executeNested({
+          steps: condition.then,
+          stepPathPrefix: `${h.stepPath}.if.then`
+        });
+        for (const sr of subResult.results) {
+          h.results.push({ ...sr, type: `if > ${sr.type}` });
+        }
+        h.screenshots.push(...subResult.screenshots);
+        if (subResult.failed) {
+          return { kind: "abort", error: subResult.error };
+        }
+        return {
+          kind: "result",
+          result: {
+            type: "if",
+            status: "pass",
+            durationMs: Date.now() - h.stepStart,
+            value: `condition met, executed ${condition.then.length} steps`
+          }
+        };
+      }
+
+      if (condition.else && condition.else.length > 0) {
+        const subResult = await h.executeNested({
+          steps: condition.else,
+          stepPathPrefix: `${h.stepPath}.if.else`
+        });
+        for (const sr of subResult.results) {
+          h.results.push({ ...sr, type: `if > ${sr.type}` });
+        }
+        h.screenshots.push(...subResult.screenshots);
+        if (subResult.failed) {
+          return { kind: "abort", error: subResult.error };
+        }
+        return {
+          kind: "result",
+          result: {
+            type: "if",
+            status: "pass",
+            durationMs: Date.now() - h.stepStart,
+            value: `condition not met, executed ${condition.else.length} else steps`
+          }
+        };
+      }
+
+      return {
+        kind: "result",
+        result: {
+          type: "if",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: "condition not met, skipped"
+        }
+      };
+    }
+  },
+
+  repeat: {
+    capabilities: ["query"],
+    run: async (h) => {
+      if (!("repeat" in h.step)) unknownStep();
+      const repeat = h.step.repeat;
+      let totalSubSteps = 0;
+
+      if (repeat.times !== undefined) {
+        const totalPlanned = repeat.times * repeat.steps.length;
+        if (totalPlanned + totalSubSteps > h.context.maxSteps) {
+          throw new Error(`Repeat exceeded maxSteps guardrail (${h.context.maxSteps})`);
+        }
+        for (let i = 0; i < repeat.times; i++) {
+          totalSubSteps += repeat.steps.length;
+          const subResult = await h.executeNested({
+            steps: repeat.steps,
+            stepPathPrefix: `${h.stepPath}.repeat.steps`
+          });
+          for (const sr of subResult.results) {
+            h.results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
+          }
+          h.screenshots.push(...subResult.screenshots);
+          if (subResult.failed) {
+            return { kind: "abort", error: subResult.error };
+          }
+        }
+      } else if (repeat.while !== undefined) {
+        const maxIter = repeat.maxIterations!;
+        const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
+        h.policy.assertAllowedSelector(whileSelector);
+        for (let i = 0; i < maxIter; i++) {
+          const whileCount = await h.driver.count(whileSelector);
+          const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
+          if (!shouldContinue) break;
+
+          totalSubSteps += repeat.steps.length;
+          if (totalSubSteps > h.context.maxSteps) {
+            throw new Error(`Repeat exceeded maxSteps guardrail (${h.context.maxSteps})`);
+          }
+          const subResult = await h.executeNested({
+            steps: repeat.steps,
+            stepPathPrefix: `${h.stepPath}.repeat.steps`
+          });
+          for (const sr of subResult.results) {
+            h.results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
+          }
+          h.screenshots.push(...subResult.screenshots);
+          if (subResult.failed) {
+            return { kind: "abort", error: subResult.error };
+          }
+        }
+      }
+
+      return {
+        kind: "result",
+        result: { type: "repeat", status: "pass", durationMs: Date.now() - h.stepStart }
+      };
+    }
+  },
+
+  mockRoute: {
+    capabilities: ["route"],
+    run: async (h) => {
+      if (!("mockRoute" in h.step)) unknownStep();
+      const mock = h.step.mockRoute;
+      const mocks = h.context.activeMocks ?? new Map<string, () => Promise<void>>();
+      h.context.activeMocks = mocks;
+
+      let responseBody: string;
+      if (mock.response.body !== undefined) {
+        responseBody = mock.response.body;
+      } else {
+        const responseFile = mock.response.file;
+        if (!responseFile) {
+          throw new Error("mock.response must include either body or file");
+        }
+        const candidateFilePath = path.isAbsolute(responseFile)
+          ? responseFile
+          : path.join(h.context.configDir, responseFile);
+        const resolvedConfigDir = path.resolve(h.context.configDir);
+        const resolvedFilePath = path.resolve(candidateFilePath);
+        const relativePath = path.relative(resolvedConfigDir, resolvedFilePath);
+        const isWithinConfigDir =
+          relativePath === ""
+          || (
+            relativePath !== ".."
+            && !relativePath.startsWith(`..${path.sep}`)
+            && !path.isAbsolute(relativePath)
+          );
+        if (!isWithinConfigDir) {
+          throw new Error("mock.response.file must resolve within config directory");
+        }
+        responseBody = await fs.promises.readFile(resolvedFilePath, "utf-8");
+      }
+
+      const contentType = mock.response.contentType ?? "application/json";
+      const status = mock.response.status;
+
+      await h.driver.route(mock.url, async (route) => {
+        await route.fulfill({
+          status,
+          contentType,
+          body: responseBody
+        });
+      });
+
+      mocks.set(mock.url, async () => {
+        await h.driver.unroute(mock.url);
+      });
+
+      return {
+        kind: "result",
+        result: { type: "mockRoute", status: "pass", durationMs: Date.now() - h.stepStart, value: mock.url }
+      };
+    }
+  },
+
+  unmockRoute: {
+    capabilities: ["route"],
+    run: async (h) => {
+      if (!("unmockRoute" in h.step)) unknownStep();
+      const url = typeof h.step.unmockRoute === "string" ? h.step.unmockRoute : h.step.unmockRoute.url;
+      const mocks = h.context.activeMocks;
+      if (!mocks || !mocks.has(url)) {
+        throw new Error(`No active mock for URL: ${url}`);
+      }
+      const cleanup = mocks.get(url)!;
+      await cleanup();
+      mocks.delete(url);
+
+      return {
+        kind: "result",
+        result: { type: "unmockRoute", status: "pass", durationMs: Date.now() - h.stepStart, value: url }
+      };
+    }
+  },
+
+  evalScript: {
+    capabilities: ["evaluate"],
+    run: async (h) => {
+      if (!("evalScript" in h.step)) unknownStep();
+      const expression = typeof h.step.evalScript === "string" ? h.step.evalScript : h.step.evalScript.expression;
+      const result = await h.driver.evaluate(expression);
+      const resultStr = String(result);
+      if (typeof h.step.evalScript !== "string" && h.step.evalScript.as) {
+        h.runtimeVars.set(h.step.evalScript.as, resultStr);
+      }
+      return {
+        kind: "result",
+        result: {
+          type: "evalScript",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: resultStr.length > 200 ? resultStr.slice(0, 200) + "…" : resultStr
+        }
+      };
+    }
+  },
+
+  runScript: {
+    capabilities: ["evaluate"],
+    run: async (h) => {
+      if (!("runScript" in h.step)) unknownStep();
+      const filePath = path.isAbsolute(h.step.runScript.file)
+        ? h.step.runScript.file
+        : path.join(h.context.configDir, h.step.runScript.file);
+      const fileContents = fs.readFileSync(filePath, "utf-8");
+      await h.driver.evaluate(fileContents);
+      return {
+        kind: "result",
+        result: {
+          type: "runScript",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: h.step.runScript.file
+        }
+      };
+    }
+  },
+
+  assertScreenshot: {
+    capabilities: ["screenshot"],
+    run: async (h) => {
+      if (!("assertScreenshot" in h.step)) unknownStep();
+      const { compareScreenshots, ensureBaselineDir } = await import("./visual.js");
+      const name = h.step.assertScreenshot.name;
+      const threshold = h.step.assertScreenshot.threshold ?? 0.1;
+      const baselineDir = ensureBaselineDir(h.context.configDir);
+      const baselinePath = path.join(baselineDir, `${name}.png`);
+      const currentScreenshotPath = path.join(h.context.runDir, "screenshots", `${name}-current.png`);
+      fs.mkdirSync(path.dirname(currentScreenshotPath), { recursive: true });
+      await h.driver.screenshot({ path: currentScreenshotPath, fullPage: true });
+      h.screenshots.push(path.join("screenshots", `${name}-current.png`));
+
+      if (!fs.existsSync(baselinePath)) {
+        fs.copyFileSync(currentScreenshotPath, baselinePath);
+        return {
+          kind: "result",
+          result: { type: "assertScreenshot", status: "pass", durationMs: Date.now() - h.stepStart, value: "baseline created" }
+        };
+      }
+
+      const diffPath = path.join(h.context.runDir, "screenshots", `${name}-diff.png`);
+      const comparison = await compareScreenshots(baselinePath, currentScreenshotPath, diffPath, threshold);
+      if (comparison.match) {
+        return {
+          kind: "result",
+          result: {
+            type: "assertScreenshot",
+            status: "pass",
+            durationMs: Date.now() - h.stepStart,
+            value: `diff: ${(comparison.diffPercentage * 100).toFixed(2)}%`
+          }
+        };
+      }
+      h.screenshots.push(path.join("screenshots", `${name}-diff.png`));
+      throw new Error(
+        `Visual regression: ${(comparison.diffPercentage * 100).toFixed(2)}% diff exceeds threshold ${(threshold * 100).toFixed(0)}%`
+      );
+    }
+  },
+
+  copyText: {
+    capabilities: ["query"],
+    run: async (h) => {
+      if (!("copyText" in h.step)) unknownStep();
+      h.policy.assertAllowedSelector(h.step.copyText.selector);
+      const text = await h.driver.textContent(h.step.copyText.selector);
+      if (text === null) {
+        throw new Error(`No text content found for selector: ${h.step.copyText.selector}`);
+      }
+      h.runtimeVars.set(h.step.copyText.as, text);
+      return {
+        kind: "result",
+        result: {
+          type: "copyText",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          selector: h.step.copyText.selector,
+          value: "[REDACTED]"
+        }
+      };
+    }
+  },
+
+  waitForDownload: {
+    capabilities: ["download"],
+    run: async (h) => {
+      if (!("waitForDownload" in h.step)) unknownStep();
+      const opts = h.step.waitForDownload;
+      const downloadPromise = h.context.pendingDownload ?? armDownloadListener(h.driver, opts?.timeout ?? 30000);
+      h.context.pendingDownload = undefined;
+      const download = await downloadPromise;
+      const suggestedFilename = validateDownloadFilename(download.suggestedFilename());
+      if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {
+        throw new Error(
+          `Download filename mismatch: expected "${opts.filename}", got "${suggestedFilename}"`
+        );
+      }
+      const savePath = path.join(h.context.runDir, suggestedFilename);
+      await download.saveAs(savePath);
+      return {
+        kind: "result",
+        result: {
+          type: "waitForDownload",
+          status: "pass",
+          durationMs: Date.now() - h.stepStart,
+          value: suggestedFilename
+        }
+      };
+    }
+  }
+};
+
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
+  const driver = context.driver ?? createPlaywrightDriver(context.page);
+  context.driver = driver;
+  const policy = createRunPolicy(driver, {
+    forbiddenSelectors: context.forbiddenSelectors,
+    allowedDomains: context.allowedDomains,
+    maxSteps: context.maxSteps,
+    selfHealing: context.selfHealing
+  });
+
   const screenshotsDir = path.join(context.runDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
   const currentHuntName = context.huntStack?.[context.huntStack.length - 1];
-  assertWithinMaxSteps(context.steps.length, context.maxSteps, currentHuntName);
+  policy.assertWithinMaxSteps(context.steps.length, currentHuntName);
 
   const results: StepResult[] = [];
   const screenshots: string[] = [];
@@ -657,11 +1328,15 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
 
   const addScreenshot = async (fileName: string): Promise<string> => {
     const fullPath = screenshotPath(screenshotsDir, fileName);
-    await captureScreenshot(context.page, fullPath);
+    await captureScreenshot(driver, fullPath);
     const relative = path.join("screenshots", fileName);
     screenshots.push(relative);
     return relative;
   };
+
+  const executeNested = (
+    overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
+  ): Promise<StepExecutionResult> => executeNestedSteps(context, overrides);
 
   for (let index = 0; index < context.steps.length; index += 1) {
     const currentStepPath = stepPath(context.stepPathPrefix, index);
@@ -689,7 +1364,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
       && isWaitForDownloadStep(nextStep)
     ) {
       context.pendingDownload = armDownloadListener(
-        context.page,
+        driver,
         nextStep.waitForDownload?.timeout ?? 30000
       );
     }
@@ -698,591 +1373,38 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
     let stepResult: StepResult | null = null;
 
     try {
-      if ("navigate" in step) {
-        const destination = resolveNavigationTarget(context.targetUrl, step.navigate);
-        ensureAllowedUrl(destination, context.allowedDomains);
-        await context.page.goto(destination);
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = { type: "navigate", status: "pass", durationMs: Date.now() - stepStart };
-      } else if ("click" in step) {
-        let selector: string;
-        let healedFrom: string | undefined;
-        if (typeof step.click === "string") {
-          selector = await clickByTextWithFallback(
-            context.page,
-            step.click,
-            context.forbiddenSelectors
-          );
-        } else {
-          const resolved = await resolveActionSelector(context, step.click.selector);
-          await clickElement(context.page, resolved.selector);
-          selector = resolved.selector;
-          healedFrom = resolved.healedFrom;
-        }
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "click",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector,
-          ...(healedFrom ? { healedFrom } : {})
-        };
-      } else if ("fill" in step) {
-        let selector: string;
-        let value: string;
-        let healedFrom: string | undefined;
-        if (isExplicitFillStep(step.fill)) {
-          const resolved = await resolveActionSelector(context, step.fill.selector);
-          await fillElement(context.page, resolved.selector, step.fill.value);
-          selector = resolved.selector;
-          healedFrom = resolved.healedFrom;
-          value = step.fill.value;
-        } else {
-          const [label, shorthandValue] = getSinglePair(step.fill, "fill");
-          selector = await fillByLabelOrPlaceholder(
-            context.page,
-            label,
-            shorthandValue,
-            context.forbiddenSelectors
-          );
-          value = shorthandValue;
-        }
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "fill",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector,
-          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : value,
-          ...(healedFrom ? { healedFrom } : {})
-        };
-      } else if ("type" in step) {
-        assertAllowedSelector(":focus", context.forbiddenSelectors);
-        await fillElement(context.page, ":focus", step.type);
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "type",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: ":focus",
-          value: context.redactedFillSteps.has(currentStepPath) ? "[REDACTED]" : step.type
-        };
-      } else if ("selectOption" in step) {
-        const resolved = await resolveActionSelector(context, step.selectOption.selector);
-        await selectOption(context.page, resolved.selector, step.selectOption.value);
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "selectOption",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: resolved.selector,
-          value: step.selectOption.value,
-          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
-        };
-      } else if ("select" in step) {
-        const [label, value] = getSinglePair(step.select, "select");
-        const selector = await selectByLabelOrFallback(
-          context.page,
-          label,
-          value,
-          context.forbiddenSelectors
-        );
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "select",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector,
-          value
-        };
-      } else if ("onDialog" in step) {
-        setupDialogHandler(context.page, step.onDialog.action);
-        stepResult = {
-          type: "onDialog",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: step.onDialog.action
-        };
-      } else if ("setInputFiles" in step) {
-        const resolvedInput = await resolveActionSelector(context, step.setInputFiles.selector);
-        const rawFiles = step.setInputFiles.files;
-        const resolveFile = (f: string) =>
-          path.isAbsolute(f) ? f : path.join(context.configDir, f);
-        const resolvedFiles = Array.isArray(rawFiles)
-          ? rawFiles.map(resolveFile)
-          : resolveFile(rawFiles);
-        await setInputFiles(context.page, resolvedInput.selector, resolvedFiles);
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        const filesLabel = Array.isArray(rawFiles) ? rawFiles.join(", ") : rawFiles;
-        stepResult = {
-          type: "setInputFiles",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: resolvedInput.selector,
-          ...(resolvedInput.healedFrom ? { healedFrom: resolvedInput.healedFrom } : {}),
-          value: filesLabel
-        };
-      } else if ("runHunt" in step) {
-        const huntName = typeof step.runHunt === "string" ? step.runHunt : step.runHunt.name;
-        const overrideVars = typeof step.runHunt === "string" ? undefined : step.runHunt.vars;
-        const stack = context.huntStack ?? [];
-        if (stack.includes(huntName)) {
-          throw new Error(`Circular hunt dependency: ${[...stack, huntName].join(" → ")}`);
-        }
-        const subHunt = loadHunt(huntName, context.configDir);
-        if (overrideVars) {
-          subHunt.vars = { ...subHunt.vars, ...overrideVars };
-        }
-        const {
-          hunt: interpolatedSubHunt,
-          redactedFillSteps: subRedacted,
-          randomVars
-        } = interpolateHunt(
-          subHunt,
-          process.env,
-          context.randomVars
-        );
-        assertWithinMaxSteps(interpolatedSubHunt.steps.length, context.maxSteps, huntName);
-        const subResult = await executeNestedSteps(context, {
-          steps: interpolatedSubHunt.steps,
-          redactedFillSteps: subRedacted,
-          randomVars,
-          stepPathPrefix: undefined,
-          huntStack: [...stack, huntName],
-          onStep: context.onStep
-        });
-        for (const sr of subResult.results) {
-          results.push({ ...sr, type: `${huntName} > ${sr.type}` });
-        }
-        screenshots.push(...subResult.screenshots);
-        if (subResult.failed) {
-          return {
-            results,
-            screenshots,
-            failed: true,
-            error: `Sub-hunt "${huntName}" failed: ${subResult.error}`
-          };
-        }
-        stepResult = {
-          type: "runHunt",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: huntName
-        };
-      } else if ("press" in step) {
-        const resolved = await resolveActionSelector(context, step.press.selector);
-        await pressKey(context.page, resolved.selector, step.press.key);
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "press",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: resolved.selector,
-          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
-        };
-      } else if ("assert" in step) {
-        const value = await runInlineAssert(context.page, step.assert, context.forbiddenSelectors);
-        stepResult = {
-          type: "assert",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value
-        };
-      } else if ("wait" in step) {
-        const text = typeof step.wait === "string" ? step.wait : step.wait.for;
-        const timeout = typeof step.wait === "string" ? undefined : step.wait.timeout;
-        const selector = `text=${escapeForText(text)}`;
-        assertAllowedSelector(selector, context.forbiddenSelectors);
-        await context.page.waitForSelector(selector, { timeout });
-        stepResult = {
-          type: "wait",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector
-        };
-      } else if ("waitForSelector" in step) {
-        assertAllowedSelector(step.waitForSelector.selector, context.forbiddenSelectors);
-        await context.page.waitForSelector(step.waitForSelector.selector, {
-          timeout: step.waitForSelector.timeout
-        });
-        stepResult = {
-          type: "waitForSelector",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: step.waitForSelector.selector
-        };
-      } else if ("waitForUrl" in step) {
-        await context.page.waitForURL(
-          (url) => url.toString().includes(step.waitForUrl.value),
-          { timeout: step.waitForUrl.timeout }
-        );
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "waitForUrl",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: step.waitForUrl.value
-        };
-      } else if ("waitForNetworkIdle" in step) {
-        await context.page.waitForLoadState("networkidle", {
-          timeout: step.waitForNetworkIdle.timeout
-        });
-        stepResult = {
-          type: "waitForNetworkIdle",
-          status: "pass",
-          durationMs: Date.now() - stepStart
-        };
-      } else if ("hover" in step) {
-        const resolved = await resolveActionSelector(context, step.hover.selector);
-        await context.page.locator(resolved.selector).hover();
-        ensureAllowedUrl(context.page.url(), context.allowedDomains);
-        stepResult = {
-          type: "hover",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: resolved.selector,
-          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
-        };
-      } else if ("scroll" in step) {
-        const amount = step.scroll.amount ?? 500;
-        const scrollMap: Record<string, [number, number]> = {
-          up: [0, -amount],
-          down: [0, amount],
-          left: [-amount, 0],
-          right: [amount, 0]
-        };
-        const [x, y] = scrollMap[step.scroll.direction];
-        await context.page.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
-        stepResult = {
-          type: "scroll",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: `${step.scroll.direction} ${amount}px`
-        };
-      } else if ("scrollTo" in step) {
-        const resolved = await resolveActionSelector(context, step.scrollTo.selector);
-        await context.page.locator(resolved.selector).scrollIntoViewIfNeeded();
-        stepResult = {
-          type: "scrollTo",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: resolved.selector,
-          ...(resolved.healedFrom ? { healedFrom: resolved.healedFrom } : {})
-        };
-      } else if ("screenshot" in step) {
-        const name = step.screenshot.name ?? `manual_step_${index + 1}.png`;
-        if (/[/\\]|\.\./.test(name)) {
-          throw new Error(`Invalid screenshot name: "${name}" must not contain path separators or ".."`);
-        }
-        const fileName = name.endsWith(".png") ? name : `${name}.png`;
-        const relative = await addScreenshot(fileName);
-        stepResult = {
-          type: "screenshot",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          screenshot: relative
-        };
-      } else if ("if" in step) {
-        const condition = step.if;
-        const selector = condition.visible ?? condition.notVisible!;
-        assertAllowedSelector(selector, context.forbiddenSelectors);
-        const count = await context.page.locator(selector).count();
-        const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
-
-        if (conditionMet) {
-          const subResult = await executeNestedSteps(context, {
-            steps: condition.then,
-            stepPathPrefix: `${currentStepPath}.if.then`
-          });
-          for (const sr of subResult.results) {
-            results.push({ ...sr, type: `if > ${sr.type}` });
-          }
-          screenshots.push(...subResult.screenshots);
-          if (subResult.failed) {
-            return {
-              results,
-              screenshots,
-              failed: true,
-              error: subResult.error
-            };
-          }
-          stepResult = {
-            type: "if",
-            status: "pass",
-            durationMs: Date.now() - stepStart,
-            value: `condition met, executed ${condition.then.length} steps`
-          };
-        } else {
-          if (condition.else && condition.else.length > 0) {
-            const subResult = await executeNestedSteps(context, {
-              steps: condition.else,
-              stepPathPrefix: `${currentStepPath}.if.else`
-            });
-            for (const sr of subResult.results) {
-              results.push({ ...sr, type: `if > ${sr.type}` });
-            }
-            screenshots.push(...subResult.screenshots);
-            if (subResult.failed) {
-              return {
-                results,
-                screenshots,
-                failed: true,
-                error: subResult.error
-              };
-            }
-            stepResult = {
-              type: "if",
-              status: "pass",
-              durationMs: Date.now() - stepStart,
-              value: `condition not met, executed ${condition.else.length} else steps`
-            };
-          } else {
-            stepResult = {
-              type: "if",
-              status: "pass",
-              durationMs: Date.now() - stepStart,
-              value: "condition not met, skipped"
-            };
-          }
-        }
-      } else if ("repeat" in step) {
-        const repeat = step.repeat;
-        let totalSubSteps = 0;
-
-        if (repeat.times !== undefined) {
-          const totalPlanned = repeat.times * repeat.steps.length;
-          if (totalPlanned + totalSubSteps > context.maxSteps) {
-            throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
-          }
-          for (let i = 0; i < repeat.times; i++) {
-            totalSubSteps += repeat.steps.length;
-            const subResult = await executeNestedSteps(context, {
-              steps: repeat.steps,
-              stepPathPrefix: `${currentStepPath}.repeat.steps`
-            });
-            for (const sr of subResult.results) {
-              results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
-            }
-            screenshots.push(...subResult.screenshots);
-            if (subResult.failed) {
-              return {
-                results,
-                screenshots,
-                failed: true,
-                error: subResult.error
-              };
-            }
-          }
-        } else if (repeat.while !== undefined) {
-          const maxIter = repeat.maxIterations!;
-          const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
-          assertAllowedSelector(whileSelector, context.forbiddenSelectors);
-          for (let i = 0; i < maxIter; i++) {
-            const whileCount = await context.page.locator(whileSelector).count();
-            const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
-            if (!shouldContinue) break;
-
-            totalSubSteps += repeat.steps.length;
-            if (totalSubSteps > context.maxSteps) {
-              throw new Error(`Repeat exceeded maxSteps guardrail (${context.maxSteps})`);
-            }
-            const subResult = await executeNestedSteps(context, {
-              steps: repeat.steps,
-              stepPathPrefix: `${currentStepPath}.repeat.steps`
-            });
-            for (const sr of subResult.results) {
-              results.push({ ...sr, type: `repeat[${i}] > ${sr.type}` });
-            }
-            screenshots.push(...subResult.screenshots);
-            if (subResult.failed) {
-              return {
-                results,
-                screenshots,
-                failed: true,
-                error: subResult.error
-              };
-            }
-          }
-        }
-
-        stepResult = {
-          type: "repeat",
-          status: "pass",
-          durationMs: Date.now() - stepStart
-        };
-      } else if ("mockRoute" in step) {
-        const mock = step.mockRoute;
-        const mocks = context.activeMocks ?? new Map<string, () => Promise<void>>();
-        context.activeMocks = mocks;
-
-        let responseBody: string;
-        if (mock.response.body !== undefined) {
-          responseBody = mock.response.body;
-        } else {
-          const responseFile = mock.response.file;
-          if (!responseFile) {
-            throw new Error("mock.response must include either body or file");
-          }
-          const candidateFilePath = path.isAbsolute(responseFile)
-            ? responseFile
-            : path.join(context.configDir, responseFile);
-          const resolvedConfigDir = path.resolve(context.configDir);
-          const resolvedFilePath = path.resolve(candidateFilePath);
-          const relativePath = path.relative(resolvedConfigDir, resolvedFilePath);
-          const isWithinConfigDir =
-            relativePath === ""
-            || (
-              relativePath !== ".."
-              && !relativePath.startsWith(`..${path.sep}`)
-              && !path.isAbsolute(relativePath)
-            );
-          if (!isWithinConfigDir) {
-            throw new Error("mock.response.file must resolve within config directory");
-          }
-          responseBody = await fs.promises.readFile(resolvedFilePath, "utf-8");
-        }
-
-        const contentType = mock.response.contentType ?? "application/json";
-        const status = mock.response.status;
-
-        await context.page.route(mock.url, (route) => {
-          route.fulfill({
-            status,
-            contentType,
-            body: responseBody
-          });
-        });
-
-        mocks.set(mock.url, async () => {
-          await context.page.unroute(mock.url);
-        });
-
-        stepResult = {
-          type: "mockRoute",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: mock.url
-        };
-      } else if ("unmockRoute" in step) {
-        const url = typeof step.unmockRoute === "string" ? step.unmockRoute : step.unmockRoute.url;
-        const mocks = context.activeMocks;
-        if (!mocks || !mocks.has(url)) {
-          throw new Error(`No active mock for URL: ${url}`);
-        }
-        const cleanup = mocks.get(url)!;
-        await cleanup();
-        mocks.delete(url);
-
-        stepResult = {
-          type: "unmockRoute",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: url
-        };
-      } else if ("evalScript" in step) {
-        const expression = typeof step.evalScript === "string"
-          ? step.evalScript
-          : step.evalScript.expression;
-        const result = await context.page.evaluate(expression);
-        const resultStr = String(result);
-        if (typeof step.evalScript !== "string" && step.evalScript.as) {
-          runtimeVars.set(step.evalScript.as, resultStr);
-        }
-        stepResult = {
-          type: "evalScript",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: resultStr.length > 200 ? resultStr.slice(0, 200) + "\u2026" : resultStr
-        };
-      } else if ("runScript" in step) {
-        const filePath = path.isAbsolute(step.runScript.file)
-          ? step.runScript.file
-          : path.join(context.configDir, step.runScript.file);
-        const fileContents = fs.readFileSync(filePath, "utf-8");
-        await context.page.evaluate(fileContents);
-        stepResult = {
-          type: "runScript",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: step.runScript.file
-        };
-      } else if ("assertScreenshot" in step) {
-        const { compareScreenshots, ensureBaselineDir } = await import("./visual.js");
-        const name = step.assertScreenshot.name;
-        const threshold = step.assertScreenshot.threshold ?? 0.1;
-        const baselineDir = ensureBaselineDir(context.configDir);
-        const baselinePath = path.join(baselineDir, `${name}.png`);
-        const currentScreenshotPath = path.join(context.runDir, "screenshots", `${name}-current.png`);
-        fs.mkdirSync(path.dirname(currentScreenshotPath), { recursive: true });
-        await context.page.screenshot({ path: currentScreenshotPath, fullPage: true });
-        screenshots.push(path.join("screenshots", `${name}-current.png`));
-
-        if (!fs.existsSync(baselinePath)) {
-          fs.copyFileSync(currentScreenshotPath, baselinePath);
-          stepResult = {
-            type: "assertScreenshot",
-            status: "pass",
-            durationMs: Date.now() - stepStart,
-            value: "baseline created"
-          };
-        } else {
-          const diffPath = path.join(context.runDir, "screenshots", `${name}-diff.png`);
-          const comparison = await compareScreenshots(baselinePath, currentScreenshotPath, diffPath, threshold);
-          if (comparison.match) {
-            stepResult = {
-              type: "assertScreenshot",
-              status: "pass",
-              durationMs: Date.now() - stepStart,
-              value: `diff: ${(comparison.diffPercentage * 100).toFixed(2)}%`
-            };
-          } else {
-            screenshots.push(path.join("screenshots", `${name}-diff.png`));
-            throw new Error(
-              `Visual regression: ${(comparison.diffPercentage * 100).toFixed(2)}% diff exceeds threshold ${(threshold * 100).toFixed(0)}%`
-            );
-          }
-        }
-      } else if ("copyText" in step) {
-        assertAllowedSelector(step.copyText.selector, context.forbiddenSelectors);
-        const text = await context.page.locator(step.copyText.selector).textContent();
-        if (text === null) {
-          throw new Error(`No text content found for selector: ${step.copyText.selector}`);
-        }
-        runtimeVars.set(step.copyText.as, text);
-        stepResult = {
-          type: "copyText",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          selector: step.copyText.selector,
-          value: "[REDACTED]"
-        };
-      } else if ("waitForDownload" in step) {
-        const opts = step.waitForDownload;
-        const downloadPromise = context.pendingDownload ?? armDownloadListener(
-          context.page,
-          opts?.timeout ?? 30000
-        );
-        context.pendingDownload = undefined;
-        const download = await downloadPromise;
-        const suggestedFilename = validateDownloadFilename(download.suggestedFilename());
-        if (opts?.filename !== undefined && suggestedFilename !== opts.filename) {
-          throw new Error(
-            `Download filename mismatch: expected "${opts.filename}", got "${suggestedFilename}"`
-          );
-        }
-        const savePath = path.join(context.runDir, suggestedFilename);
-        await download.saveAs(savePath);
-        stepResult = {
-          type: "waitForDownload",
-          status: "pass",
-          durationMs: Date.now() - stepStart,
-          value: suggestedFilename
-        };
-      }
-
-      if (!stepResult) {
+      const handler = STEP_HANDLERS[stepType];
+      if (!handler) {
         throw new Error("Unknown step type");
       }
+      for (const capability of handler.capabilities) {
+        if (!driver.capabilities.has(capability)) {
+          throw new Error(
+            `Driver does not support capability "${capability}" required by step "${stepType}"`
+          );
+        }
+      }
+
+      const outcome = await handler.run({
+        driver,
+        policy,
+        context,
+        step,
+        index,
+        stepPath: currentStepPath,
+        stepStart,
+        runtimeVars,
+        results,
+        screenshots,
+        addScreenshot,
+        executeNested
+      });
+
+      if (outcome.kind === "abort") {
+        return { results, screenshots, failed: true, error: outcome.error };
+      }
+
+      stepResult = outcome.result;
 
       if (context.screenshotsMode === "all" && stepResult.type !== "screenshot") {
         const fileName = `step_${index + 1}.png`;
@@ -1314,7 +1436,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
   return { results, screenshots, failed: false };
 }
 
-export async function captureFinalScreenshot(page: Page, runDir: string): Promise<string> {
+export async function captureFinalScreenshot(page: ScreenshotTaker, runDir: string): Promise<string> {
   const screenshotsDir = path.join(runDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
   const fileName = "final.png";
