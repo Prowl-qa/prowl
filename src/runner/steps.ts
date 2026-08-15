@@ -14,8 +14,9 @@ import { createRunPolicy, type RunPolicy } from "./policy.js";
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
 export type StepExecutionContext = {
-  page: Page;
-  /** Optional pre-built driver; when omitted one is created from `page`. */
+  /** Playwright page entrypoint for the web target; omitted for non-web drivers. */
+  page?: Page;
+  /** Pre-built driver; required when `page` is omitted (e.g. the macOS target). */
   driver?: SessionDriver;
   steps: Step[];
   targetUrl: string;
@@ -1309,7 +1310,13 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
 };
 
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
-  const driver = context.driver ?? createPlaywrightDriver(context.page);
+  let driver = context.driver;
+  if (!driver) {
+    if (!context.page) {
+      throw new Error("executeSteps requires a driver or a Playwright page");
+    }
+    driver = createPlaywrightDriver(context.page);
+  }
   context.driver = driver;
   const policy = createRunPolicy(driver, {
     forbiddenSelectors: context.forbiddenSelectors,

@@ -1,9 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AssertionResult, BrowserChannel, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
+import type { AssertionResult, BrowserChannel, Config, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
+import { assertStepsSupportedByTarget, assertTargetAppAllowed } from "../config/target.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
+import { launchMacSession, closeMacSession } from "../browser/mac-helper.js";
+import type { MacHelperClient } from "../browser/mac-driver.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
@@ -23,6 +26,8 @@ export type RunOptions = {
   channel?: BrowserChannel;
   viewport?: string;
   junit?: boolean;
+  /** Inject a macOS helper client (tests / a prebuilt binary); defaults to spawning the helper. */
+  macClientFactory?: () => MacHelperClient;
 };
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
@@ -247,6 +252,11 @@ export async function runHunt(
   options: RunOptions
 ): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
   const { config, configDir } = loadConfig(options.configPath);
+
+  if (config.target.type === "macos") {
+    return runMacHunt(options, config, configDir, config.target);
+  }
+
   const hunt = loadHunt(options.huntName, configDir);
   const {
     hunt: interpolatedHunt,
@@ -258,11 +268,6 @@ export async function runHunt(
     process.env
   );
 
-  if (config.target.type === "macos") {
-    // The macOS execution target is wired through a dedicated run path; this
-    // browser path is web-only.
-    throw new Error("The macOS target is not supported by the web run path.");
-  }
   const targetUrl = options.urlOverride ?? config.target.url;
   const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
   const maxSteps = config.guardrails.maxSteps;
@@ -312,6 +317,158 @@ export async function runHunt(
     recordHistory(configDir, lastResult, config.history.maxRuns);
   }
 
+  return lastResult!;
+}
+
+// ---------------------------------------------------------------------------
+// macOS native target (PROWL-048). A dedicated run path: no browser, no console/
+// network assertions or HAR/trace (all web concepts). Steps run through the
+// MacDriver over the prowl-macdriver helper; artifacts are step + final
+// screenshots and the usual reports.
+// ---------------------------------------------------------------------------
+
+async function executeMacHuntAttempt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: MacosTarget,
+  interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
+  redactedFillSteps: Set<string>,
+  randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
+  allowedApps: string[]
+): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+  const maxSteps = config.guardrails.maxSteps;
+  const runDir = path.join(configDir, "runs", timestamp());
+  fs.mkdirSync(runDir, { recursive: true });
+
+  const session = await launchMacSession({
+    app: target.app,
+    timeoutMs: config.browser.timeout,
+    clientFactory: options.macClientFactory
+  });
+
+  let result: RunResult;
+  try {
+    const targetLabel = `macos:${session.bundleId}`;
+    const effectiveAllowedApps = [...new Set([...allowedApps, target.app, session.bundleId])];
+    const startedAt = new Date().toISOString();
+    const startTime = Date.now();
+
+    let stepResults: StepResult[] = [];
+    let stepScreenshots: string[] = [];
+    let stepFailed = false;
+
+    try {
+      const stepExecution = await executeSteps({
+        driver: session.driver,
+        steps: interpolatedHunt.steps,
+        targetUrl: targetLabel,
+        runDir,
+        screenshotsMode: config.artifacts.screenshots,
+        forbiddenSelectors: config.guardrails.forbiddenSelectors,
+        allowedDomains: [],
+        allowedApps: effectiveAllowedApps,
+        maxSteps,
+        maxTotalTimeMs: config.assertions.maxTotalTimeMs,
+        selfHealing: config.guardrails.selfHealing,
+        redactedFillSteps,
+        randomVars,
+        configDir,
+        huntStack: [options.huntName],
+        onStep: options.onStep
+      });
+      stepResults = stepExecution.results;
+      stepScreenshots = stepExecution.screenshots;
+      stepFailed = stepExecution.failed;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Step execution failed";
+      stepResults = [{ type: "steps", status: "fail", durationMs: 0, error: message }];
+      stepFailed = true;
+    }
+
+    let finalScreenshot: string | undefined;
+    try {
+      finalScreenshot = await captureFinalScreenshot(session.driver, runDir);
+    } catch {
+      finalScreenshot = undefined;
+    }
+
+    const durationMs = Date.now() - startTime;
+    const status: "pass" | "fail" = stepFailed ? "fail" : "pass";
+    const artifacts: RunResult["artifacts"] = {
+      screenshots: finalScreenshot ? [...stepScreenshots, finalScreenshot] : stepScreenshots
+    };
+
+    const runResult = buildRunResult({
+      status,
+      startedAt,
+      durationMs,
+      hunt: options.huntName,
+      targetUrl: targetLabel,
+      steps: stepResults,
+      assertions: [],
+      artifacts
+    });
+
+    result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
+  } finally {
+    await closeMacSession(session);
+  }
+
+  return { result, runDir, steps: interpolatedHunt.steps };
+}
+
+async function runMacHunt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: MacosTarget
+): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+  const hunt = loadHunt(options.huntName, configDir);
+  const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
+
+  // Fail fast on web-only steps and out-of-scope apps before launching anything.
+  assertStepsSupportedByTarget(interpolatedHunt.steps, "macos");
+  assertTargetAppAllowed(config.guardrails.allowedApps, target.app);
+
+  const maxSteps = config.guardrails.maxSteps;
+  if (interpolatedHunt.steps.length > maxSteps) {
+    throw new Error(`Hunt has ${interpolatedHunt.steps.length} steps. Max allowed is ${maxSteps}.`);
+  }
+
+  const maxRetries = hunt.retry?.maxRetries ?? 0;
+  const retryDelay = hunt.retry?.delay ?? 0;
+  let lastResult: { result: RunResult; runDir: string; steps: Step[] } | undefined;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0 && retryDelay > 0) {
+      await delay(retryDelay);
+    }
+    lastResult = await executeMacHuntAttempt(
+      options,
+      config,
+      configDir,
+      target,
+      interpolatedHunt,
+      redactedFillSteps,
+      randomVars,
+      config.guardrails.allowedApps
+    );
+    if (lastResult.result.status === "pass") {
+      if (attempt > 0) {
+        lastResult.result.artifacts.summary = `Passed on attempt ${attempt + 1} of ${maxRetries + 1}`;
+      }
+      recordHistory(configDir, lastResult, config.history.maxRuns);
+      return lastResult;
+    }
+  }
+
+  if (maxRetries > 0 && lastResult) {
+    lastResult.result.artifacts.summary = `Failed after ${maxRetries + 1} attempts`;
+  }
+  if (lastResult) {
+    recordHistory(configDir, lastResult, config.history.maxRuns);
+  }
   return lastResult!;
 }
 
