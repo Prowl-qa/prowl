@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   assertHuntAssertionsSupportedByTarget,
   assertStepsSupportedByTarget,
@@ -103,6 +103,48 @@ describe("assertTargetAppAllowed", () => {
       expect(() => assertTargetAppAllowed(["Example"], appPath)).not.toThrow();
       expect(() => assertTargetAppAllowed([appPath], `${appPath}/`)).not.toThrow();
     } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("allows an app-path target by bundle id resolved through plutil fallback", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-app-"));
+    const appPath = path.join(root, "BinaryExample.app");
+    const contentsPath = path.join(appPath, "Contents");
+    const plistPath = path.join(contentsPath, "Info.plist");
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    const originalExistsSync = fs.existsSync;
+    const execFileSync = vi.fn(() => "com.example.Binary\n");
+
+    fs.mkdirSync(contentsPath, { recursive: true });
+    fs.writeFileSync(plistPath, Buffer.from("bplist00-not-xml"));
+
+    vi.spyOn(fs, "existsSync").mockImplementation((candidate) => {
+      if (candidate === "/usr/bin/plutil") {
+        return true;
+      }
+      return originalExistsSync(candidate);
+    });
+    vi.doMock("node:child_process", () => ({ execFileSync }));
+    vi.resetModules();
+    Object.defineProperty(process, "platform", { value: "darwin" });
+
+    try {
+      const { assertTargetAppAllowed: assertTargetAppAllowedWithPlutil } = await import("../src/config/target.js");
+
+      expect(() => assertTargetAppAllowedWithPlutil(["com.example.Binary"], appPath)).not.toThrow();
+      expect(execFileSync).toHaveBeenCalledWith(
+        "/usr/bin/plutil",
+        ["-extract", "CFBundleIdentifier", "raw", "-o", "-", plistPath],
+        { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"], timeout: 1000 }
+      );
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, "platform", platformDescriptor);
+      }
+      vi.doUnmock("node:child_process");
+      vi.restoreAllMocks();
+      vi.resetModules();
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
