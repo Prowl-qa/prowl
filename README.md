@@ -422,15 +422,19 @@ assertions:
 Config lives at `.prowl/config.yml`. All options with defaults:
 
 ```yaml
-# The base URL for all hunt navigation
+# Execution target. Defaults to the web target; existing configs work unchanged.
 target:
-  url: "http://localhost:3000"        # Required
+  type: "web"                         # "web" (default) or "macos" (experimental)
+  url: "http://localhost:3000"        # Required for web targets
+  # For the experimental macOS target instead:
+  #   type: "macos"
+  #   app: "com.example.App"          # bundle id or /path/to/App.app  (see "macOS Target")
 
 # Browser settings
 browser:
   headless: true                       # false = show the browser window
   slowMo: 0                           # ms delay between actions (debugging)
-  timeout: 30000                       # default page operation timeout
+  timeout: 30000                       # default page operation timeout; macOS app launch timeout
 
 # What gets saved per run
 artifacts:
@@ -454,6 +458,7 @@ guardrails:
   forbiddenSelectors:                  # selectors that steps cannot use
     - "[data-danger]"
     - ".delete-btn"
+  allowedApps: []                      # macOS target only: bundle IDs, bundle names, or .app paths
 
 # Auth state from `prowl login`
 auth:
@@ -894,6 +899,113 @@ CLI Commands
 Browse and contribute hunt templates through the internal community registry (contact ops for access).
 
 Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS patterns, and more. Each template is heavily commented and ready to customize.
+
+---
+
+## macOS Target (Experimental)
+
+> **Experimental (PROWL-048).** Prowl can drive **native macOS apps** — including
+> menu bar extras (`NSStatusItem` + `NSMenu`) — through Apple's Accessibility API,
+> in addition to the web. The API, selector dialect, and step coverage may change.
+> **Distribution is deferred:** the required helper binary is **not** shipped in the
+> npm package; you build it locally (below).
+
+### Enabling it
+
+1. **Build the helper** (one time; requires the Swift toolchain / Xcode CLT):
+
+   ```bash
+   cd macdriver
+   swift build -c release
+   ```
+
+   Prowl finds the binary at `macdriver/.build/release/prowl-macdriver`, or at
+   `$PROWL_MACDRIVER_BIN` if set. If it is missing, Prowl fails with a clear
+   "build the helper" message rather than crashing.
+
+2. **Point your config at a macOS target:**
+
+   ```yaml
+   target:
+     type: macos
+     app: "com.example.App"        # bundle id, or an absolute /path/to/App.app
+   guardrails:
+     allowedApps:                   # optional scope; empty = allow the target app
+       - "com.example.App"
+   ```
+
+   When `target.app` is an app path, `allowedApps` may list the exact `.app`
+   path, the app bundle name (`Example` for `Example.app`), or the bundle id
+   from `Contents/Info.plist` when that file is readable.
+
+3. **Grant Accessibility permission** (see below), then run a hunt as usual:
+   `prowl run my-macos-hunt`.
+
+### Accessibility & Screen Recording permission
+
+The **process that hosts** Prowl (your terminal — Terminal, iTerm, VS Code, or a CI
+agent) must be granted **Accessibility** permission: **System Settings → Privacy &
+Security → Accessibility**, then enable that app. macOS attributes the grant to the
+hosting app, not to `prowl-macdriver`. Preflight from the helper:
+
+```bash
+macdriver/.build/release/prowl-macdriver check   # prints {"trusted": <bool>}; prompts on first run
+```
+
+The `screenshot`/`assertScreenshot` steps additionally need **Screen Recording**
+permission for the hosting app.
+
+**CI notes (macOS runners):** headless CI cannot click "Allow" in a dialog, so grant
+the permissions non-interactively before the run. On a self-hosted runner you can
+pre-authorize the agent's host app with a TCC profile via MDM, or (on ephemeral
+runners where it's acceptable) seed the TCC database, e.g.:
+
+```bash
+sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
+  "INSERT OR REPLACE INTO access VALUES('kTCCServiceAccessibility','<runner-app-bundle-id>',0,2,2,1,NULL,NULL,NULL,'UNUSED',NULL,0,1,NULL,NULL,NULL);"
+```
+
+GitHub-hosted macOS runners do not grant Accessibility, so the macOS target is aimed
+at self-hosted / MDM-managed runners for now.
+
+### Selector dialect (macOS)
+
+Native selectors address accessibility identifiers, roles, and labels:
+
+| Selector | Matches |
+|---|---|
+| `id=openSettings` | element whose `AXIdentifier` equals `openSettings` |
+| `role=button[name="Save"]` | an `AXButton` whose title/description/value contains `Save` |
+| `label="Email"` | element whose accessibility label equals `Email` |
+| `text="Save"` or bare `Save` | element whose title/description/value contains the text |
+| `statusItem` | opens the app's menu bar status-item menu |
+| `menu=Preferences…` | opens the status-item menu and clicks that item |
+
+`forbiddenSelectors` still applies (text patterns match via the same substring
+semantics as the web target). Prefer `id=` (accessibility identifiers) — the native
+analog of `data-testid`.
+
+### Step compatibility
+
+Portable steps run on **both** targets; web-only steps are rejected up front on the
+macOS target (with a clear error), and `prowl login` / URL guardrails do not apply.
+
+| Portable (web + macOS) | Web-only (rejected on macOS) |
+|---|---|
+| `click`, `fill`, `type`, `press` | `navigate`, `waitForUrl`, `waitForNetworkIdle` |
+| `wait`, `waitForSelector` | `mockRoute` / `unmockRoute` |
+| `assert: visible` / `notVisible` | `evalScript`, `runScript` |
+| `screenshot`, `assertScreenshot` | `onDialog`, `select` / `selectOption` |
+| `hover`, `scrollTo` | `setInputFiles`, `waitForDownload` |
+| `repeat`, `if`, `runHunt`, `copyText` | `scroll` (directional), `assert: urlIncludes` / `urlEquals` |
+
+Notes: `press` maps Enter/Return/Space onto the element's activate action (other keys
+are unsupported); `type` fills the focused control; app teardown quits the target app
+after the run.
+
+> Docs follow-up: the customer-facing docs site (`prowl-docs`) should gain a "macOS
+> target" page mirroring this section (target type + step-compatibility matrix +
+> permission setup); tracked separately from this repo.
 
 ---
 

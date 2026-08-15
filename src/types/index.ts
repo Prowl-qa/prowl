@@ -12,10 +12,27 @@ export type Viewport = {
   height: number;
 };
 
+/** Web execution target (default): drives a browser at `url`. */
+export type WebTarget = {
+  type: "web";
+  url: string;
+};
+
+/**
+ * macOS native execution target (experimental, PROWL-048). `app` is a bundle
+ * identifier (e.g. `com.example.App`) or an absolute path to a `.app` bundle.
+ * App-path guardrails are matched against the path, bundle name, and
+ * `CFBundleIdentifier` from `Contents/Info.plist` when it is readable.
+ */
+export type MacosTarget = {
+  type: "macos";
+  app: string;
+};
+
+export type Target = WebTarget | MacosTarget;
+
 export type Config = {
-  target: {
-    url: string;
-  };
+  target: Target;
   browser: {
     headless: boolean;
     slowMo: number;
@@ -39,6 +56,8 @@ export type Config = {
   guardrails: {
     maxSteps: number;
     allowedDomains: string[];
+    /** Native scope analog of `allowedDomains`: allowed bundle IDs, app bundle names, or `.app` paths. */
+    allowedApps: string[];
     forbiddenSelectors: string[];
     selfHealing: boolean;
   };

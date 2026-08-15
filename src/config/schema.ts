@@ -2,11 +2,32 @@ import { z } from "zod";
 import { SUPPORTED_BROWSER_ENGINES, type Step } from "../types/index.js";
 import { isValidHuntName } from "./hunt-name.js";
 
+// Web target keeps `type` optional so pre-existing configs (`target: { url }`)
+// parse unchanged and default to the web target.
+const webTargetSchema = z
+  .object({
+    type: z.literal("web").optional(),
+    url: z.string().min(1)
+  })
+  .strict();
+
+// macOS native target (experimental, PROWL-048): requires `type: "macos"` and an
+// app (bundle id or .app path); `url` is not accepted.
+const macosTargetSchema = z
+  .object({
+    type: z.literal("macos"),
+    app: z.string().min(1)
+  })
+  .strict();
+
+// macos is tried first because it is the only branch with `type: "macos"`; a bare
+// `{ url }` (no type) falls through to web. An object with neither `url` nor a
+// macos `app` matches neither branch and is rejected with a union error.
+export const targetSchema = z.union([macosTargetSchema, webTargetSchema]);
+
 export const configSchema = z
   .object({
-    target: z.object({
-      url: z.string().min(1)
-    }),
+    target: targetSchema,
     browser: z
       .object({
         headless: z.boolean().optional(),
@@ -46,6 +67,7 @@ export const configSchema = z
       .object({
         maxSteps: z.number().optional(),
         allowedDomains: z.array(z.string()).optional(),
+        allowedApps: z.array(z.string()).optional(),
         forbiddenSelectors: z.array(z.string()).optional(),
         selfHealing: z.boolean().optional()
       })

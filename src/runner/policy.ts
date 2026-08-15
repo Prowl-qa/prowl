@@ -19,6 +19,12 @@ const ALWAYS_ALLOWED_PROTOCOLS = ["about:", "data:"];
 export type RunPolicyOptions = {
   forbiddenSelectors: string[];
   allowedDomains: string[];
+  /**
+   * Allow-listed bundle IDs / process names for the macOS target. Defaults to
+   * `[]`, which denies every app. This is the inverse of
+   * `assertTargetAppAllowed`, where an empty list allows the configured target.
+   */
+  allowedApps?: string[];
   maxSteps: number;
   selfHealing?: boolean;
 };
@@ -28,6 +34,15 @@ export type RunPolicy = {
   assertWithinMaxSteps(stepCount: number, huntName?: string): void;
   /** Throw if navigating/landing on a URL whose host is not allow-listed. */
   ensureUrlAllowed(urlValue: string): void;
+  /** Throw if a bundle id / process name is not allow-listed; an empty list denies all apps. */
+  ensureAppAllowed(app: string): void;
+  /**
+   * Re-assert scope after an action, in a target-aware way: on a URL-capable
+   * driver (web) this is the allowed-domain check on the current URL; on a
+   * driver without the `navigate` capability (e.g. macOS) there is no URL to
+   * check and app scope is enforced at launch, so this is a no-op.
+   */
+  ensureLocationAllowed(driver: SessionDriver): void;
   /** Throw if a selector matches the forbidden list. */
   assertAllowedSelector(selector: string): void;
   /**
@@ -40,6 +55,7 @@ export type RunPolicy = {
 
 export function createRunPolicy(driver: SessionDriver, options: RunPolicyOptions): RunPolicy {
   const { forbiddenSelectors, allowedDomains, maxSteps, selfHealing } = options;
+  const allowedApps = options.allowedApps ?? [];
 
   // Substring match: if both the selector and forbidden pattern are text=
   // selectors, the selector's text is checked for whether it *contains* the
@@ -98,6 +114,20 @@ export function createRunPolicy(driver: SessionDriver, options: RunPolicyOptions
     }
   }
 
+  function ensureAppAllowed(app: string): void {
+    if (!allowedApps.includes(app)) {
+      throw new Error(`Interaction with disallowed app: ${app}`);
+    }
+  }
+
+  function ensureLocationAllowed(activeDriver: SessionDriver): void {
+    // URL scope only applies to URL-capable (web) drivers. Non-navigating
+    // drivers (macOS) have no URL; their app scope is enforced at launch.
+    if (activeDriver.capabilities.has("navigate")) {
+      ensureUrlAllowed(activeDriver.currentUrl());
+    }
+  }
+
   // Bridge the driver's `count` verb to the healing probe surface, so healing
   // stays driver-agnostic.
   const healProbe: SelectorProbe = {
@@ -137,5 +167,12 @@ export function createRunPolicy(driver: SessionDriver, options: RunPolicyOptions
     return { selector: healed.selector, healedFrom: healed.healedFrom };
   }
 
-  return { assertWithinMaxSteps, ensureUrlAllowed, assertAllowedSelector, resolveActionSelector };
+  return {
+    assertWithinMaxSteps,
+    ensureUrlAllowed,
+    ensureAppAllowed,
+    ensureLocationAllowed,
+    assertAllowedSelector,
+    resolveActionSelector
+  };
 }

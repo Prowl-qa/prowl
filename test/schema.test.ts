@@ -1,6 +1,50 @@
 import { describe, expect, it } from "vitest";
 import { configSchema, huntSchema } from "../src/config/schema.js";
 
+describe("configSchema target discriminant (PROWL-048)", () => {
+  it("accepts a legacy web target with no type (back-compat)", () => {
+    const parsed = configSchema.parse({ target: { url: "http://example.com" } });
+    expect(parsed.target).toEqual({ url: "http://example.com" });
+  });
+
+  it("accepts an explicit web target", () => {
+    const parsed = configSchema.parse({ target: { type: "web", url: "http://example.com" } });
+    expect(parsed.target).toEqual({ type: "web", url: "http://example.com" });
+  });
+
+  it("accepts a macos target with a bundle id", () => {
+    const parsed = configSchema.parse({ target: { type: "macos", app: "com.example.App" } });
+    expect(parsed.target).toEqual({ type: "macos", app: "com.example.App" });
+  });
+
+  it("accepts a macos target with an app path", () => {
+    const parsed = configSchema.parse({ target: { type: "macos", app: "/Applications/Example.app" } });
+    expect(parsed.target).toEqual({ type: "macos", app: "/Applications/Example.app" });
+  });
+
+  it("rejects a macos target without an app", () => {
+    expect(() => configSchema.parse({ target: { type: "macos" } })).toThrow();
+  });
+
+  it("rejects a macos target that also carries a url", () => {
+    expect(() =>
+      configSchema.parse({ target: { type: "macos", app: "com.example.App", url: "http://x" } })
+    ).toThrow();
+  });
+
+  it("rejects a web target with no url", () => {
+    expect(() => configSchema.parse({ target: { type: "web" } })).toThrow();
+  });
+
+  it("accepts guardrails.allowedApps", () => {
+    const parsed = configSchema.parse({
+      target: { type: "macos", app: "com.example.App" },
+      guardrails: { allowedApps: ["com.example.App"] }
+    });
+    expect(parsed.guardrails?.allowedApps).toEqual(["com.example.App"]);
+  });
+});
+
 describe("huntSchema shorthand syntax", () => {
   it("accepts shorthand and explicit step forms", () => {
     const parsed = huntSchema.parse({

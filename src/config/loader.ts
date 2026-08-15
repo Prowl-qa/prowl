@@ -2,13 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
 import dotenv from "dotenv";
-import type { BrowserChannel, BrowserEngine, Config, Hunt, Viewport } from "../types/index.js";
+import type { BrowserChannel, BrowserEngine, Config, Hunt, Target, Viewport } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
 import { assertValidHuntName } from "./hunt-name.js";
 
+const DEFAULT_WEB_URL = "http://localhost:3000";
+
 const DEFAULT_CONFIG: Config = {
   target: {
-    url: "http://localhost:3000"
+    type: "web",
+    url: DEFAULT_WEB_URL
   },
   browser: {
     headless: true,
@@ -32,6 +35,7 @@ const DEFAULT_CONFIG: Config = {
   guardrails: {
     maxSteps: 50,
     allowedDomains: ["localhost", "127.0.0.1", "0.0.0.0"],
+    allowedApps: [],
     forbiddenSelectors: ["[data-danger]", ".delete-btn"],
     selfHealing: false
   },
@@ -101,11 +105,25 @@ export function resolveViewport(
   return value;
 }
 
+/**
+ * Normalize the validated target into a canonical discriminated shape. A target
+ * with `type: "macos"` becomes a macOS target; anything else (including the
+ * legacy `{ url }` with no `type`) resolves to the web target, so pre-existing
+ * configs are untouched.
+ */
+function resolveTarget(target: Config["target"] | undefined): Target {
+  if (target && (target as { type?: string }).type === "macos") {
+    return { type: "macos", app: (target as { app: string }).app };
+  }
+  return {
+    type: "web",
+    url: (target as { url?: string } | undefined)?.url ?? DEFAULT_WEB_URL
+  };
+}
+
 function mergeConfig(partial: Partial<Config>): Config {
   return {
-    target: {
-      url: partial.target?.url ?? DEFAULT_CONFIG.target.url
-    },
+    target: resolveTarget(partial.target),
     browser: {
       headless: partial.browser?.headless ?? DEFAULT_CONFIG.browser.headless,
       slowMo: partial.browser?.slowMo ?? DEFAULT_CONFIG.browser.slowMo,
@@ -134,6 +152,7 @@ function mergeConfig(partial: Partial<Config>): Config {
     guardrails: {
       maxSteps: partial.guardrails?.maxSteps ?? DEFAULT_CONFIG.guardrails.maxSteps,
       allowedDomains: partial.guardrails?.allowedDomains ?? DEFAULT_CONFIG.guardrails.allowedDomains,
+      allowedApps: partial.guardrails?.allowedApps ?? DEFAULT_CONFIG.guardrails.allowedApps,
       forbiddenSelectors:
         partial.guardrails?.forbiddenSelectors ?? DEFAULT_CONFIG.guardrails.forbiddenSelectors,
       selfHealing: partial.guardrails?.selfHealing ?? DEFAULT_CONFIG.guardrails.selfHealing
@@ -190,10 +209,14 @@ export function loadConfig(configPath?: string): {
   const validated = configSchema.parse(parsed);
   const config = mergeConfig(validated as Partial<Config>);
 
-  config.guardrails.allowedDomains = ensureAllowedDomain(
-    config.guardrails.allowedDomains,
-    config.target.url
-  );
+  // allowedDomains only applies to the web target; the macOS target scopes on
+  // bundle IDs / process names via guardrails.allowedApps instead.
+  if (config.target.type === "web") {
+    config.guardrails.allowedDomains = ensureAllowedDomain(
+      config.guardrails.allowedDomains,
+      config.target.url
+    );
+  }
 
   return { config, configPath: resolvedPath, configDir };
 }

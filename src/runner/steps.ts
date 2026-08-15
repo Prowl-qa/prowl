@@ -9,13 +9,15 @@ import type { DriverCapability, DriverDownload, SessionDriver } from "../browser
 import type { Step, StepResult } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
+import { assertHuntAssertionsSupportedByTarget, assertStepsSupportedByTarget } from "../config/target.js";
 import { createRunPolicy, type RunPolicy } from "./policy.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
 export type StepExecutionContext = {
-  page: Page;
-  /** Optional pre-built driver; when omitted one is created from `page`. */
+  /** Playwright page entrypoint for the web target; omitted for non-web drivers. */
+  page?: Page;
+  /** Pre-built driver; required when `page` is omitted (e.g. the macOS target). */
   driver?: SessionDriver;
   steps: Step[];
   targetUrl: string;
@@ -23,6 +25,8 @@ export type StepExecutionContext = {
   screenshotsMode: "on-failure" | "all";
   forbiddenSelectors: string[];
   allowedDomains: string[];
+  /** Allow-listed bundle IDs / process names for the macOS target (optional). */
+  allowedApps?: string[];
   maxSteps: number;
   selfHealing?: boolean;
   maxTotalTimeMs: number;
@@ -578,13 +582,13 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       const destination = resolveNavigationTarget(h.context.targetUrl, h.step.navigate);
       h.policy.ensureUrlAllowed(destination);
       await h.driver.goto(destination);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return { kind: "result", result: { type: "navigate", status: "pass", durationMs: Date.now() - h.stepStart } };
     }
   },
 
   click: {
-    capabilities: ["navigate", "interact", "query"],
+    capabilities: ["interact", "query"],
     run: async (h) => {
       if (!("click" in h.step)) unknownStep();
       let selector: string;
@@ -597,7 +601,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         selector = resolved.selector;
         healedFrom = resolved.healedFrom;
       }
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -612,7 +616,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   fill: {
-    capabilities: ["navigate", "interact", "query"],
+    capabilities: ["interact", "query"],
     run: async (h) => {
       if (!("fill" in h.step)) unknownStep();
       let selector: string;
@@ -629,7 +633,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         selector = await fillByLabelOrPlaceholder(h.driver, h.policy, label, shorthandValue);
         value = shorthandValue;
       }
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -645,12 +649,12 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   type: {
-    capabilities: ["navigate", "interact"],
+    capabilities: ["interact"],
     run: async (h) => {
       if (!("type" in h.step)) unknownStep();
       h.policy.assertAllowedSelector(":focus");
       await h.driver.fill(":focus", h.step.type);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -670,7 +674,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       if (!("selectOption" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.selectOption.selector);
       await h.driver.selectOption(resolved.selector, h.step.selectOption.value);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -691,7 +695,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       if (!("select" in h.step)) unknownStep();
       const [label, value] = getSinglePair(h.step.select, "select");
       const selector = await selectByLabelOrFallback(h.driver, h.policy, label, value);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -731,7 +735,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       const resolveFile = (f: string) => (path.isAbsolute(f) ? f : path.join(h.context.configDir, f));
       const resolvedFiles = Array.isArray(rawFiles) ? rawFiles.map(resolveFile) : resolveFile(rawFiles);
       await h.driver.setInputFiles(resolvedInput.selector, resolvedFiles);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       const filesLabel = Array.isArray(rawFiles) ? rawFiles.join(", ") : rawFiles;
       return {
         kind: "result",
@@ -766,6 +770,14 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         redactedFillSteps: subRedacted,
         randomVars
       } = interpolateHunt(subHunt, process.env, h.context.randomVars);
+      // Sub-hunts bypass the top-level target check, so re-run it here against
+      // the sub-hunt's own steps. The target type is derived from the driver: a
+      // driver without the `navigate` capability is the (non-web) macOS target,
+      // where web-only steps — including `assert: urlIncludes`/`urlEquals`
+      // against a bundle-id `currentUrl()` — must be rejected, not silently run.
+      const subTargetType = h.driver.capabilities.has("navigate") ? "web" : "macos";
+      assertStepsSupportedByTarget(interpolatedSubHunt.steps, subTargetType);
+      assertHuntAssertionsSupportedByTarget(interpolatedSubHunt.assertions, subTargetType);
       h.policy.assertWithinMaxSteps(interpolatedSubHunt.steps.length, huntName);
       const subResult = await h.executeNested({
         steps: interpolatedSubHunt.steps,
@@ -790,12 +802,12 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   press: {
-    capabilities: ["navigate", "interact", "query"],
+    capabilities: ["interact", "query"],
     run: async (h) => {
       if (!("press" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.press.selector);
       await h.driver.press(resolved.selector, h.step.press.key);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -810,7 +822,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   assert: {
-    capabilities: ["navigate", "query"],
+    capabilities: ["query"],
     run: async (h) => {
       if (!("assert" in h.step)) unknownStep();
       const value = await runInlineAssert(h.driver, h.policy, h.step.assert);
@@ -863,7 +875,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       if (!("waitForUrl" in h.step)) unknownStep();
       const value = h.step.waitForUrl.value;
       await h.driver.waitForUrl((url) => url.includes(value), { timeout: h.step.waitForUrl.timeout });
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: { type: "waitForUrl", status: "pass", durationMs: Date.now() - h.stepStart, value }
@@ -884,12 +896,12 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   hover: {
-    capabilities: ["navigate", "interact", "query"],
+    capabilities: ["interact", "query"],
     run: async (h) => {
       if (!("hover" in h.step)) unknownStep();
       const resolved = await h.policy.resolveActionSelector(h.step.hover.selector);
       await h.driver.hover(resolved.selector);
-      h.policy.ensureUrlAllowed(h.driver.currentUrl());
+      h.policy.ensureLocationAllowed(h.driver);
       return {
         kind: "result",
         result: {
@@ -1307,11 +1319,17 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
 };
 
 export async function executeSteps(context: StepExecutionContext): Promise<StepExecutionResult> {
-  const driver = context.driver ?? createPlaywrightDriver(context.page);
-  context.driver = driver;
+  let driver = context.driver;
+  if (!driver) {
+    if (!context.page) {
+      throw new Error("executeSteps requires a driver or a Playwright page");
+    }
+    driver = createPlaywrightDriver(context.page);
+  }
   const policy = createRunPolicy(driver, {
     forbiddenSelectors: context.forbiddenSelectors,
     allowedDomains: context.allowedDomains,
+    allowedApps: context.allowedApps,
     maxSteps: context.maxSteps,
     selfHealing: context.selfHealing
   });
@@ -1336,7 +1354,7 @@ export async function executeSteps(context: StepExecutionContext): Promise<StepE
 
   const executeNested = (
     overrides: Partial<StepExecutionContext> & Pick<StepExecutionContext, "steps">
-  ): Promise<StepExecutionResult> => executeNestedSteps(context, overrides);
+  ): Promise<StepExecutionResult> => executeNestedSteps(context, { driver, ...overrides });
 
   for (let index = 0; index < context.steps.length; index += 1) {
     const currentStepPath = stepPath(context.stepPathPrefix, index);

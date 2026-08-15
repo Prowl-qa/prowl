@@ -8,6 +8,14 @@ function policyDriver(): SessionDriver {
   } as unknown as SessionDriver;
 }
 
+function driverWithCapabilities(caps: string[], currentUrl: () => string): SessionDriver {
+  return {
+    parseTextSelector: () => null,
+    capabilities: new Set(caps),
+    currentUrl
+  } as unknown as SessionDriver;
+}
+
 describe("createRunPolicy", () => {
   it("throws an actionable error for invalid navigation URLs", () => {
     const policy = createRunPolicy(policyDriver(), {
@@ -31,5 +39,40 @@ describe("createRunPolicy", () => {
     expect(() => policy.ensureUrlAllowed("https://evil.test/path")).toThrow(
       "Navigation to disallowed domain: evil.test"
     );
+  });
+});
+
+describe("createRunPolicy — native scope (PROWL-048)", () => {
+  const base = { forbiddenSelectors: [], allowedDomains: [], maxSteps: 50 };
+
+  it("ensureAppAllowed passes an allow-listed bundle id and rejects others", () => {
+    const policy = createRunPolicy(policyDriver(), { ...base, allowedApps: ["com.example.App"] });
+    expect(() => policy.ensureAppAllowed("com.example.App")).not.toThrow();
+    expect(() => policy.ensureAppAllowed("com.evil.App")).toThrow(
+      "Interaction with disallowed app: com.evil.App"
+    );
+  });
+
+  it("ensureAppAllowed rejects everything when allowedApps is empty/omitted", () => {
+    const policy = createRunPolicy(policyDriver(), base);
+    expect(() => policy.ensureAppAllowed("com.example.App")).toThrow(
+      "Interaction with disallowed app: com.example.App"
+    );
+  });
+
+  it("ensureLocationAllowed enforces allowed domains on a navigating (web) driver", () => {
+    const policy = createRunPolicy(policyDriver(), { ...base, allowedDomains: ["example.com"] });
+    const webDriver = driverWithCapabilities(["navigate"], () => "https://evil.test/x");
+    expect(() => policy.ensureLocationAllowed(webDriver)).toThrow(
+      "Navigation to disallowed domain: evil.test"
+    );
+  });
+
+  it("ensureLocationAllowed is a no-op for a driver without navigate (macOS) and never reads the URL", () => {
+    const policy = createRunPolicy(policyDriver(), base);
+    const macDriver = driverWithCapabilities(["query", "interact"], () => {
+      throw new Error("currentUrl should not be called");
+    });
+    expect(() => policy.ensureLocationAllowed(macDriver)).not.toThrow();
   });
 });

@@ -1,6 +1,7 @@
 // Re-export public types
 export type {
   Config, Hunt, Step, Assertion,
+  Target, WebTarget, MacosTarget,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
   CiResult, CiHuntResult, CiStatus, CiFlakyHunt, CiFailureCluster,
@@ -9,6 +10,19 @@ export type {
   EvalScriptStep, RunScriptStep, AssertScreenshotStep,
   HistoryEntry, HistoryFile
 } from "./types/index.js";
+
+// Re-export the experimental macOS target (PROWL-048)
+export { createMacDriver, parseMacSelector } from "./browser/mac-driver.js";
+export type { MacHelperClient, MacQuery, MacDriverOptions } from "./browser/mac-driver.js";
+export {
+  launchMacSession, closeMacSession, resolveHelperBinary,
+  macdriverBuildInstructions, SpawnMacHelperClient, DEFAULT_REQUEST_TIMEOUT_MS
+} from "./browser/mac-helper.js";
+export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions } from "./browser/mac-helper.js";
+export {
+  assertStepsSupportedByTarget, assertTargetAppAllowed,
+  webOnlyReason, WEB_ONLY_STEP_TYPES
+} from "./config/target.js";
 
 // Re-export runner
 export { runHunt } from "./runner/index.js";

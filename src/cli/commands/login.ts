@@ -37,6 +37,9 @@ export function buildLoginCommand(): Command {
       let session: BrowserSession | null = null;
       try {
         const { config, configDir } = loadConfig(options.config);
+        if (config.target.type === "macos") {
+          throw new Error("`prowl login` captures browser auth state and only applies to web targets.");
+        }
         const targetUrl = options.url ?? config.target.url;
         const storageStatePath = config.auth.storageStatePath
           ? resolvePath(configDir, config.auth.storageStatePath)
