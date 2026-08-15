@@ -293,21 +293,6 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
----
-
-{PROWL-048} **ARCH-002: macOS native app testing target (menu bar apps first)**
-   Add a second execution target so hunts can test native macOS apps — starting with menu bar apps (`NSStatusItem` + popover/menu) — via Apple's Accessibility API (AXUIElement). Differentiator: neither Maestro (Android/iOS/web only) nor Playwright covers native macOS; accessibility identifiers map directly onto Prowl's stable-selectors principle (`data-testid` ↔ `accessibilityIdentifier`). Depends on PROWL-047.
-
-**Found during**: macOS menu bar app testing feasibility analysis (2026-08-14)
-**Acceptance Criteria**:
-- `target` config gains a discriminant: `type: "web" | "macos"`, with `url` required only for web and `app` (bundle ID or app path) for macos
-- Schema validation rejects steps the selected target can't honor (web-only: `navigate`/`waitForUrl`/`waitForNetworkIdle`/`mockRoute`/`evalScript`/`runScript`/`onDialog`/`select`/`setInputFiles`/`waitForDownload`, URL assertions); portable steps (`click`, `type`, `press`, `wait`, `assert visible`, `screenshot`, `assertScreenshot`, `repeat`, `runHunt`) work on both
-- `MacDriver` implements the `SessionDriver` verb set over AXUIElement; selectors address accessibility identifiers/roles/labels
-- Native guardrail analog for `allowedDomains`: allowed bundle IDs / process names; `maxSteps` and time budgets inherited from the policy layer
-- Launch/teardown of the target app, including activating a menu bar extra and interacting with its popover
-- Documented setup for the Accessibility permission (System Settings → Privacy & Security → Accessibility), including CI notes for macOS runners
-- Ships as experimental; docs updated in `prowl-docs` (new target type + step compatibility matrix)
-
 ## CI/CD & OpenShift (Epic)
 
 Make Prowl usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowl ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.
