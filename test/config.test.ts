@@ -148,6 +148,59 @@ describe("ensureAllowedDomain", () => {
   });
 });
 
+describe("loadConfig macOS target (PROWL-048)", () => {
+  function setupMacProject(configYml: string): string {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mac-"));
+    fs.mkdirSync(path.join(tmpDir, ".prowl", "hunts"), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, ".prowl", "config.yml"), configYml);
+    return tmpDir;
+  }
+
+  it("normalizes a legacy web target to include type: web", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({ type: "web", url: "http://example.com" });
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("loads a macos target and does not inject an allowed domain", () => {
+    const project = setupMacProject(
+      "target:\n  type: macos\n  app: 'com.example.App'\nguardrails:\n  allowedApps: ['com.example.App']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({ type: "macos", app: "com.example.App" });
+      expect(config.guardrails.allowedApps).toEqual(["com.example.App"]);
+      // No url means allowedDomains stays at defaults (no host appended).
+      expect(config.guardrails.allowedDomains).toEqual(["localhost", "127.0.0.1", "0.0.0.0"]);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("defaults allowedApps to an empty list for web targets", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.guardrails.allowedApps).toEqual([]);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("loadConfig history", () => {
   it("defaults history.maxRuns to 100 when not set", () => {
     const project = setupTempProject();

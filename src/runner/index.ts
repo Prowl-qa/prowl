@@ -258,6 +258,11 @@ export async function runHunt(
     process.env
   );
 
+  if (config.target.type === "macos") {
+    // The macOS execution target is wired through a dedicated run path; this
+    // browser path is web-only.
+    throw new Error("The macOS target is not supported by the web run path.");
+  }
   const targetUrl = options.urlOverride ?? config.target.url;
   const allowedDomains = ensureAllowedDomain([...config.guardrails.allowedDomains], targetUrl);
   const maxSteps = config.guardrails.maxSteps;
