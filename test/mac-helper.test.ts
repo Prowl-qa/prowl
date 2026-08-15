@@ -7,7 +7,8 @@ import {
   closeMacSession,
   launchMacSession,
   macdriverBuildInstructions,
-  resolveHelperBinary
+  resolveHelperBinary,
+  SpawnMacHelperClient
 } from "../src/browser/mac-helper.js";
 import type { MacHelperClient } from "../src/browser/mac-driver.js";
 import { executeSteps } from "../src/runner/steps.js";
@@ -81,6 +82,36 @@ describe("closeMacSession", () => {
     await closeMacSession(session);
     expect(client.calls.some((c) => c.cmd === "quit")).toBe(true);
     expect(client.closed).toBe(true);
+  });
+});
+
+describe("SpawnMacHelperClient request timeout", () => {
+  // A stand-in "helper" that consumes stdin and never writes a response, so a
+  // request can only ever resolve via the transport's own deadline.
+  function writeHangScript(): string {
+    const scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "prowl-hang-")), "hang.sh");
+    fs.writeFileSync(scriptPath, "#!/bin/sh\ncat >/dev/null\n");
+    fs.chmodSync(scriptPath, 0o755);
+    return scriptPath;
+  }
+
+  it("rejects a hung request with a named-command timeout and does not leak the pending entry", async () => {
+    const scriptPath = writeHangScript();
+    const client = new SpawnMacHelperClient(scriptPath, { requestTimeoutMs: 150 });
+    try {
+      await expect(client.request("click", { query: { by: "id", value: "x" } })).rejects.toThrow(
+        'prowl-macdriver request "click" timed out after 150ms'
+      );
+      expect(client.pendingCount).toBe(0);
+      // The client stays usable: a second request also times out cleanly.
+      await expect(client.request("waitFor")).rejects.toThrow(
+        'prowl-macdriver request "waitFor" timed out after 150ms'
+      );
+      expect(client.pendingCount).toBe(0);
+    } finally {
+      await client.close();
+      fs.rmSync(path.dirname(scriptPath), { recursive: true, force: true });
+    }
   });
 });
 

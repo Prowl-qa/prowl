@@ -67,20 +67,32 @@ export function resolveHelperBinary(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 type Pending = {
+  cmd: string;
   resolve: (result: Record<string, unknown>) => void;
   reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+/** Default per-request deadline for the helper transport. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+
+export type SpawnMacHelperOptions = {
+  /** Per-request deadline; a request that gets no response by then rejects. */
+  requestTimeoutMs?: number;
 };
 
 /** A {@link MacHelperClient} backed by a spawned `prowl-macdriver serve` process. */
 export class SpawnMacHelperClient implements MacHelperClient {
   private readonly child: ChildProcess;
   private readonly pending = new Map<number, Pending>();
+  private readonly requestTimeoutMs: number;
   private stdoutBuffer = "";
   private stderrBuffer = "";
   private nextId = 1;
   private closed = false;
 
-  constructor(binaryPath: string) {
+  constructor(binaryPath: string, options: SpawnMacHelperOptions = {}) {
+    this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.child = spawn(binaryPath, ["serve"], { stdio: ["pipe", "pipe", "pipe"] });
     this.child.stdout?.setEncoding("utf-8");
     this.child.stderr?.setEncoding("utf-8");
@@ -128,6 +140,7 @@ export class SpawnMacHelperClient implements MacHelperClient {
       return;
     }
     this.pending.delete(id);
+    clearTimeout(pending.timer);
     if (message.ok === true) {
       pending.resolve((message.result as Record<string, unknown>) ?? {});
     } else {
@@ -137,9 +150,15 @@ export class SpawnMacHelperClient implements MacHelperClient {
 
   private failAll(error: Error): void {
     for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
       pending.reject(error);
     }
     this.pending.clear();
+  }
+
+  /** Number of in-flight requests awaiting a response (for teardown/tests). */
+  get pendingCount(): number {
+    return this.pending.size;
   }
 
   request(cmd: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -149,10 +168,21 @@ export class SpawnMacHelperClient implements MacHelperClient {
     const id = this.nextId++;
     const payload = JSON.stringify({ id, cmd, ...params });
     return new Promise<Record<string, unknown>>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          const shown =
+            this.requestTimeoutMs >= 1000
+              ? `${Math.round(this.requestTimeoutMs / 1000)}s`
+              : `${this.requestTimeoutMs}ms`;
+          reject(new Error(`prowl-macdriver request "${cmd}" timed out after ${shown}`));
+        }
+      }, this.requestTimeoutMs);
+      // Don't let a pending deadline keep the event loop alive on its own.
+      timer.unref?.();
+      this.pending.set(id, { cmd, resolve, reject, timer });
       this.child.stdin?.write(payload + "\n", (error) => {
-        if (error) {
-          this.pending.delete(id);
+        if (error && this.pending.delete(id)) {
+          clearTimeout(timer);
           reject(error);
         }
       });
@@ -204,9 +234,12 @@ export type LaunchMacOptions = {
 
 /** Launch/attach the target app through the helper and build a {@link MacDriver}. */
 export async function launchMacSession(options: LaunchMacOptions): Promise<MacSession> {
+  // Give the transport headroom over the app-level timeout so a legitimately
+  // slow verb (launch, waitFor) isn't killed early by the request deadline.
+  const requestTimeoutMs = Math.max(options.timeoutMs ?? 10000, DEFAULT_REQUEST_TIMEOUT_MS) + 5000;
   const client = options.clientFactory
     ? options.clientFactory()
-    : new SpawnMacHelperClient(resolveHelperBinary());
+    : new SpawnMacHelperClient(resolveHelperBinary(), { requestTimeoutMs });
   const timeoutSeconds = (options.timeoutMs ?? 10000) / 1000;
 
   try {

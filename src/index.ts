@@ -16,9 +16,9 @@ export { createMacDriver, parseMacSelector } from "./browser/mac-driver.js";
 export type { MacHelperClient, MacQuery, MacDriverOptions } from "./browser/mac-driver.js";
 export {
   launchMacSession, closeMacSession, resolveHelperBinary,
-  macdriverBuildInstructions, SpawnMacHelperClient
+  macdriverBuildInstructions, SpawnMacHelperClient, DEFAULT_REQUEST_TIMEOUT_MS
 } from "./browser/mac-helper.js";
-export type { MacSession, LaunchMacOptions } from "./browser/mac-helper.js";
+export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions } from "./browser/mac-helper.js";
 export {
   assertStepsSupportedByTarget, assertTargetAppAllowed,
   webOnlyReason, WEB_ONLY_STEP_TYPES
