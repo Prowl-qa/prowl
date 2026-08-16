@@ -9,7 +9,19 @@ import PackageDescription
 let package = Package(
     name: "prowl-macdriver",
     platforms: [.macOS(.v13)],
+    products: [
+        .executable(name: "prowl-macdriver", targets: ["prowl-macdriver"])
+    ],
     targets: [
-        .executableTarget(name: "prowl-macdriver", path: "Sources/prowl-macdriver")
+        .target(name: "ProwlMacDriverCore", path: "Sources/prowl-macdriver"),
+        .executableTarget(
+            name: "prowl-macdriver",
+            dependencies: ["ProwlMacDriverCore"],
+            path: "Sources/prowl-macdriver-cli"
+        ),
+        .testTarget(
+            name: "ProwlMacDriverCoreTests",
+            dependencies: ["ProwlMacDriverCore"]
+        )
     ]
 )

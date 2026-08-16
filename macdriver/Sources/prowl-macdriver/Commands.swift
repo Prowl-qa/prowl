@@ -7,16 +7,116 @@ import AppKit
 import ApplicationServices
 import Foundation
 
+protocol RunningApplication: AnyObject {
+    var bundleIdentifier: String? { get }
+    var isFinishedLaunching: Bool { get }
+    var isTerminated: Bool { get }
+    var processIdentifier: pid_t { get }
+
+    @discardableResult
+    func activate(options: NSApplication.ActivationOptions) -> Bool
+
+    @discardableResult
+    func terminate() -> Bool
+
+    @discardableResult
+    func forceTerminate() -> Bool
+}
+
+extension NSRunningApplication: RunningApplication {}
+
+protocol WorkspaceClient {
+    func runningApplications(withBundleIdentifier bundleIdentifier: String) -> [RunningApplication]
+    func urlForApplication(withBundleIdentifier bundleIdentifier: String) -> URL?
+    func openApplication(
+        at url: URL,
+        configuration: NSWorkspace.OpenConfiguration,
+        completionHandler: @escaping (RunningApplication?, Error?) -> Void
+    )
+}
+
+struct AppKitWorkspaceClient: WorkspaceClient {
+    private let workspace: NSWorkspace
+
+    init(workspace: NSWorkspace = .shared) {
+        self.workspace = workspace
+    }
+
+    func runningApplications(withBundleIdentifier bundleIdentifier: String) -> [RunningApplication] {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+    }
+
+    func urlForApplication(withBundleIdentifier bundleIdentifier: String) -> URL? {
+        workspace.urlForApplication(withBundleIdentifier: bundleIdentifier)
+    }
+
+    func openApplication(
+        at url: URL,
+        configuration: NSWorkspace.OpenConfiguration,
+        completionHandler: @escaping (RunningApplication?, Error?) -> Void
+    ) {
+        workspace.openApplication(at: url, configuration: configuration) { started, error in
+            completionHandler(started, error)
+        }
+    }
+}
+
+protocol StatusMenuController {
+    func dismissOpenStatusMenu(app: AXUIElement?) -> Bool
+}
+
+struct AccessibilityStatusMenuController: StatusMenuController {
+    func dismissOpenStatusMenu(app: AXUIElement?) -> Bool {
+        guard let app,
+              let status = axStatusItems(app).first,
+              let menu = axChildren(status).first(where: {
+                  axString($0, kAXRoleAttribute as String) == "AXMenu"
+              })
+        else { return false }
+        return axPerform(menu, "AXCancel") == .success
+    }
+}
+
 final class Session {
     private(set) var app: AXUIElement?
     private(set) var bundleId: String?
-    private var runningApp: NSRunningApplication?
+    private var runningApp: RunningApplication?
+    private var blockedReusePids = Set<pid_t>()
+    private let workspace: WorkspaceClient
+    private let statusMenuController: StatusMenuController
+    private let isProcessTrusted: () -> Bool
+    private let createApplication: (pid_t) -> AXUIElement
+    private let setMessagingTimeout: (AXUIElement, TimeInterval) -> Void
+    private let now: () -> Date
+    private let sleep: (useconds_t) -> Void
 
     /// How long `quit()` waits for a graceful terminate before escalating to a
     /// forced kill, and then for that kill to take effect. Kept well under the
     /// helper transport's per-request deadline so a stuck quit still returns an
     /// honest result instead of hanging the caller.
-    private let terminationTimeout: TimeInterval = 5.0
+    private let terminationTimeout: TimeInterval
+
+    init(
+        workspace: WorkspaceClient = AppKitWorkspaceClient(),
+        statusMenuController: StatusMenuController = AccessibilityStatusMenuController(),
+        isProcessTrusted: @escaping () -> Bool = AXIsProcessTrusted,
+        createApplication: @escaping (pid_t) -> AXUIElement = AXUIElementCreateApplication,
+        setMessagingTimeout: @escaping (AXUIElement, TimeInterval) -> Void = { element, timeout in
+            AXUIElementSetMessagingTimeout(element, Float(timeout))
+        },
+        now: @escaping () -> Date = Date.init,
+        sleep: @escaping (useconds_t) -> Void = { usleep($0) },
+        terminationTimeout: TimeInterval = 5.0
+    ) {
+        self.workspace = workspace
+        self.statusMenuController = statusMenuController
+        self.isProcessTrusted = isProcessTrusted
+        self.createApplication = createApplication
+        self.setMessagingTimeout = setMessagingTimeout
+        self.now = now
+        self.sleep = sleep
+        self.terminationTimeout = terminationTimeout
+    }
 
     private func requireApp() throws -> AXUIElement {
         guard let app else { throw AXFailure("no app attached — send a \"launch\" command first") }
@@ -24,7 +124,7 @@ final class Session {
     }
 
     private func requireTrusted() throws {
-        guard AXIsProcessTrusted() else {
+        guard isProcessTrusted() else {
             throw AXFailure(
                 "not trusted for Accessibility — grant the hosting terminal/app permission in "
                     + "System Settings → Privacy & Security → Accessibility"
@@ -35,12 +135,11 @@ final class Session {
     // MARK: - Lifecycle
 
     func check() -> [String: Any] {
-        ["trusted": AXIsProcessTrusted()]
+        ["trusted": isProcessTrusted()]
     }
 
     func launch(app appRef: String, timeout: TimeInterval) throws -> [String: Any] {
         try requireTrusted()
-        let ws = NSWorkspace.shared
         let looksLikePath = appRef.contains("/") || appRef.hasSuffix(".app")
 
         // Never attach to a dying instance. A previous run's app may still be
@@ -51,15 +150,15 @@ final class Session {
         // (non-terminated) instance if one exists; if only terminating instances
         // remain, wait (bounded by the launch timeout) for their PIDs to clear
         // before launching a fresh copy.
-        var running: NSRunningApplication? = looksLikePath
+        var running: RunningApplication? = looksLikePath
             ? nil
-            : awaitLaunchableInstance(bundleId: appRef, timeout: timeout)
+            : try awaitLaunchableInstance(bundleId: appRef, timeout: timeout)
 
         if running == nil {
             let url: URL
             if looksLikePath {
                 url = URL(fileURLWithPath: appRef)
-            } else if let resolved = ws.urlForApplication(withBundleIdentifier: appRef) {
+            } else if let resolved = workspace.urlForApplication(withBundleIdentifier: appRef) {
                 url = resolved
             } else {
                 throw AXFailure("no application found for bundle id \(appRef)")
@@ -68,7 +167,7 @@ final class Session {
             let semaphore = DispatchSemaphore(value: 0)
             let lock = NSLock()
             var launchError: Error?
-            ws.openApplication(at: url, configuration: config) { started, error in
+            workspace.openApplication(at: url, configuration: config) { started, error in
                 lock.lock()
                 running = started
                 launchError = error
@@ -87,9 +186,9 @@ final class Session {
             running = launchOutcome.app
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while running?.isFinishedLaunching != true && Date() < deadline {
-            usleep(100_000)
+        let deadline = now().addingTimeInterval(timeout)
+        while running?.isFinishedLaunching != true && now() < deadline {
+            sleep(100_000)
         }
         guard let resolved = running else { throw AXFailure("app did not start within \(timeout)s") }
 
@@ -99,10 +198,11 @@ final class Session {
             throw AXFailure("target \(appRef) terminated during launch")
         }
 
+        blockedReusePids.remove(resolved.processIdentifier)
         self.runningApp = resolved
         self.bundleId = resolved.bundleIdentifier ?? appRef
-        let axApp = AXUIElementCreateApplication(resolved.processIdentifier)
-        AXUIElementSetMessagingTimeout(axApp, 2.0)
+        let axApp = createApplication(resolved.processIdentifier)
+        setMessagingTimeout(axApp, 2.0)
         self.app = axApp
         return ["bundleId": bundleId ?? appRef, "pid": Int(resolved.processIdentifier)]
     }
@@ -132,28 +232,31 @@ final class Session {
         // `terminate()` only *requests* termination and returns immediately, so
         // poll `isTerminated` until the process is actually gone before returning —
         // otherwise the next run can attach to this still-dying instance.
-        target.terminate()
+        _ = target.terminate()
         if waitForTermination(of: target, timeout: terminationTimeout) {
+            blockedReusePids.remove(target.processIdentifier)
             return ["quit": true, "state": "terminated"]
         }
 
         // Didn't go quietly; escalate to a forced kill and wait for that.
-        target.forceTerminate()
+        _ = target.forceTerminate()
         if waitForTermination(of: target, timeout: terminationTimeout) {
+            blockedReusePids.remove(target.processIdentifier)
             return ["quit": true, "state": "forced"]
         }
 
         // Even the forced kill didn't take effect within the deadline. Report
         // honestly rather than pretending the app is gone.
+        blockedReusePids.insert(target.processIdentifier)
         return ["quit": false, "state": "timedOut"]
     }
 
     /// Poll `isTerminated` until the app is gone or `timeout` elapses. Returns
     /// whether the process actually terminated.
-    private func waitForTermination(of target: NSRunningApplication, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !target.isTerminated && Date() < deadline {
-            usleep(50_000)
+    private func waitForTermination(of target: RunningApplication, timeout: TimeInterval) -> Bool {
+        let deadline = now().addingTimeInterval(timeout)
+        while !target.isTerminated && now() < deadline {
+            sleep(50_000)
         }
         return target.isTerminated
     }
@@ -332,20 +435,39 @@ final class Session {
     /// never attach to a dying PID.
     private func awaitLaunchableInstance(
         bundleId: String, timeout: TimeInterval
-    ) -> NSRunningApplication? {
-        let deadline = Date().addingTimeInterval(timeout)
+    ) throws -> RunningApplication? {
+        let deadline = now().addingTimeInterval(timeout)
         while true {
-            let instances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-            if let live = instances.first(where: { !$0.isTerminated }) {
+            let instances = workspace.runningApplications(withBundleIdentifier: bundleId)
+            pruneReusablePidBlocks(from: instances)
+            if let live = instances.first(where: {
+                !$0.isTerminated && !blockedReusePids.contains($0.processIdentifier)
+            }) {
                 return live
             }
-            // No live instance. If some are still terminating and there's time
-            // left, wait for the dying PID(s) to disappear rather than launching
-            // alongside them; otherwise a fresh launch is needed.
-            let stillDying = instances.contains { $0.isTerminated }
-            guard stillDying && Date() < deadline else { return nil }
-            usleep(100_000)
+            let unresolvedBlockedPids = instances
+                .filter { !$0.isTerminated && blockedReusePids.contains($0.processIdentifier) }
+                .map(\.processIdentifier)
+            guard !unresolvedBlockedPids.isEmpty else { return nil }
+            guard now() < deadline else {
+                let pids = unresolvedBlockedPids.map(String.init).joined(separator: ", ")
+                throw AXFailure(
+                    "timed out after \(timeout)s waiting for previous \(bundleId) instance(s) "
+                        + "to exit (pid(s): \(pids))"
+                )
+            }
+            sleep(100_000)
         }
+    }
+
+    private func pruneReusablePidBlocks(from instances: [RunningApplication]) {
+        let activeBlockedPids = Set(instances.compactMap { instance -> pid_t? in
+            guard !instance.isTerminated,
+                  blockedReusePids.contains(instance.processIdentifier)
+            else { return nil }
+            return instance.processIdentifier
+        })
+        blockedReusePids = blockedReusePids.intersection(activeBlockedPids)
     }
 
     /// Cancel an open status-item menu if one is showing, returning whether a menu
@@ -355,12 +477,8 @@ final class Session {
     @discardableResult
     private func dismissOpenStatusMenu() -> Bool {
         guard let app,
-              let status = axStatusItems(app).first,
-              let menu = axChildren(status).first(where: {
-                  axString($0, kAXRoleAttribute as String) == "AXMenu"
-              })
+              statusMenuController.dismissOpenStatusMenu(app: app)
         else { return false }
-        _ = axPerform(menu, "AXCancel")
         return true
     }
 
