@@ -12,6 +12,12 @@ final class Session {
     private(set) var bundleId: String?
     private var runningApp: NSRunningApplication?
 
+    /// How long `quit()` waits for a graceful terminate before escalating to a
+    /// forced kill, and then for that kill to take effect. Kept well under the
+    /// helper transport's per-request deadline so a stuck quit still returns an
+    /// honest result instead of hanging the caller.
+    private let terminationTimeout: TimeInterval = 5.0
+
     private func requireApp() throws -> AXUIElement {
         guard let app else { throw AXFailure("no app attached — send a \"launch\" command first") }
         return app
@@ -36,9 +42,18 @@ final class Session {
         try requireTrusted()
         let ws = NSWorkspace.shared
         let looksLikePath = appRef.contains("/") || appRef.hasSuffix(".app")
+
+        // Never attach to a dying instance. A previous run's app may still be
+        // terminating — `terminate()` only *requests* termination and returns
+        // before the process is actually gone — so an unfiltered
+        // `runningApplications(...).first` can hand back a zombie whose AX tree is
+        // still readable (the launch-race bug: BUG-MAC-001). Reuse a live
+        // (non-terminated) instance if one exists; if only terminating instances
+        // remain, wait (bounded by the launch timeout) for their PIDs to clear
+        // before launching a fresh copy.
         var running: NSRunningApplication? = looksLikePath
             ? nil
-            : NSRunningApplication.runningApplications(withBundleIdentifier: appRef).first
+            : awaitLaunchableInstance(bundleId: appRef, timeout: timeout)
 
         if running == nil {
             let url: URL
@@ -78,6 +93,12 @@ final class Session {
         }
         guard let resolved = running else { throw AXFailure("app did not start within \(timeout)s") }
 
+        // Final guard: refuse to attach to a PID that died between resolution and
+        // now, so success always means a living process we can drive.
+        guard !resolved.isTerminated else {
+            throw AXFailure("target \(appRef) terminated during launch")
+        }
+
         self.runningApp = resolved
         self.bundleId = resolved.bundleIdentifier ?? appRef
         let axApp = AXUIElementCreateApplication(resolved.processIdentifier)
@@ -93,11 +114,48 @@ final class Session {
     }
 
     func quit() -> [String: Any] {
-        let terminated = runningApp?.terminate() ?? false
-        runningApp = nil
-        app = nil
-        bundleId = nil
-        return ["quit": terminated]
+        // Defuse the aggravator first: a status-item menu left open keeps an
+        // NSMenu tracking runloop alive and delays clean termination, widening the
+        // launch race. Cancel it before asking the app to quit.
+        dismissOpenStatusMenu()
+
+        defer {
+            runningApp = nil
+            app = nil
+            bundleId = nil
+        }
+
+        guard let target = runningApp, !target.isTerminated else {
+            return ["quit": true, "state": "alreadyGone"]
+        }
+
+        // `terminate()` only *requests* termination and returns immediately, so
+        // poll `isTerminated` until the process is actually gone before returning —
+        // otherwise the next run can attach to this still-dying instance.
+        target.terminate()
+        if waitForTermination(of: target, timeout: terminationTimeout) {
+            return ["quit": true, "state": "terminated"]
+        }
+
+        // Didn't go quietly; escalate to a forced kill and wait for that.
+        target.forceTerminate()
+        if waitForTermination(of: target, timeout: terminationTimeout) {
+            return ["quit": true, "state": "forced"]
+        }
+
+        // Even the forced kill didn't take effect within the deadline. Report
+        // honestly rather than pretending the app is gone.
+        return ["quit": false, "state": "timedOut"]
+    }
+
+    /// Poll `isTerminated` until the app is gone or `timeout` elapses. Returns
+    /// whether the process actually terminated.
+    private func waitForTermination(of target: NSRunningApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !target.isTerminated && Date() < deadline {
+            usleep(50_000)
+        }
+        return target.isTerminated
     }
 
     // MARK: - Element verbs
@@ -232,15 +290,8 @@ final class Session {
     }
 
     func closeMenu() throws -> [String: Any] {
-        let app = try requireApp()
-        guard let status = axStatusItems(app).first else { return ["closed": false] }
-        if let menu = axChildren(status).first(where: {
-            axString($0, kAXRoleAttribute as String) == "AXMenu"
-        }) {
-            _ = axPerform(menu, "AXCancel")
-            return ["closed": true]
-        }
-        return ["closed": false]
+        _ = try requireApp()
+        return ["closed": dismissOpenStatusMenu()]
     }
 
     func clickMenu(title: String, timeout: TimeInterval) throws -> [String: Any] {
@@ -274,6 +325,44 @@ final class Session {
     }
 
     // MARK: - Helpers
+
+    /// Return an already-running, non-terminated instance of `bundleId` to reuse,
+    /// or nil when a fresh launch is needed. If only *terminating* instances exist
+    /// (a prior run still dying), block until they clear or `timeout` elapses so we
+    /// never attach to a dying PID.
+    private func awaitLaunchableInstance(
+        bundleId: String, timeout: TimeInterval
+    ) -> NSRunningApplication? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let instances = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+            if let live = instances.first(where: { !$0.isTerminated }) {
+                return live
+            }
+            // No live instance. If some are still terminating and there's time
+            // left, wait for the dying PID(s) to disappear rather than launching
+            // alongside them; otherwise a fresh launch is needed.
+            let stillDying = instances.contains { $0.isTerminated }
+            guard stillDying && Date() < deadline else { return nil }
+            usleep(100_000)
+        }
+    }
+
+    /// Cancel an open status-item menu if one is showing, returning whether a menu
+    /// was dismissed. Best-effort and safe with no app attached — an open menu
+    /// keeps an NSMenu tracking runloop alive and delays clean termination, so
+    /// `quit()` calls this first to defuse that.
+    @discardableResult
+    private func dismissOpenStatusMenu() -> Bool {
+        guard let app,
+              let status = axStatusItems(app).first,
+              let menu = axChildren(status).first(where: {
+                  axString($0, kAXRoleAttribute as String) == "AXMenu"
+              })
+        else { return false }
+        _ = axPerform(menu, "AXCancel")
+        return true
+    }
 
     private func firstOrThrow(_ queryDict: [String: Any]) throws -> AXUIElement {
         let app = try requireApp()
