@@ -347,6 +347,25 @@ with an install/download command (`prowl doctor --fix`-style), and/or a Homebrew
 - `resolveHelperBinary` search order documented and extended (user-level install location)
 - CI recipe for macOS runners updated
 
+{PROWL-054} **BUG-MAC-001: Back-to-back macOS runs attach to the terminating previous instance**
+   Race found by Sentwise dogfooding (first real-usage bug for the macOS target): `quit()` only
+*requests* termination and returns, and `launch()` attaches to any running instance of the
+bundle id with no `isTerminated` filter (`macdriver/Sources/prowl-macdriver/Commands.swift:41,
+96`). When hunts run back-to-back, the next run attaches AX to the dying process's still-readable
+tree (status item resolves in <100ms vs ~1s for a real launch), clicks a zombie menu, then waits
+forever for a window no living process was asked to open. Aggravated by hunts that end with the
+status menu open (an active NSMenu tracking runloop delays clean termination).
+
+**Found during**: Sentwise dogfood run (2026-08-16)
+**Acceptance Criteria**:
+- `quit()` closes any open status menu (AXCancel), requests terminate, polls `isTerminated` to a
+  deadline, escalates to `forceTerminate()`, and only returns once the process is gone
+- `launch()` ignores `isTerminated` instances, waits (bounded) for a terminating instance to
+  disappear, then launches fresh — never attaches to a dying PID; verifies the PID is alive
+  before returning
+- Back-to-back `prowl run` invocations are reliable with no sleeps between them
+- No "suspiciously fast resolution" heuristics — the lifecycle fix is deterministic
+
 {PROWL-053} **REL-001: Release v0.1.4 (first release with the driver abstraction + macOS target)**
    Publishes everything merged since 0.1.3. Gate on Sentwise dogfood feedback for the macOS
 target's UX before cutting.
