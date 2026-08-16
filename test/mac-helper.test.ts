@@ -83,6 +83,21 @@ describe("closeMacSession", () => {
     expect(client.calls.some((c) => c.cmd === "quit")).toBe(true);
     expect(client.closed).toBe(true);
   });
+
+  it("closes the client even when quit reports a non-clean termination", async () => {
+    // BUG-MAC-001 fix: the quit response now reports how the app went down
+    // (`{ quit, state }`, e.g. terminated / forced / timedOut). A forced or
+    // timed-out termination must never stop teardown from closing the client.
+    const client = new FakeClient((cmd) => {
+      if (cmd === "check") return { trusted: true };
+      if (cmd === "quit") return { quit: false, state: "timedOut" };
+      return {};
+    });
+    const session = await launchMacSession({ app: "com.example.App", clientFactory: () => client });
+    await closeMacSession(session);
+    expect(client.calls.some((c) => c.cmd === "quit")).toBe(true);
+    expect(client.closed).toBe(true);
+  });
 });
 
 describe("SpawnMacHelperClient request timeout", () => {

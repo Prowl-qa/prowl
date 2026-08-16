@@ -4,6 +4,24 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **macOS target launch/quit race (BUG-MAC-001 / PROWL-054).** Back-to-back
+  `prowl run` invocations against a macOS app could attach to the *previous*
+  instance while it was still terminating — `terminate()` only requests shutdown
+  and returns immediately, and the next launch's unfiltered
+  `runningApplications(...).first` picked up the dying PID's still-readable AX
+  tree, clicked a zombie menu, then hung waiting for a window no living process
+  had been asked to open. The Swift helper's lifecycle is now deterministic:
+  `quit()` first cancels any open status-item menu (whose NSMenu tracking runloop
+  delayed clean termination), then requests terminate, polls `isTerminated` to a
+  deadline, escalates to `forceTerminate()` if needed, and only returns once the
+  process is actually gone — reporting the outcome (`terminated` / `forced` /
+  `alreadyGone` / `timedOut`) in the quit response. `launch()` now skips
+  terminating instances, waits (bounded by the launch timeout) for a still-dying
+  instance to disappear before launching fresh, and verifies the PID is still
+  alive before returning success. Back-to-back runs are now reliable with no
+  sleeps between them (PROWL-054).
+
 ### Added
 - **Experimental macOS native target (ARCH-002 / PROWL-048).** Prowl can now drive
   native macOS apps — including menu bar extras (`NSStatusItem` + `NSMenu`) — through
