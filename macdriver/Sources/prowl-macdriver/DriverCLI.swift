@@ -41,7 +41,7 @@ func int(_ value: Any?, default fallback: Int) -> Int {
 }
 
 /// Execute one decoded request, returning the `result` payload or throwing.
-func handle(_ request: [String: Any], session: Session = Session()) throws -> [String: Any] {
+func handle(_ request: [String: Any], session: Session) throws -> [String: Any] {
     guard let cmd = request["cmd"] as? String else { throw AXFailure("request is missing \"cmd\"") }
     func query() throws -> [String: Any] {
         guard let q = request["query"] as? [String: Any] else { throw AXFailure("\(cmd) requires a query") }

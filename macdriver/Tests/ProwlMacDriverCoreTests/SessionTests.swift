@@ -21,7 +21,8 @@ final class SessionTests: XCTestCase {
         app.onTerminate = { app.isTerminated = true }
         let workspace = FakeWorkspace()
         workspace.runningApplicationsForBundle = { _ in [app] }
-        let (session, _, _) = makeSession(workspace: workspace)
+        let menuController = FakeStatusMenuController(result: true)
+        let (session, _, _) = makeSession(workspace: workspace, menuController: menuController)
 
         _ = try session.launch(app: "com.example.App", timeout: 1.0)
         let result = session.quit()
@@ -30,6 +31,8 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(result["state"] as? String, "terminated")
         XCTAssertEqual(app.terminateCallCount, 1)
         XCTAssertEqual(app.forceTerminateCallCount, 0)
+        XCTAssertEqual(menuController.dismissCallCount, 1)
+        XCTAssertEqual(menuController.receivedApp, true)
     }
 
     func testQuitReturnsForcedWhenGracefulExitStalls() throws {
@@ -92,6 +95,24 @@ final class SessionTests: XCTestCase {
             XCTAssertTrue(failure.message.contains("waiting for previous com.example.App instance(s) to exit"))
         }
         XCTAssertEqual(workspace.openApplicationCallCount, 0)
+    }
+
+    func testLaunchThrowsWhenSelectedAppTerminatesDuringLaunchWait() throws {
+        let app = FakeRunningApplication(pid: 101, isFinishedLaunching: false)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let (session, clock, _) = makeSession(workspace: workspace)
+        clock.onSleep = {
+            app.isTerminated = true
+            app.isFinishedLaunching = true
+        }
+
+        XCTAssertThrowsError(try session.launch(app: "com.example.App", timeout: 1.0)) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("terminated during launch"))
+        }
     }
 
     func testCloseMenuPropagatesCancelFailure() throws {
@@ -216,6 +237,7 @@ private final class FakeStatusMenuController: StatusMenuController {
 private final class ManualClock {
     private var current = Date(timeIntervalSince1970: 0)
     private(set) var sleepCallCount = 0
+    var onSleep: (() -> Void)?
 
     func now() -> Date {
         current
@@ -224,5 +246,6 @@ private final class ManualClock {
     func sleep(_ microseconds: useconds_t) {
         sleepCallCount += 1
         current = current.addingTimeInterval(Double(microseconds) / 1_000_000)
+        onSleep?()
     }
 }
