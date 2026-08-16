@@ -293,6 +293,71 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
+## macOS Target — Phase 2 (Epic)
+
+Follow-ups to the experimental macOS native target ({PROWL-048}, shipped 2026-08-15 on `main`,
+unreleased). Priorities should be re-ordered by dogfood feedback from the first real consumer
+(Sentwise menu bar app, `prowl-hunts` branch in that repo). Phase 1 scope notes live in
+`resolved.md` under PROWL-048.
+
+{PROWL-049} **ARCH-003: Window-scoped screenshots for the macOS target**
+   Screenshots currently shell out to full-screen `screencapture -x`, so `assertScreenshot`
+baselines include the menu bar clock, wallpaper, and unrelated windows — visual diffs will be
+flaky by construction. Capture the target app's frontmost window instead.
+
+**Found during**: PROWL-048 code review (2026-08-15)
+**Acceptance Criteria**:
+- Helper captures the app's frontmost window (e.g. `screencapture -l <windowid>` via the window's `CGWindowID`, or `ScreenCaptureKit`)
+- Fallback to full-screen with a warning when no window exists (menu-only states)
+- `assertScreenshot` baselines on macOS are window-sized and stable across desktops
+- Screen Recording permission docs updated if the mechanism changes
+
+{PROWL-050} **ARCH-004: Hunt-level assertions on the macOS path**
+   The macOS run path passes `assertions: []` — config/hunt `assertions:` blocks are silently
+skipped. Evaluate the applicable subset (e.g. `selectorExists`; console/network assertions stay
+web-only) and reject or warn on inapplicable ones instead of ignoring them.
+
+**Found during**: PROWL-048 phase-1 scope notes (2026-08-15)
+**Acceptance Criteria**:
+- Applicable hunt-level assertions run after macOS steps complete
+- Web-only assertion types produce a validation error or explicit "skipped (web-only)" result, never silence
+- Tests for both paths
+
+{PROWL-051} **ARCH-005: Arbitrary key support for `press` on macOS**
+   The helper maps Enter/Return/Space onto `AXPress` and rejects everything else. Synthesize
+real keystrokes (CGEvent posting to the target app) so `press` supports the same key names as
+the web target (Escape, Tab, arrows, modifiers).
+
+**Found during**: PROWL-048 phase-1 scope notes (2026-08-15)
+**Acceptance Criteria**:
+- `press` accepts the common key vocabulary; unknown keys still error clearly
+- Keystrokes go to the target app (activate first), not whatever is frontmost
+- Docs/compatibility matrix updated
+
+{PROWL-052} **ARCH-006: Distribute the `prowl-macdriver` helper**
+   The macOS target currently requires a source checkout and local `swift build`. Ship the
+helper so npm users can use the target: prebuilt universal binary attached to GitHub Releases
+with an install/download command (`prowl doctor --fix`-style), and/or a Homebrew formula in
+`prowl-tools/homebrew-tap`. Keep the npm tarball JS-only.
+
+**Found during**: PROWL-048 phase-1 scope notes (2026-08-15)
+**Acceptance Criteria**:
+- A supported install path that doesn't require Xcode on the user's machine
+- Signed/notarized binary (or documented Gatekeeper workaround) — coordinate with the Sentwise release-automation learnings
+- `resolveHelperBinary` search order documented and extended (user-level install location)
+- CI recipe for macOS runners updated
+
+{PROWL-053} **REL-001: Release v0.1.4 (first release with the driver abstraction + macOS target)**
+   Publishes everything merged since 0.1.3. Gate on Sentwise dogfood feedback for the macOS
+target's UX before cutting.
+
+**Found during**: macOS target shipping review (2026-08-16)
+**Acceptance Criteria**:
+- **Rotate `NPM_TOKEN` first** — the granular token expires ~2026-08-27; publishing after expiry fails with a misleading 404 (see CLAUDE.md Release Configuration)
+- Standard `release-prep-npm` flow (changelog roll, `release-v0.1.4` branch, tag from main, CI publish)
+- Realign the Homebrew formula (`prowl-tools/homebrew-tap`) — currently pinned to the orphaned `1.0.0` tarball
+- README/docs clearly mark the macOS target experimental in the released package
+
 ## CI/CD & OpenShift (Epic)
 
 Make Prowl usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowl ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.
