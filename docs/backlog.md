@@ -315,18 +315,6 @@ unreleased). Priorities should be re-ordered by dogfood feedback from the first 
 (Sentwise menu bar app, `prowl-hunts` branch in that repo). Phase 1 scope notes live in
 `resolved.md` under PROWL-048.
 
-{PROWL-049} **ARCH-003: Window-scoped screenshots for the macOS target**
-   Screenshots currently shell out to full-screen `screencapture -x`, so `assertScreenshot`
-baselines include the menu bar clock, wallpaper, and unrelated windows — visual diffs will be
-flaky by construction. Capture the target app's frontmost window instead.
-
-**Found during**: PROWL-048 code review (2026-08-15)
-**Acceptance Criteria**:
-- Helper captures the app's frontmost window (e.g. `screencapture -l <windowid>` via the window's `CGWindowID`, or `ScreenCaptureKit`)
-- Fallback to full-screen with a warning when no window exists (menu-only states)
-- `assertScreenshot` baselines on macOS are window-sized and stable across desktops
-- Screen Recording permission docs updated if the mechanism changes
-
 {PROWL-050} **ARCH-004: Hunt-level assertions on the macOS path**
    The macOS run path passes `assertions: []` — config/hunt `assertions:` blocks are silently
 skipped. Evaluate the applicable subset (e.g. `selectorExists`; console/network assertions stay
