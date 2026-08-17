@@ -3,6 +3,9 @@
 All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
+- No unreleased changes.
+
+## [0.1.4] - 2026-08-16
 
 ### Fixed
 - **macOS target launch/quit race (BUG-MAC-001 / PROWL-054).** Back-to-back
