@@ -3,9 +3,6 @@
 All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes.
-
-## [0.1.4] - 2026-08-16
 
 ### Changed
 - **Window-scoped screenshots on the macOS target (ARCH-003 / PROWL-049).** The
@@ -24,6 +21,8 @@ All notable changes to Prowl will be documented in this file.
   captured by earlier macOS runs will no longer match the new window-scoped
   captures — delete and re-create them (`prowl update-baselines` or remove the
   stored baseline) after upgrading.
+
+## [0.1.4] - 2026-08-16
 
 ### Fixed
 - **macOS target launch/quit race (BUG-MAC-001 / PROWL-054).** Back-to-back
