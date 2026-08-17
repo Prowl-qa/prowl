@@ -379,6 +379,25 @@ this item is mostly TS-side shaping.
 - Guardrails honored (`allowedApps`); read-only — no clicks beyond opening the status menu
 - Docs: macOS-target page gains an "finding selectors" section
 
+{PROWL-056} **ARCH-008: Event-driven AX waits via AXObserver (BiDi lesson applied to macdriver)**
+   The Swift helper is a classic command/poll design: `waitFor` loops on 100ms sleeps, menu-open
+detection polls children. The WebDriver BiDi insight — UIs are event-driven, and protocols that
+poll them breed timing races — applies verbatim: macOS's `AXObserver` API pushes notifications
+(`AXWindowCreated`, `AXUIElementDestroyed`, focus/value changes) that the helper could subscribe
+to instead. Waits resolve the instant the state changes, with less CPU and structurally fewer
+race windows of the BUG-MAC-001 kind. Lower priority than {PROWL-049}/{PROWL-052}: today's
+polling is correct, just less elegant.
+
+**Found during**: WebDriver BiDi spec review (2026-08-16)
+**Acceptance Criteria**:
+- Helper registers `AXObserver` notifications for the attached app and resolves `waitFor` (and
+  menu-open detection in `openMenu`/`clickMenu`) from notifications, with the existing polling
+  retained as fallback for elements/notifications AX doesn't announce
+- Stdio protocol gains server-initiated event messages (distinct from id-matched responses);
+  `SpawnMacHelperClient` routes them without confusing the pending-request map
+- No behavior change to hunt semantics — same steps, same results, lower latency
+- Timeout behavior preserved exactly (a wait that never resolves still errors at its deadline)
+
 {PROWL-053} **REL-001: Release v0.1.4 (first release with the driver abstraction + macOS target)**
    Publishes everything merged since 0.1.3. Gate on Sentwise dogfood feedback for the macOS
 target's UX before cutting.
