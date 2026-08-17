@@ -398,16 +398,6 @@ polling is correct, just less elegant.
 - No behavior change to hunt semantics — same steps, same results, lower latency
 - Timeout behavior preserved exactly (a wait that never resolves still errors at its deadline)
 
-{PROWL-053} **REL-001: Release v0.1.4 (first release with the driver abstraction + macOS target)**
-   Publishes everything merged since 0.1.3. Gate on Sentwise dogfood feedback for the macOS
-target's UX before cutting.
-
-**Found during**: macOS target shipping review (2026-08-16)
-**Acceptance Criteria**:
-- **Rotate `NPM_TOKEN` first** — the granular token expires ~2026-08-27; publishing after expiry fails with a misleading 404 (see CLAUDE.md Release Configuration)
-- Standard `release-prep-npm` flow (changelog roll, `release-v0.1.4` branch, tag from main, CI publish)
-- Realign the Homebrew formula (`prowl-tools/homebrew-tap`) — currently pinned to the orphaned `1.0.0` tarball
-- README/docs clearly mark the macOS target experimental in the released package
 
 ## CI/CD & OpenShift (Epic)
 
