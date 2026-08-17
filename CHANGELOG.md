@@ -7,6 +7,24 @@ All notable changes to Prowl will be documented in this file.
 
 ## [0.1.4] - 2026-08-16
 
+### Changed
+- **Window-scoped screenshots on the macOS target (ARCH-003 / PROWL-049).** The
+  macOS helper's `screenshot` verb now captures the attached app's **frontmost
+  window** instead of the whole screen. It enumerates on-screen windows in
+  z-order (`CGWindowListCopyWindowInfo`), keeps those owned by the app's pid at
+  window layer 0, and captures the frontmost via `screencapture -x -l <windowID>`,
+  so `assertScreenshot` baselines are window-sized and stable across desktops and
+  machines with the same window content — no more menu bar clock, wallpaper, or
+  unrelated windows folded into the baseline making diffs flaky by construction.
+  When the app exposes no capturable window (menu-only apps, an open status-item
+  menu, everything minimized) it falls back to a full-screen capture and surfaces
+  a `warning` in the response (which `MacDriver.screenshot` logs via
+  `console.warn`) rather than failing the hunt. Screenshots remain gated on Screen
+  Recording permission. **Baseline invalidation:** existing full-screen baselines
+  captured by earlier macOS runs will no longer match the new window-scoped
+  captures — delete and re-create them (`prowl update-baselines` or remove the
+  stored baseline) after upgrading.
+
 ### Fixed
 - **macOS target launch/quit race (BUG-MAC-001 / PROWL-054).** Back-to-back
   `prowl run` invocations against a macOS app could attach to the *previous*
