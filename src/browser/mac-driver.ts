@@ -222,7 +222,16 @@ export function createMacDriver(client: MacHelperClient, options: MacDriverOptio
       return rejectUnsupported("evalScript") as Promise<R>;
     },
     async screenshot(screenshotOptions: { path: string; fullPage?: boolean }): Promise<void> {
-      await client.request("screenshot", { path: screenshotOptions.path });
+      // The helper captures the app's frontmost window (window-scoped baselines);
+      // `fullPage` has no analogue on a native window and is intentionally ignored.
+      // When it can't find a capturable window it falls back to a full-screen grab
+      // and reports a `warning` — surface it rather than swallowing it, so a flaky
+      // full-screen baseline isn't produced silently.
+      const result = await client.request("screenshot", { path: screenshotOptions.path });
+      const warning = result.warning;
+      if (typeof warning === "string" && warning.length > 0) {
+        console.warn(`macOS screenshot fell back to full screen: ${warning}`);
+      }
     },
 
     // network / dialogs / downloads (all web-only) -------------------------

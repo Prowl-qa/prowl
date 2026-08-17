@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMacDriver,
   parseMacSelector,
@@ -151,6 +151,40 @@ describe("createMacDriver", () => {
     await expect(driver.evaluate("1+1")).rejects.toThrow("evalScript is not supported by the macOS target");
     await expect(driver.setInputFiles("id=x", "f")).rejects.toThrow("setInputFiles is not supported by the macOS target");
     await expect(driver.waitForDownloadEvent()).rejects.toThrow("waitForDownload is not supported by the macOS target");
+  });
+
+  describe("screenshot", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("requests a screenshot with only the path (fullPage is ignored)", async () => {
+      const client = new FakeClient(() => ({ path: "/tmp/out.png", scope: "window" }));
+      const driver = createMacDriver(client);
+      await driver.screenshot({ path: "/tmp/out.png", fullPage: true });
+      expect(client.last()).toEqual({ cmd: "screenshot", params: { path: "/tmp/out.png" } });
+    });
+
+    it("stays quiet on a window-scoped capture", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const client = new FakeClient(() => ({ path: "/tmp/out.png", scope: "window" }));
+      const driver = createMacDriver(client);
+      await driver.screenshot({ path: "/tmp/out.png" });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("surfaces a full-screen fallback warning via console.warn", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const client = new FakeClient(() => ({
+        path: "/tmp/out.png",
+        scope: "fullScreen",
+        warning: "attached app has no capturable window"
+      }));
+      const driver = createMacDriver(client);
+      await driver.screenshot({ path: "/tmp/out.png" });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("attached app has no capturable window");
+    });
   });
 
   it("propagates helper errors", async () => {
