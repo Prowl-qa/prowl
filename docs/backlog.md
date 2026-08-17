@@ -158,6 +158,21 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
    Sharpen the comparison table on prowl.tools beyond feature checkmarks. Define what Prowl uniquely does better than Playwright Test, Cypress, Maestro, and Selenium — and be honest about where it's weaker. Current comparison table exists but isn't grounded in user feedback or win/loss data.
 
 **Found during**: Gap analysis (2026-02-16)
+**Practitioner pain points to ground it in** (Reddit thread research, 2026-08-16 — real language
+from Appium/Espresso/Maestro users; use these verbatim-ish, they beat feature checkmarks):
+- *"Flakiness drives me up the wall … debugging timing crap or CI fails that work fine locally"*
+  (Appium) → Prowl's answers: Playwright auto-waiting, deterministic scripted steps, flake
+  scoring/quarantine ({PROWL-035}), pinned container image ({PROWL-042}) for CI/local parity.
+  Be honest: the macOS target is black-box AX (no in-process idle signal à la Espresso).
+- *"Reliable and quick, but Android-only, and the boilerplate is a slog"* (Espresso) → hunts are
+  ~a dozen lines, no instrumentation build; platform coverage is web + experimental macOS.
+- *"YAML starts feeling like a cage when I need more control"* (Maestro) → Prowl's escape
+  hatches: `runHunt` composition, `if`/`repeat`, runtime vars, `evalScript`/`runScript`, and the
+  **library API** for graduating gnarly flows to TS (docs path tracked in prowl-docs PQD-005).
+- *"No IDs or anything useful"* → stable-selector philosophy + `prowl analyze` selector ranking
+  (macOS analog tracked as {PROWL-055}).
+- The poster's wish list (MCP-native, AI-assisted, local/BYOK, no lock-in) is Prowl's mission
+  statement — lead with it.
 **Deliverable**: Updated comparison page with:
 - "Best for" statement per competitor
 - Prowl's unique angle (YAML simplicity + agent-native + Playwright power)
@@ -346,6 +361,23 @@ with an install/download command (`prowl doctor --fix`-style), and/or a Homebrew
 - Signed/notarized binary (or documented Gatekeeper workaround) — coordinate with the Sentwise release-automation learnings
 - `resolveHelperBinary` search order documented and extended (user-level install location)
 - CI recipe for macOS runners updated
+
+{PROWL-055} **ARCH-007: `prowl analyze` for the macOS target**
+   The web target's `prowl analyze` dumps a page's interactive elements with ranked selector
+candidates; the macOS target has nothing equivalent, so hunting an app without accessibility
+identifiers means guessing selectors blind (the "app has no IDs, nothing useful to select on"
+pain from practitioner research). The helper's `tree` command already returns the full AX tree —
+this item is mostly TS-side shaping.
+
+**Found during**: Competitive/practitioner research (2026-08-16)
+**Acceptance Criteria**:
+- `prowl analyze` works when `target.type: macos`: launches/attaches to the app, dumps
+  interactive elements (buttons, text fields, menu items, windows) with ranked selector
+  candidates (`id=` > `label=` > `role=[name=]` > `text=`)
+- `--json` output for agents, human-readable table by default (parity with the web analyzer)
+- Menu bar aware: includes the status-item menu contents (opens and closes the menu to read it)
+- Guardrails honored (`allowedApps`); read-only — no clicks beyond opening the status menu
+- Docs: macOS-target page gains an "finding selectors" section
 
 {PROWL-053} **REL-001: Release v0.1.4 (first release with the driver abstraction + macOS target)**
    Publishes everything merged since 0.1.3. Gate on Sentwise dogfood feedback for the macOS
