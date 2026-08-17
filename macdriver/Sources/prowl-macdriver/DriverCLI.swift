@@ -1,17 +1,4 @@
-// prowl-macdriver — Accessibility helper behind Prowl's experimental macOS
-// execution target (PROWL-048 / ARCH-002).
-//
-// Modes:
-//   prowl-macdriver serve   Long-lived JSON-over-stdio loop (how Prowl drives it).
-//                           Reads one JSON request per line on stdin, writes one
-//                           JSON response per line on stdout. State (the attached
-//                           app, open menus) persists across requests.
-//   prowl-macdriver check   One-shot Accessibility-permission preflight; prints
-//                           {"trusted": bool} and exits 0 (trusted) or 1.
-//
-// Request:  {"id": <n>, "cmd": "<verb>", ...args}
-// Response: {"id": <n>, "ok": true, "result": {...}}
-//        or {"id": <n>, "ok": false, "error": "<message>"}
+// DriverCLI.swift — JSON-over-stdio command loop for the macOS helper.
 
 import ApplicationServices
 import Foundation
@@ -53,10 +40,8 @@ func int(_ value: Any?, default fallback: Int) -> Int {
     return fallback
 }
 
-let session = Session()
-
 /// Execute one decoded request, returning the `result` payload or throwing.
-func handle(_ request: [String: Any]) throws -> [String: Any] {
+func handle(_ request: [String: Any], session: Session) throws -> [String: Any] {
     guard let cmd = request["cmd"] as? String else { throw AXFailure("request is missing \"cmd\"") }
     func query() throws -> [String: Any] {
         guard let q = request["query"] as? [String: Any] else { throw AXFailure("\(cmd) requires a query") }
@@ -98,7 +83,7 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
     }
 }
 
-func serve() {
+func serve(session: Session = Session()) {
     while let line = readLine(strippingNewline: true) {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { continue }
@@ -115,7 +100,7 @@ func serve() {
             return
         }
         do {
-            let result = try handle(request)
+            let result = try handle(request, session: session)
             var response: [String: Any] = ["ok": true, "result": result]
             if let id { response["id"] = id }
             writeStdoutLine(response, fallbackId: id)
@@ -131,18 +116,18 @@ func serve() {
     }
 }
 
-// MARK: - Entry
-
-let mode = CommandLine.arguments.dropFirst().first ?? "serve"
-switch mode {
-case "serve":
-    serve()
-case "check":
-    let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-    let trusted = AXIsProcessTrustedWithOptions(options)
-    writeStdoutLine(["trusted": trusted])
-    exit(trusted ? 0 : 1)
-default:
-    writeStderr("usage: prowl-macdriver [serve|check]")
-    exit(2)
+public func runMain(arguments: [String] = CommandLine.arguments) {
+    let mode = arguments.dropFirst().first ?? "serve"
+    switch mode {
+    case "serve":
+        serve()
+    case "check":
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        writeStdoutLine(["trusted": trusted])
+        exit(trusted ? 0 : 1)
+    default:
+        writeStderr("usage: prowl-macdriver [serve|check]")
+        exit(2)
+    }
 }
