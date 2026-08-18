@@ -629,6 +629,32 @@ Make Prowl usable as an automated go/no-go acceptance gate in CI/CD pipelines an
 - Schema validation + unit tests for the new launch-args option
 - Depends on CICD-001
 
+{PROWL-068} **CICD-007: Prowl GitHub App — branded check runs on PRs**
+   *As a repo owner running Prowl in CI, I want the Prowl check on my PRs to carry the Prowl
+name and logo (like CodeRabbit/Codecov) instead of the generic GitHub Actions octocat.*
+   The avatar on a PR check row belongs to the GitHub App that created the check, so this
+requires a first-party **"Prowl" GitHub App** (owned by the `prowltools` account, Prowl logo as
+avatar, `checks: write` permission) publishing a check run via the Checks API. The Actions
+workflow mints an app token (`actions/create-github-app-token`) and posts a check named
+"Prowl" whose summary is rendered from `ci-result.json` (pass/fail counts, failed hunts,
+artifact pointers); consumers mark *that* check as required. Beyond cosmetics this is a
+distribution surface — per-hunt PR annotations now, links into the hosted results console
+({PROWL-066}) later.
+
+**Found during**: Sentwise CI dogfooding (2026-08-18 — PR checks showed octocat + stale
+"Prowl QA" naming)
+**Acceptance Criteria**:
+- App creation is a documented manual step for the repo owner (name "Prowl", logo upload,
+  `checks: write`, install on target repos); no app credentials ever committed
+- A rendering path from `ci-result.json` to check-run `output` (title/summary/failed-hunt
+  detail) — either a documented `gh api` recipe or a small `prowl` helper subcommand; failed
+  hunts listed with their failure step, capped sensibly
+- Check conclusion mirrors `prowl ci` exit semantics (0 → success, 1 → failure, 2 → neutral)
+- Copy-paste workflow snippet in docs (prowl-docs CI section, cross-repo duty)
+- First consumer: Sentwise's `prowl-qa.yml` adopts it, the branded check becomes the required
+  one, and the workflow/job is renamed from the retired "Prowl QA" branding to "Prowl"
+- Optional stretch: per-hunt check-run annotations on the changed files
+
 {PROWL-046} **CICD-005: Enterprise productization (LARGE — do last)**
    *As a Red Hat / enterprise customer, I want a certified, governed Prowl distribution integrated with the OpenShift Console.*
    Captured per full-scope decision, but **do not start before CICD-001–004 ship** — building an Operator first is overkill (per the Red Hat SA's own advice). Will likely split into sub-items when picked up.
