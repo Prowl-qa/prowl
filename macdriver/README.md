@@ -39,6 +39,15 @@ Preflight from the command line:
 ```
 
 `screenshot` additionally needs Screen Recording permission for the hosting app.
+It captures the attached app's **frontmost window** (via
+`CGWindowListCopyWindowInfo` → `screencapture -x -l <windowID>`) so baselines are
+window-sized and stable across desktops and machines — a full-screen grab would
+fold in the menu bar clock, wallpaper, and unrelated windows and make
+`assertScreenshot` diffs flaky. Both the window enumeration (which only returns
+window IDs with the grant) and the capture itself require Screen Recording. When
+the app exposes no capturable window (menu-only apps, an open status-item menu,
+everything minimized) it falls back to a full-screen capture and includes a
+`warning` in the response rather than failing the shot.
 
 ## Protocol
 

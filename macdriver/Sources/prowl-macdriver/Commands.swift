@@ -5,6 +5,7 @@
 
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Foundation
 
 protocol RunningApplication: AnyObject {
@@ -90,6 +91,16 @@ final class Session {
     private let now: () -> Date
     private let sleep: (useconds_t) -> Void
 
+    /// On-screen windows in front-to-back z-order, each a raw
+    /// `CGWindowListCopyWindowInfo` dictionary. Injected so `screenshot()`'s
+    /// window-selection logic is unit-testable without a live window server.
+    private let listOnScreenWindows: () -> [[String: Any]]
+
+    /// Runs `/usr/sbin/screencapture` with the given arguments (throwing on a
+    /// non-zero exit). Injected so screenshot capture is testable without
+    /// spawning the real binary or touching the display.
+    private let runScreencapture: ([String]) throws -> Void
+
     /// How long `quit()` waits for a graceful terminate before escalating to a
     /// forced kill, and then for that kill to take effect. Kept well under the
     /// helper transport's per-request deadline so a stuck quit still returns an
@@ -106,7 +117,9 @@ final class Session {
         },
         now: @escaping () -> Date = Date.init,
         sleep: @escaping (useconds_t) -> Void = { usleep($0) },
-        terminationTimeout: TimeInterval = 5.0
+        terminationTimeout: TimeInterval = 5.0,
+        listOnScreenWindows: @escaping () -> [[String: Any]] = Session.defaultListOnScreenWindows,
+        runScreencapture: @escaping ([String]) throws -> Void = Session.defaultRunScreencapture
     ) {
         self.workspace = workspace
         self.statusMenuController = statusMenuController
@@ -116,6 +129,49 @@ final class Session {
         self.now = now
         self.sleep = sleep
         self.terminationTimeout = terminationTimeout
+        self.listOnScreenWindows = listOnScreenWindows
+        self.runScreencapture = runScreencapture
+    }
+
+    /// Live on-screen window enumeration, front-to-back. `.optionOnScreenOnly`
+    /// already yields z-order (frontmost first) and drops minimized/off-screen
+    /// windows; `.excludeDesktopElements` drops the desktop/Dock icon layer.
+    /// Reading window owners/IDs reliably requires Screen Recording permission.
+    static let defaultListOnScreenWindows: () -> [[String: Any]] = {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        return (CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]) ?? []
+    }
+
+    private static let screencaptureTimeout: TimeInterval = 10.0
+
+    /// Spawns `/usr/sbin/screencapture` with a bounded wait and fails loudly on
+    /// timeout or a non-zero exit.
+    static let defaultRunScreencapture: ([String]) throws -> Void = { arguments in
+        try Session.runScreencapture(arguments: arguments, timeout: Session.screencaptureTimeout)
+    }
+
+    static func runScreencapture(
+        arguments: [String],
+        timeout: TimeInterval,
+        executableURL: URL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    ) throws {
+        let process = Process()
+        let completed = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in completed.signal() }
+        process.executableURL = executableURL
+        process.arguments = arguments
+        try process.run()
+
+        guard completed.wait(timeout: .now() + timeout) == .success else {
+            if process.isRunning {
+                process.terminate()
+            }
+            throw AXFailure("screencapture timed out after \(timeout)s; terminated the capture process")
+        }
+
+        guard process.terminationStatus == 0 else {
+            throw AXFailure("screencapture exited with status \(process.terminationStatus)")
+        }
     }
 
     private func requireApp() throws -> AXUIElement {
@@ -345,16 +401,46 @@ final class Session {
         throw AXFailure("timed out after \(timeout)s waiting for element")
     }
 
+    /// Capture the attached app's frontmost window so `assertScreenshot`
+    /// baselines are window-sized and stable across desktops/machines — a
+    /// full-screen grab folds in the menu bar clock, wallpaper, and unrelated
+    /// windows, which makes visual diffs flaky by construction (ARCH-003).
+    ///
+    /// Falls back to a full-screen capture when the app exposes no capturable
+    /// window (menu-only apps, a status-item menu open, everything minimized),
+    /// surfacing a `warning` in the payload so the caller knows the baseline is
+    /// not window-scoped — never fails the shot solely because enumeration came
+    /// up empty. Still gated on Screen Recording permission either way.
     func screenshot(path: String) throws -> [String: Any] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        process.arguments = ["-x", path]
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            throw AXFailure("screencapture exited with status \(process.terminationStatus)")
+        if let pid = runningApp?.processIdentifier,
+           let windowID = frontmostWindowID(pid: pid) {
+            try runScreencapture(["-x", "-l", String(windowID), path])
+            return ["path": path, "scope": "window"]
         }
-        return ["path": path]
+
+        try runScreencapture(["-x", path])
+        let warning = runningApp == nil
+            ? "no app attached; captured the full screen instead of an app window "
+                + "(baseline may include unrelated desktop content and be unstable)"
+            : "attached app has no capturable window (menu-only or menu open); captured the "
+                + "full screen instead (baseline may include unrelated desktop content and be unstable)"
+        return ["path": path, "scope": "fullScreen", "warning": warning]
+    }
+
+    /// The window ID of the attached app's frontmost normal window, or nil when
+    /// it has none. Keeps only windows owned by `pid` at layer 0 (ordinary app
+    /// windows — layer 0 excludes the menu bar, Dock, and status-item menus,
+    /// which sit at higher layers) and returns the first, which is frontmost
+    /// because the enumeration is in front-to-back z-order.
+    private func frontmostWindowID(pid: pid_t) -> CGWindowID? {
+        for info in listOnScreenWindows() {
+            guard let ownerPID = info[kCGWindowOwnerPID as String] as? Int, ownerPID == Int(pid) else { continue }
+            guard (info[kCGWindowLayer as String] as? Int) == 0 else { continue }
+            if let number = info[kCGWindowNumber as String] as? Int {
+                return CGWindowID(number)
+            }
+        }
+        return nil
     }
 
     // MARK: - Menu bar interaction

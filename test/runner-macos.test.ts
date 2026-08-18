@@ -8,11 +8,11 @@ import type { MacHelperClient } from "../src/browser/mac-driver.js";
 class FakeClient implements MacHelperClient {
   calls: { cmd: string; params: Record<string, unknown> }[] = [];
   constructor(
-    private readonly responder: (cmd: string) => Record<string, unknown> = () => ({})
+    private readonly responder: (cmd: string, params: Record<string, unknown>) => Record<string, unknown> = () => ({})
   ) {}
   async request(cmd: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     this.calls.push({ cmd, params });
-    return this.responder(cmd);
+    return this.responder(cmd, params);
   }
   async close(): Promise<void> {}
 }
@@ -66,6 +66,39 @@ describe("runHunt — macOS target (PROWL-048)", () => {
       expect(cmds).toContain("count"); // assert visible
       expect(cmds).toContain("quit"); // teardown
       expect(fs.existsSync(path.join(runDir, "result.json"))).toBe(true);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("runs an assertScreenshot hunt with the window-scoped helper response shape", async () => {
+    const project = setupProject(
+      MAC_CONFIG,
+      "shot",
+      "steps:\n  - assertScreenshot: { name: 'home' }\n"
+    );
+    // The helper writes the capture to the requested path and reports the new
+    // window-scoped response shape ({ path, scope }); the runner must accept it
+    // and create the baseline on first run.
+    const client = new FakeClient((cmd, params) => {
+      if (cmd === "screenshot") {
+        fs.writeFileSync(String(params.path), "PNGDATA");
+        return { path: params.path, scope: "window" };
+      }
+      return macResponder(cmd);
+    });
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({ huntName: "shot", macClientFactory: () => client });
+
+      expect(result.status).toBe("pass");
+      const shot = client.calls.find((c) => c.cmd === "screenshot");
+      expect(shot).toBeDefined();
+      expect(typeof shot?.params.path).toBe("string");
+      expect(shot?.params).not.toHaveProperty("fullPage");
+      expect(result.steps.some((s) => s.type === "assertScreenshot" && s.status === "pass")).toBe(true);
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });

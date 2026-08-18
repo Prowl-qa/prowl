@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 @testable import ProwlMacDriverCore
 import XCTest
 
@@ -115,6 +116,95 @@ final class SessionTests: XCTestCase {
         }
     }
 
+    func testRunScreencaptureTimesOutAndReportsAXFailure() {
+        let started = Date()
+
+        XCTAssertThrowsError(try Session.runScreencapture(
+            arguments: ["5"],
+            timeout: 0.1,
+            executableURL: URL(fileURLWithPath: "/bin/sleep")
+        )) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("screencapture timed out after 0.1s"))
+            XCTAssertTrue(failure.message.contains("terminated the capture process"))
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2.0)
+    }
+
+    func testRunScreencapturePreservesNonZeroExitFailureBeforeTimeout() {
+        XCTAssertThrowsError(try Session.runScreencapture(
+            arguments: ["-c", "exit 7"],
+            timeout: 5.0,
+            executableURL: URL(fileURLWithPath: "/bin/sh")
+        )) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertEqual(failure.message, "screencapture exited with status 7")
+        }
+    }
+
+    func testScreenshotCapturesFrontmostWindowOfAttachedApp() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        var captured: [[String]] = []
+        // Front-to-back z-order: another app's window is frontmost, then our
+        // app's status-menu layer, then our app's real windows. Selection must
+        // skip the other owner and the non-zero layer and take window 42.
+        let windows: [[String: Any]] = [
+            window(pid: 999, layer: 0, number: 1),
+            window(pid: 101, layer: 25, number: 2),
+            window(pid: 101, layer: 0, number: 42),
+            window(pid: 101, layer: 0, number: 43)
+        ]
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            listOnScreenWindows: { windows },
+            runScreencapture: { captured.append($0) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.screenshot(path: "/tmp/out.png")
+
+        XCTAssertEqual(result["scope"] as? String, "window")
+        XCTAssertEqual(result["path"] as? String, "/tmp/out.png")
+        XCTAssertNil(result["warning"])
+        XCTAssertEqual(captured, [["-x", "-l", "42", "/tmp/out.png"]])
+    }
+
+    func testScreenshotFallsBackToFullScreenWithWarningWhenNoWindow() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        var captured: [[String]] = []
+        // Our app is present only at a menu layer (menu-only / status-menu-open
+        // state) — no layer-0 window to scope to.
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            listOnScreenWindows: { [self.window(pid: 101, layer: 25, number: 2)] },
+            runScreencapture: { captured.append($0) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.screenshot(path: "/tmp/out.png")
+
+        XCTAssertEqual(result["scope"] as? String, "fullScreen")
+        XCTAssertEqual(result["path"] as? String, "/tmp/out.png")
+        XCTAssertNotNil(result["warning"] as? String)
+        XCTAssertEqual(captured, [["-x", "/tmp/out.png"]])
+    }
+
+    private func window(pid: Int, layer: Int, number: Int) -> [String: Any] {
+        [
+            kCGWindowOwnerPID as String: pid,
+            kCGWindowLayer as String: layer,
+            kCGWindowNumber as String: number
+        ]
+    }
+
     func testCloseMenuPropagatesCancelFailure() throws {
         let app = FakeRunningApplication(pid: 101)
         let workspace = FakeWorkspace()
@@ -133,7 +223,9 @@ final class SessionTests: XCTestCase {
     private func makeSession(
         workspace: FakeWorkspace,
         menuController: FakeStatusMenuController = FakeStatusMenuController(result: true),
-        terminationTimeout: TimeInterval = 0.5
+        terminationTimeout: TimeInterval = 0.5,
+        listOnScreenWindows: @escaping () -> [[String: Any]] = { [] },
+        runScreencapture: @escaping ([String]) throws -> Void = { _ in }
     ) -> (Session, ManualClock, FakeStatusMenuController) {
         let clock = ManualClock()
         let session = Session(
@@ -144,7 +236,9 @@ final class SessionTests: XCTestCase {
             setMessagingTimeout: { _, _ in },
             now: clock.now,
             sleep: clock.sleep,
-            terminationTimeout: terminationTimeout
+            terminationTimeout: terminationTimeout,
+            listOnScreenWindows: listOnScreenWindows,
+            runScreencapture: runScreencapture
         )
         return (session, clock, menuController)
     }
