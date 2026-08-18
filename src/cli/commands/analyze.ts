@@ -9,6 +9,7 @@ import { launchMacSession } from "../../browser/mac-helper.js";
 import { assertTargetAppAllowed } from "../../config/target.js";
 import { findConfigPath, loadConfig, resolveViewport } from "../../config/loader.js";
 
+/** Parse a viewport flag into a named preset or an explicit width/height pair. */
 function parseViewportFlag(value: string): string | { width: number; height: number } {
   const match = /^(\d+)x(\d+)$/i.exec(value);
   if (match) {
@@ -113,6 +114,7 @@ async function runWebAnalyze(url: string, options: Record<string, unknown>): Pro
   }
 }
 
+/** Print one macOS analysis element in the human-readable analyze output. */
 function printMacElement(el: MacAnalysisElement): void {
   const role = chalk.cyan(el.role);
   const [best] = el.selectors;
@@ -173,6 +175,7 @@ async function runMacAnalyze(app: string, config: Config | null, options: Record
   }
 }
 
+/** Build the `prowl analyze` command for both web URLs and macOS app targets. */
 export function buildAnalyzeCommand(): Command {
   const command = new Command("analyze")
     .argument("[url]", "URL to analyze (web target)")
