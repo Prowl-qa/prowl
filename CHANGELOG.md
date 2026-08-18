@@ -4,6 +4,28 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`prowl analyze` for the macOS target (ARCH-007 / PROWL-055).** The analyzer
+  now works on native apps, not just web pages: when the loaded config has
+  `target.type: macos` (or you pass `--app <bundle-id|.app-path>` to run without a
+  config), `prowl analyze` launches/attaches to the app through the existing
+  `prowl-macdriver` helper and dumps its interactive elements — buttons, text
+  fields, checkboxes, pop-ups, links, sliders, etc. — each with **ranked selector
+  candidates** in the native selector dialect: `id=<AXIdentifier>` (best) >
+  `label="<title/description>"` > `role=<role>[name="<name>"]` > `text="<substring>"`
+  (last resort), so authoring macOS hunts no longer means guessing selectors
+  blind. It also lists top-level **windows** as navigable surfaces and is **menu
+  bar aware** — when the app has a status item it opens the status-item menu,
+  reads the items (their `AXIdentifier`s are the most durable selectors), and
+  closes it again. The command is **read-only** apart from that single
+  open/close-menu interaction, quits the app cleanly afterward, and honors
+  `guardrails.allowedApps` before launch (mirroring the run path). `--json`
+  emits agent-friendly output; the default is a human-readable table with the
+  same shape and feel as the web analyzer. The web `prowl analyze <url>` path is
+  unchanged. New library exports: `analyzeMacApp`, `rankMacSelectors`,
+  `INTERACTIVE_ROLES`, `DEFAULT_ANALYZE_TREE_DEPTH`, and the `MacAnalysisResult` /
+  `MacAnalysisElement` / `MacAnalysisWindow` types.
+
 ### Changed
 - **Window-scoped screenshots on the macOS target (ARCH-003 / PROWL-049).** The
   macOS helper's `screenshot` verb now captures the attached app's **frontmost
