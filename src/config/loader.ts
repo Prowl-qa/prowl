@@ -112,8 +112,22 @@ export function resolveViewport(
  * configs are untouched.
  */
 function resolveTarget(target: Config["target"] | undefined): Target {
-  if (target && (target as { type?: string }).type === "macos") {
+  const type = (target as { type?: string } | undefined)?.type;
+  if (type === "macos") {
     return { type: "macos", app: (target as { app: string }).app };
+  }
+  if (type === "android") {
+    const androidTarget = target as {
+      app: string;
+      deviceSerial?: string;
+      coldStart?: boolean;
+    };
+    return {
+      type: "android",
+      app: androidTarget.app,
+      ...(androidTarget.deviceSerial !== undefined ? { deviceSerial: androidTarget.deviceSerial } : {}),
+      ...(androidTarget.coldStart !== undefined ? { coldStart: androidTarget.coldStart } : {})
+    };
   }
   return {
     type: "web",
