@@ -116,6 +116,36 @@ final class SessionTests: XCTestCase {
         }
     }
 
+    func testRunScreencaptureTimesOutAndReportsAXFailure() {
+        let started = Date()
+
+        XCTAssertThrowsError(try Session.runScreencapture(
+            arguments: ["5"],
+            timeout: 0.1,
+            executableURL: URL(fileURLWithPath: "/bin/sleep")
+        )) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("screencapture timed out after 0.1s"))
+            XCTAssertTrue(failure.message.contains("terminated the capture process"))
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2.0)
+    }
+
+    func testRunScreencapturePreservesNonZeroExitFailureBeforeTimeout() {
+        XCTAssertThrowsError(try Session.runScreencapture(
+            arguments: ["-c", "exit 7"],
+            timeout: 5.0,
+            executableURL: URL(fileURLWithPath: "/bin/sh")
+        )) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertEqual(failure.message, "screencapture exited with status 7")
+        }
+    }
+
     func testScreenshotCapturesFrontmostWindowOfAttachedApp() throws {
         let app = FakeRunningApplication(pid: 101)
         let workspace = FakeWorkspace()

@@ -142,13 +142,33 @@ final class Session {
         return (CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]]) ?? []
     }
 
-    /// Spawns `/usr/sbin/screencapture` and fails loudly on a non-zero exit.
+    private static let screencaptureTimeout: TimeInterval = 10.0
+
+    /// Spawns `/usr/sbin/screencapture` with a bounded wait and fails loudly on
+    /// timeout or a non-zero exit.
     static let defaultRunScreencapture: ([String]) throws -> Void = { arguments in
+        try Session.runScreencapture(arguments: arguments, timeout: Session.screencaptureTimeout)
+    }
+
+    static func runScreencapture(
+        arguments: [String],
+        timeout: TimeInterval,
+        executableURL: URL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    ) throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        let completed = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in completed.signal() }
+        process.executableURL = executableURL
         process.arguments = arguments
         try process.run()
-        process.waitUntilExit()
+
+        guard completed.wait(timeout: .now() + timeout) == .success else {
+            if process.isRunning {
+                process.terminate()
+            }
+            throw AXFailure("screencapture timed out after \(timeout)s; terminated the capture process")
+        }
+
         guard process.terminationStatus == 0 else {
             throw AXFailure("screencapture exited with status \(process.terminationStatus)")
         }

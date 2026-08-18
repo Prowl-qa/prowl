@@ -17,10 +17,12 @@ All notable changes to Prowl will be documented in this file.
   menu, everything minimized) it falls back to a full-screen capture and surfaces
   a `warning` in the response (which `MacDriver.screenshot` logs via
   `console.warn`) rather than failing the hunt. Screenshots remain gated on Screen
-  Recording permission. **Baseline invalidation:** existing full-screen baselines
-  captured by earlier macOS runs will no longer match the new window-scoped
-  captures — delete and re-create them (`prowl update-baselines` or remove the
-  stored baseline) after upgrading.
+  Recording permission. The helper now bounds each `screencapture` subprocess to
+  10 seconds and terminates it with an explicit timeout error instead of blocking
+  later helper commands indefinitely. **Baseline invalidation:** existing
+  full-screen baselines captured by earlier macOS runs will no longer match the
+  new window-scoped captures — delete and re-create them (`prowl update-baselines`
+  or remove the stored baseline) after upgrading.
 
 ## [0.1.4] - 2026-08-16
 
