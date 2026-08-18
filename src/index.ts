@@ -67,6 +67,15 @@ export { interpolateHunt } from "./config/interpolate.js";
 export { analyzePage } from "./analyzer/index.js";
 export type { AnalysisResult, PageElement, PageForm, PageLink } from "./analyzer/index.js";
 
+// Re-export the macOS analyzer (PROWL-055)
+export {
+  analyzeMacApp, rankMacSelectors, INTERACTIVE_ROLES, DEFAULT_ANALYZE_TREE_DEPTH
+} from "./analyzer/mac.js";
+export type {
+  MacAnalysisResult, MacAnalysisElement, MacAnalysisWindow,
+  MacAxNode, AnalyzeMacOptions
+} from "./analyzer/mac.js";
+
 // Re-export generator
 export { generateHunt } from "./generator/index.js";
 export type { GenerateOptions } from "./generator/index.js";
