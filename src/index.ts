@@ -1,7 +1,7 @@
 // Re-export public types
 export type {
   Config, Hunt, Step, Assertion,
-  Target, WebTarget, MacosTarget,
+  Target, WebTarget, MacosTarget, AndroidTarget,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
   CiResult, CiHuntResult, CiStatus, CiFlakyHunt, CiFailureCluster,
@@ -19,9 +19,32 @@ export {
   macdriverBuildInstructions, SpawnMacHelperClient, DEFAULT_REQUEST_TIMEOUT_MS
 } from "./browser/mac-helper.js";
 export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions } from "./browser/mac-helper.js";
+
+// Re-export the experimental Android target (PROWL-058)
 export {
-  assertStepsSupportedByTarget, assertTargetAppAllowed,
-  webOnlyReason, WEB_ONLY_STEP_TYPES
+  createAndroidDriver, parseAndroidSelector, androidQueryToLocator,
+  unwrapAndroidTextSelector, escapeUiSelectorArg, ANDROID_KEYCODES
+} from "./browser/android-driver.js";
+export type { AndroidAgentClient, AndroidQuery, AndroidLocator, AndroidDriverOptions } from "./browser/android-driver.js";
+export {
+  launchAndroidSession, closeAndroidSession, resolveAgentApks,
+  defaultAgentConnector, UIA2_REMOTE_PORT
+} from "./browser/android-helper.js";
+export type { AndroidSession, LaunchAndroidOptions, AgentApks, AgentConnector } from "./browser/android-helper.js";
+export {
+  Uia2Transport, createUia2AgentClient, createUia2Session,
+  waitForAgentReady, extractElementId, Uia2HttpError, DEFAULT_AGENT_REQUEST_TIMEOUT_MS
+} from "./browser/android-agent.js";
+export type { FetchLike, Uia2TransportOptions } from "./browser/android-agent.js";
+export {
+  parseAdbDevices, selectDeviceSerial, parseForwardPort, parseAaptPackage,
+  bootedDevices, listDevices
+} from "./browser/android-adb.js";
+export type { AdbDevice, AdbRunner, AdbResult, AdbSpawner } from "./browser/android-adb.js";
+
+export {
+  assertStepsSupportedByTarget, assertTargetAppAllowed, assertAndroidAppAllowed,
+  androidAppAllowedIdentities, webOnlyReason, WEB_ONLY_STEP_TYPES
 } from "./config/target.js";
 
 // Re-export runner
