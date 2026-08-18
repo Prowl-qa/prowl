@@ -17,6 +17,20 @@
 - Consider filing a trademark application in Classes 9 and 42 specifically for QA testing tools
 - Using "Prowl" or "prowl" as the primary brand provides stronger differentiation
 
+{PROWL-057} **REL-001: Migrate npm publishing to OIDC Trusted Publishing**
+   npm has announced that 2FA-bypass granular tokens lose direct-publish rights in January 2027,
+and the current `NPM_TOKEN` expires ~2026-11-15 (rotated 2026-08-17). Move
+`.github/workflows/publish.yml` to npm Trusted Publishing (OIDC) so releases stop depending on a
+long-lived secret that must be rotated every 90 days. Should land before the next token expiry.
+
+**Found during**: v0.1.4 release prep (2026-08-17, token-rotation incident)
+**Acceptance Criteria**:
+- `publish.yml` authenticates to npm via OIDC (`permissions: id-token: write`, trusted publisher
+  configured on the `prowl-tools` npm package for `prowl-tools/prowl`)
+- `--provenance` retained
+- `NPM_TOKEN` repo secret deleted after the first successful OIDC-published release
+- Release Configuration section in `CLAUDE.md` updated (no more token-rotation choreography)
+
 {PROWL-024} **P6-001: VS Code Extension**
    VS Code extension for Prowl hunt authoring and execution.
 
@@ -369,6 +383,97 @@ polling is correct, just less elegant.
 - No behavior change to hunt semantics — same steps, same results, lower latency
 - Timeout behavior preserved exactly (a wait that never resolves still errors at its deadline)
 
+
+## Mobile Target (Epic)
+
+Add Android and iOS as first-class Prowl targets, extending the `SessionDriver` abstraction the
+same way the macOS target did. Motivation (competitive research, 2026-08-18): Maestro owns the
+"simple YAML mobile testing" mindshare; BrowserStack's App Automate runs Maestro suites as a
+first-class framework, which means mobile YAML runners are now cloud-portable — Prowl without a
+mobile target concedes that whole segment. Architecture decision from the research spike:
+**"Maestro-shaped, Appium-parts"** — no Appium server, no JVM, no gRPC. Each platform gets a
+thin driver that shells out for device lifecycle and speaks plain HTTP/JSON (raw `fetch`, per
+the `ai.ts` no-heavy-SDKs ethos) to a battle-tested, Apache-2.0, standalone on-device agent
+maintained by the Appium project. This mirrors the macdriver pattern exactly (external helper +
+JSON protocol) and beats Maestro's own implementation on two known weaknesses: no JVM
+dependency, and dynamically allocated ports so parallel sessions/CI jobs work from day one.
+Build order: **PROWL-058 (Android) first** — Linux CI story is cheapest and real devices come
+free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062 (real iOS
+devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
+swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
+
+{PROWL-058} **ARCH-009: Android target (emulators + real devices)**
+   *As a mobile developer, I want `target: { type: "android" }` so my app's smoke tests run as
+Prowl hunts on an emulator or USB device.*
+   Driver = `adb` for lifecycle/screenshots + the prebuilt `appium-uiautomator2-server` APK pair
+(Apache-2.0, ships as files inside its npm package) started via `am instrument`, port-forwarded
+with a **dynamically allocated** local port, driven over its W3C-shaped HTTP/JSON API with raw
+`fetch`.
+
+**Found during**: BrowserStack/mobile competitive research (2026-08-18)
+**Acceptance Criteria**:
+- `target: { type: "android", app: "<package-or-apk>" }`; guardrails `allowedApps` extended to
+  Android package names
+- Lifecycle: install/launch/terminate via adb; deterministic cold start (`pm clear` opt-in)
+- Verbs: tap/click, typeText (unicode-safe), press, waitFor, assert visible, screenshot — same
+  step vocabulary as macOS where applicable; `WEB_ONLY_STEP_TYPES` handling extended
+- Selector dialect maps onto the hierarchy: `id=` → `resource-id`, `label=` → `content-desc`,
+  `text=` → visible text, `role=` → widget class; Compose caveat (`testTagsAsResourceId`)
+  documented
+- Degraded pure-adb fallback (`uiautomator dump` + `input tap`) is a diagnostic mode only, not
+  the primary path
+- Preflight (`check`-style) validates adb on PATH + a booted device; actionable errors
+- Unit tests with a faked agent transport (mirroring the mac-helper test approach)
+
+{PROWL-059} **ARCH-010: iOS Simulator target**
+   *As an iOS developer, I want `target: { type: "ios" }` so my app's smoke tests run as Prowl
+hunts on a booted simulator.*
+   Driver = `xcrun simctl` for lifecycle/screenshots/permission-pregrant + a prebuilt
+WebDriverAgent runner (Apache-2.0, Appium-maintained) preinstalled and launched via
+`simctl launch`, driven over its WebDriver HTTP/JSON API with raw `fetch` on a dynamic port.
+No xcodebuild at session time (build-and-cache WDA keyed on Xcode version).
+
+**Found during**: BrowserStack/mobile competitive research (2026-08-18)
+**Acceptance Criteria**:
+- `target: { type: "ios", app: "<bundle-id-or-.app>" }`; `allowedApps` extended to iOS bundle ids
+- Simulators only — real devices explicitly out of scope ({PROWL-062})
+- Same verb/selector parity bar as PROWL-058: `id=` → accessibilityIdentifier, `label=` →
+  accessibilityLabel, `text=` → StaticText label/value, `role=` → XCUIElementType
+- Deterministic screenshots: `simctl statusbar override` support
+- Preflight validates macOS + Xcode/simctl + a booted sim; actionable errors
+- Unit tests with a faked WDA transport
+
+{PROWL-060} **ARCH-011: Unified native selector engine (snapshot-then-match)**
+   Both mobile agents return full hierarchy snapshots (`/source`). Match selectors host-side in
+one shared TS engine so `id=`/`label=`/`text=`/`role=` mean the same thing on Android, iOS, and
+(eventually) macOS — one place for dialect docs, one place for the `label=`-in-assertions trap.
+
+**Found during**: BrowserStack/mobile competitive research (2026-08-18)
+**Acceptance Criteria**:
+- Shared matcher module consumed by both mobile drivers; per-platform attribute mapping tables
+- Selector semantics documented in one compatibility matrix (web / macOS / Android / iOS)
+- Evaluate migrating macdriver matching onto it later; no behavior change required now
+
+{PROWL-061} **CICD-006: Mobile targets in CI + `prowl analyze` support**
+   Make the mobile targets usable beyond a laptop: `prowl analyze --app` branches for
+Android/iOS (reusing the PROWL-055 analyzer shape), plus copy-paste CI recipes — Android on
+standard `ubuntu-latest` (KVM-accelerated emulator via `reactivecircus/android-emulator-runner`)
+and iOS sims on `macos-*` runners with cached WDA.
+
+**Found during**: BrowserStack/mobile competitive research (2026-08-18)
+**Acceptance Criteria**:
+- `prowl analyze` works against a booted emulator/simulator app: windows/screens, interactive
+  elements, ranked selectors — same output contract as the macOS analyzer
+- GitHub Actions recipes for both platforms in docs; junit + artifacts wiring shown
+- prowl-docs gains a mobile-target page (cross-repo duty)
+
+{PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
+   Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
+make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and
+manages tunnels without Xcode, even from Linux). Parked until PROWL-058/059 ship and a real
+user asks; note Android real devices already work via {PROWL-058}.
+
+**Found during**: BrowserStack/mobile competitive research (2026-08-18)
 
 ## CI/CD & OpenShift (Epic)
 
