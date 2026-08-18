@@ -18,7 +18,8 @@ All notable changes to Prowl will be documented in this file.
   bar aware** — when the app has a status item it opens the status-item menu,
   reads the items (their `AXIdentifier`s are the most durable selectors), and
   closes it again. The command is **read-only** apart from that single
-  open/close-menu interaction, quits the app cleanly afterward, and honors
+  open/close-menu interaction, closes the helper connection without quitting the
+  target app, and honors
   `guardrails.allowedApps` before launch (mirroring the run path). `--json`
   emits agent-friendly output; the default is a human-readable table with the
   same shape and feel as the web analyzer. The web `prowl analyze <url>` path is

@@ -5,9 +5,9 @@ import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../../brows
 import { parseBrowserEngine } from "../../browser/engines.js";
 import { analyzePage } from "../../analyzer/index.js";
 import { analyzeMacApp, type MacAnalysisElement } from "../../analyzer/mac.js";
-import { launchMacSession, closeMacSession } from "../../browser/mac-helper.js";
+import { launchMacSession } from "../../browser/mac-helper.js";
 import { assertTargetAppAllowed } from "../../config/target.js";
-import { loadConfig, resolveViewport } from "../../config/loader.js";
+import { findConfigPath, loadConfig, resolveViewport } from "../../config/loader.js";
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
   const match = /^(\d+)x(\d+)$/i.exec(value);
@@ -17,12 +17,20 @@ function parseViewportFlag(value: string): string | { width: number; height: num
   return value;
 }
 
-/** Best-effort config load; returns null when no config exists (so `--app` works standalone). */
+/** Optional config load; returns null only when no default config exists. */
 function tryLoadConfig(configPath?: string): Config | null {
-  try {
-    return loadConfig(configPath).config;
-  } catch {
+  const configLocation = configPath !== undefined
+    ? configPath
+    : findConfigPath(process.cwd());
+  if (configLocation === null) {
     return null;
+  }
+
+  try {
+    return loadConfig(configLocation).config;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown configuration error";
+    throw new Error(`Failed to load config at ${configLocation}: ${message}`);
   }
 }
 
@@ -161,7 +169,7 @@ async function runMacAnalyze(app: string, config: Config | null, options: Record
       );
     }
   } finally {
-    await closeMacSession(session);
+    await session.client.close();
   }
 }
 

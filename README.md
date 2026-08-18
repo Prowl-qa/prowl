@@ -992,7 +992,7 @@ same way it does on the web: it launches/attaches to the app, walks the
 Accessibility tree, and prints every interactive element with **ranked selector
 candidates** (best first) plus the app's windows and status-item menu contents.
 It is read-only (the only interaction is opening and closing the status menu),
-honors `guardrails.allowedApps`, and quits the app when done.
+honors `guardrails.allowedApps`, and leaves the app running when done.
 
 ```bash
 # Uses the macOS target from .prowl/config.yml:
@@ -1008,7 +1008,7 @@ prowl analyze --app com.example.App --json
 
 Example (human-readable) output:
 
-```
+```text
   App Analysis: com.example.App
 
   Windows:
