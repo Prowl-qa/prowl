@@ -475,6 +475,106 @@ user asks; note Android real devices already work via {PROWL-058}.
 
 **Found during**: BrowserStack/mobile competitive research (2026-08-18)
 
+## Commercialization — Prowl Cloud (Epic)
+
+Turn Prowl into a sellable product without abandoning the mission. Model decision (owner,
+2026-08-18, grounded in Maestro/Cypress/Sentry/Momentic monetization research): **open-core**.
+The CLI stays Apache-2.0 and free forever for local/self-hosted CI use; revenue comes from
+**convenience layers**, in this order: (1) **managed AI metered by credits** — AI features work
+with a Prowl account and no API key, routed through our provider keys with margin (the Momentic
+pattern); (2) **hosted results/team dashboards** — execution stays on the user's machines, we
+host history/trends/sharing (the Cypress Cloud pattern). **Standing guarantees, not up for
+re-litigation per item:** BYOK remains a supported free path forever (we invert Maestro's
+BYOK-removal, which now forces an account even for local AI); no existing local feature is ever
+paywalled retroactively; **no hosted device-execution farm** (explicit non-goal — capital-heavy,
+commoditized under open runners; partner/integrate instead if demanded). Design the paid layer
+so the value is the *service* (AI quality, dashboards, support), not a gateable API — Cypress's
+dashboard-blocking backlash and Maestro's discount resellers (DeviceCloud, Moropo) are the
+cautionary tales. Server-side components will live in a new repo (working name `prowl-cloud`);
+this epic tracks the CLI-side work and the overall sequencing. Build order: **BIZ-001 →
+BIZ-002 → BIZ-003**, with BIZ-004 as the second act and BIZ-005 alongside first paid launch.
+
+{PROWL-063} **BIZ-001: Prowl account + CLI auth (`prowl login`)**
+   *As a user, I want to sign in from the CLI so AI features can work without me managing an API
+key.*
+   Foundation for everything paid: account service, `prowl login` / `prowl logout` /
+`PROWL_API_KEY` env for CI, token storage outside the repo, `prowl whoami`. Anonymous use of
+everything that works today must remain untouched — auth is only consulted by features that
+need the cloud.
+
+**Found during**: Commercialization decision (2026-08-18)
+**Acceptance Criteria**:
+- `prowl login` (browser/device-code flow) and `PROWL_API_KEY` for headless CI
+- Credentials stored user-level (never in `.prowl/` or the repo); redacted from all artifacts
+- No existing command's behavior changes when logged out
+- Server counterpart tracked in the `prowl-cloud` repo once created
+
+{PROWL-064} **BIZ-002: Managed AI proxy with credit metering**
+   *As a user, I want AI-powered features to just work on my Prowl account, and as the owner, I
+want each AI call metered in credits with margin.*
+   A thin hosted endpoint in front of the existing raw-`fetch` provider abstraction
+(`src/generator/ai.ts`): CLI sends the same provider-shaped requests to our proxy when no BYOK
+key is configured; proxy authenticates the account, routes to a provider with our keys, meters
+credits, bills via Stripe. Free monthly credit allowance for the funnel; BYOK bypasses the
+proxy entirely (user pays their provider directly, we never see the traffic).
+
+**Found during**: Commercialization decision (2026-08-18)
+**Acceptance Criteria**:
+- Resolution order documented and tested: explicit BYOK key → managed proxy (logged in) →
+  actionable error naming both options
+- Credit metering + Stripe billing on the server side; CLI surfaces remaining credits and a
+  clear out-of-credits error (never a silent failure or a hung hunt)
+- No request/response content retained server-side beyond what billing requires — privacy
+  posture documented (this is the trust story; it must be true)
+- Depends on {PROWL-063}
+
+{PROWL-065} **BIZ-003: Dual-path AI feature set (first consumers)**
+   Ship the AI features that make BIZ-002 worth paying for, each working identically via BYOK or
+managed credits: `assertWithAI` ({PROWL-020}) as the first consumer, then AI hunt generation
+(natural language → hunt YAML, leaning on `prowl analyze` output for grounded selectors) and
+AI selector-repair suggestions on failure (suggest-only in reports — never silent self-healing;
+determinism is the product).
+
+**Found during**: Commercialization decision (2026-08-18)
+**Acceptance Criteria**:
+- {PROWL-020} implemented with the BIZ-002 resolution order
+- `prowl generate` (or similar): prompt + analyze snapshot → draft hunt YAML for human review
+- Failed-selector suggestions appear in the run report as proposals, never auto-applied
+- Every feature degrades gracefully with neither key nor account (skip/warn, never break runs)
+- Depends on {PROWL-064}
+
+{PROWL-066} **BIZ-004: Hosted results console (`prowl push`)**
+   *As a team, we want shared run history, flake trends, and failure artifacts without standing
+up our own storage.*
+   Opt-in upload of the existing file-based artifacts (`result.json`, junit, screenshots,
+traces) to a hosted console: history per hunt, flake scoring over time, shareable failure
+links, PR annotations. Execution never moves to the cloud — this monetizes visibility, not
+infra. Supersedes/absorbs the "hosted report ingestion" line inside {PROWL-046} for
+non-enterprise users.
+
+**Found during**: Commercialization decision (2026-08-18)
+**Acceptance Criteria**:
+- `prowl push` (and `prowl ci --push`) uploads a run's artifacts under the account's project
+- Console: run list, per-hunt history/trends, artifact viewing, shareable links
+- Team seats/roles at minimum viable level; data export + delete (self-sovereignty guarantee —
+  leaving must be easy and complete)
+- Depends on {PROWL-063}; independent of BIZ-002/003
+
+{PROWL-067} **BIZ-005: Pricing, packaging & site launch**
+   Decide and publish the tiers (working hypothesis: Free = full CLI + BYOK + free credit
+allowance; Pro = credit bundle + hosted console; Team/Enterprise later), update `prowl.tools`
+with honest pricing and the "never locked in" guarantee stated as policy, and update docs.
+Coordinate with {PROWL-037} (positioning matrix) so the anti-metered-lock-in message and the
+paid tiers don't contradict each other — the line is: we charge for convenience, never for
+your data or your exit.
+
+**Found during**: Commercialization decision (2026-08-18)
+**Acceptance Criteria**:
+- Pricing page live with real numbers; free tier limits stated plainly (no surprise-renewal
+  dark patterns — the BrowserStack Trustpilot file is the anti-pattern)
+- Docs cover BYOK vs managed paths side by side
+- CHANGELOG/README updated when the first paid feature ships
+
 ## CI/CD & OpenShift (Epic)
 
 Make Prowl usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowl ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.
