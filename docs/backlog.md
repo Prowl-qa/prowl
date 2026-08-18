@@ -350,23 +350,6 @@ with an install/download command (`prowl doctor --fix`-style), and/or a Homebrew
 - `resolveHelperBinary` search order documented and extended (user-level install location)
 - CI recipe for macOS runners updated
 
-{PROWL-055} **ARCH-007: `prowl analyze` for the macOS target**
-   The web target's `prowl analyze` dumps a page's interactive elements with ranked selector
-candidates; the macOS target has nothing equivalent, so hunting an app without accessibility
-identifiers means guessing selectors blind (the "app has no IDs, nothing useful to select on"
-pain from practitioner research). The helper's `tree` command already returns the full AX tree —
-this item is mostly TS-side shaping.
-
-**Found during**: Competitive/practitioner research (2026-08-16)
-**Acceptance Criteria**:
-- `prowl analyze` works when `target.type: macos`: launches/attaches to the app, dumps
-  interactive elements (buttons, text fields, menu items, windows) with ranked selector
-  candidates (`id=` > `label=` > `role=[name=]` > `text=`)
-- `--json` output for agents, human-readable table by default (parity with the web analyzer)
-- Menu bar aware: includes the status-item menu contents (opens and closes the menu to read it)
-- Guardrails honored (`allowedApps`); read-only — no clicks beyond opening the status menu
-- Docs: macOS-target page gains an "finding selectors" section
-
 {PROWL-056} **ARCH-008: Event-driven AX waits via AXObserver (BiDi lesson applied to macdriver)**
    The Swift helper is a classic command/poll design: `waitFor` loops on 100ms sleeps, menu-open
 detection polls children. The WebDriver BiDi insight — UIs are event-driven, and protocols that

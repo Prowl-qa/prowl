@@ -985,6 +985,52 @@ Native selectors address accessibility identifiers, roles, and labels:
 semantics as the web target). Prefer `id=` (accessibility identifiers) — the native
 analog of `data-testid`.
 
+### Finding selectors
+
+Don't guess selectors — dump them. `prowl analyze` works on the macOS target the
+same way it does on the web: it launches/attaches to the app, walks the
+Accessibility tree, and prints every interactive element with **ranked selector
+candidates** (best first) plus the app's windows and status-item menu contents.
+It is read-only (the only interaction is opening and closing the status menu),
+honors `guardrails.allowedApps`, and leaves the app running when done.
+
+```bash
+# Uses the macOS target from .prowl/config.yml:
+prowl analyze
+
+# …or point it at any app without a config:
+prowl analyze --app com.example.App
+prowl analyze --app "/Applications/Example.app"
+
+# Machine-readable output for agents:
+prowl analyze --app com.example.App --json
+```
+
+Example (human-readable) output:
+
+```text
+  App Analysis: com.example.App
+
+  Windows:
+    "Main Window" id=mainWindow
+
+  Interactive Elements:
+    AXButton id=saveButton "Save"
+    AXTextField label="Email" "Email"
+    AXCheckBox label="Remember me" "Remember me" (disabled)
+
+  Menu Bar:
+    AXMenuItem id=preferences "Preferences…"
+    AXMenuItem label="Quit" "Quit"
+
+  3 elements, 1 windows, 2 menu items
+```
+
+Selectors are ranked `id=` > `label=` > `role=…[name="…"]` > `text=` — copy the
+first (most durable) candidate into your hunt. Status-item menu identifiers
+(`id=preferences` above) are especially valuable, since menu titles often carry
+ellipses or localized text that are awkward to match by substring.
+
 ### Step compatibility
 
 Portable steps run on **both** targets; web-only steps are rejected up front on the
