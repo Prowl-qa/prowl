@@ -1,7 +1,7 @@
 // Re-export public types
 export type {
   Config, Hunt, Step, Assertion,
-  Target, WebTarget, MacosTarget, AndroidTarget,
+  Target, WebTarget, MacosTarget, AndroidTarget, IosTarget,
   StepResult, AssertionResult, RunResult, RunArtifacts,
   BrowserEngine, BrowserChannel, Viewport,
   CiResult, CiHuntResult, CiStatus, CiFlakyHunt, CiFailureCluster,
@@ -42,9 +42,32 @@ export {
 } from "./browser/android-adb.js";
 export type { AdbDevice, AdbRunner, AdbResult, AdbSpawner } from "./browser/android-adb.js";
 
+// Re-export the experimental iOS simulator target (PROWL-059)
+export {
+  createIosDriver, parseIosSelector, iosQueryToLocator,
+  unwrapIosTextSelector, escapePredicateArg, normalizeXcuiClassName, IOS_PRESS_KEYS
+} from "./browser/ios-driver.js";
+export type { IosAgentClient, IosQuery, IosLocator, IosDriverOptions } from "./browser/ios-driver.js";
+export {
+  launchIosSession, closeIosSession, resolveWdaRunner, resolveWdaProject,
+  defaultIosAgentConnector, wdaCacheDir, WDA_RUNNER_BUNDLE_ID, WDA_RUNNER_APP_NAME
+} from "./browser/ios-helper.js";
+export type { IosSession, LaunchIosOptions, IosAgentConnector, ResolveWdaRunnerOptions } from "./browser/ios-helper.js";
+export {
+  WdaTransport, createWdaAgentClient, createWdaSession,
+  waitForWdaReady, WdaHttpError, DEFAULT_WDA_REQUEST_TIMEOUT_MS
+} from "./browser/ios-agent.js";
+export type { WdaTransportOptions } from "./browser/ios-agent.js";
+export {
+  parseSimctlDevices, selectSimulatorUdid, bootedSimulators,
+  listSimulators, findFreePort, parseXcodeVersion
+} from "./browser/ios-simctl.js";
+export type { SimDevice, SimctlRunner, SimctlResult } from "./browser/ios-simctl.js";
+
 export {
   assertStepsSupportedByTarget, assertTargetAppAllowed, assertAndroidAppAllowed,
-  androidAppAllowedIdentities, webOnlyReason, WEB_ONLY_STEP_TYPES
+  androidAppAllowedIdentities, assertIosAppAllowed, iosAppAllowedIdentities,
+  readIosBundleIdentifier, webOnlyReason, WEB_ONLY_STEP_TYPES
 } from "./config/target.js";
 
 // Re-export runner

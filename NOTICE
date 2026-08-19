@@ -17,6 +17,11 @@ appium-uiautomator2-server
   Copyright (c) Appium Contributors
   https://github.com/appium/appium-uiautomator2-server
 
+appium-webdriveragent
+  License: Apache-2.0
+  Copyright (c) Appium Contributors
+  https://github.com/appium/WebDriverAgent
+
 chalk
   License: MIT
   https://github.com/chalk/chalk
