@@ -32,10 +32,27 @@ const androidTargetSchema = z
   })
   .strict();
 
+// iOS simulator target (experimental, PROWL-059): requires `type: "ios"` and an
+// app (bundle id or .app path). `udid` picks a specific booted simulator;
+// `coldStart` opts into an uninstall+reinstall before launch (requires a .app path).
+const iosTargetSchema = z
+  .object({
+    type: z.literal("ios"),
+    app: z.string().min(1),
+    udid: z.string().min(1).optional(),
+    coldStart: z.boolean().optional()
+  })
+  .strict();
+
 // The typed branches are tried first because each is the only one with its own
 // `type` literal; a bare `{ url }` (no type) falls through to web. An object that
 // matches none of the branches is rejected with a union error.
-export const targetSchema = z.union([macosTargetSchema, androidTargetSchema, webTargetSchema]);
+export const targetSchema = z.union([
+  macosTargetSchema,
+  androidTargetSchema,
+  iosTargetSchema,
+  webTargetSchema
+]);
 
 export const configSchema = z
   .object({

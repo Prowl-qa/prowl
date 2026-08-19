@@ -46,7 +46,25 @@ export type AndroidTarget = {
   coldStart?: boolean;
 };
 
-export type Target = WebTarget | MacosTarget | AndroidTarget;
+/**
+ * iOS simulator native execution target (experimental, PROWL-059). `app` is an
+ * iOS bundle identifier (e.g. `com.example.App`) or an absolute/relative path to
+ * a built `.app` bundle, which Prowl installs onto the simulator before launch.
+ * Optional `udid` selects a specific booted simulator; `coldStart` opts into an
+ * uninstall+reinstall before launch (default off, and only possible with a `.app`
+ * path). Real devices are out of scope (PROWL-062) — simulators only. iOS
+ * guardrails match bundle ids, the bundle name, or the canonical `.app` path.
+ */
+export type IosTarget = {
+  type: "ios";
+  app: string;
+  /** UDID of the booted simulator to target when more than one is booted. */
+  udid?: string;
+  /** Uninstall+reinstall the app before launch for a deterministic cold start (default off). */
+  coldStart?: boolean;
+};
+
+export type Target = WebTarget | MacosTarget | AndroidTarget | IosTarget;
 
 export type Config = {
   target: Target;
