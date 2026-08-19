@@ -187,6 +187,41 @@ describe("loadConfig macOS target (PROWL-048)", () => {
     }
   });
 
+  it("loads an android target with deviceSerial and coldStart and injects no domain", () => {
+    const project = setupMacProject(
+      "target:\n  type: android\n  app: 'com.example.app'\n  deviceSerial: 'emulator-5554'\n  coldStart: true\nguardrails:\n  allowedApps: ['com.example.app']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({
+        type: "android",
+        app: "com.example.app",
+        deviceSerial: "emulator-5554",
+        coldStart: true
+      });
+      expect(config.guardrails.allowedApps).toEqual(["com.example.app"]);
+      expect(config.guardrails.allowedDomains).toEqual(["localhost", "127.0.0.1", "0.0.0.0"]);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("omits optional android fields when they are not set", () => {
+    const project = setupMacProject("target:\n  type: android\n  app: 'com.example.app'\n");
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({ type: "android", app: "com.example.app" });
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
   it("defaults allowedApps to an empty list for web targets", () => {
     const project = setupTempProject();
     const cwd = process.cwd();

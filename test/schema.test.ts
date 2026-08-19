@@ -32,6 +32,33 @@ describe("configSchema target discriminant (PROWL-048)", () => {
     ).toThrow();
   });
 
+  it("accepts an android target with a package name", () => {
+    const parsed = configSchema.parse({ target: { type: "android", app: "com.example.app" } });
+    expect(parsed.target).toEqual({ type: "android", app: "com.example.app" });
+  });
+
+  it("accepts an android target with deviceSerial and coldStart", () => {
+    const parsed = configSchema.parse({
+      target: { type: "android", app: "com.example.app", deviceSerial: "emulator-5554", coldStart: true }
+    });
+    expect(parsed.target).toEqual({
+      type: "android",
+      app: "com.example.app",
+      deviceSerial: "emulator-5554",
+      coldStart: true
+    });
+  });
+
+  it("rejects an android target without an app", () => {
+    expect(() => configSchema.parse({ target: { type: "android" } })).toThrow();
+  });
+
+  it("rejects an android target that also carries a url", () => {
+    expect(() =>
+      configSchema.parse({ target: { type: "android", app: "com.example.app", url: "http://x" } })
+    ).toThrow();
+  });
+
   it("rejects a web target with no url", () => {
     expect(() => configSchema.parse({ target: { type: "web" } })).toThrow();
   });

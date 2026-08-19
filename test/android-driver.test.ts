@@ -1,0 +1,282 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  androidQueryToLocator,
+  createAndroidDriver,
+  escapeUiSelectorArg,
+  parseAndroidSelector,
+  unwrapAndroidTextSelector,
+  type AndroidAgentClient,
+  type AndroidQuery
+} from "../src/browser/android-driver.js";
+
+class FakeAgent implements AndroidAgentClient {
+  findElementQueries: AndroidQuery[] = [];
+  findElementsQueries: AndroidQuery[] = [];
+  clicks: string[] = [];
+  setValues: { id: string; text: string }[] = [];
+  keyCodes: number[] = [];
+  closed = false;
+  elementId: string | null = "el-1";
+  elements: string[] = ["el-1"];
+  text: string | null = "hello";
+  png: Buffer = Buffer.from("PNGDATA");
+
+  async findElement(query: AndroidQuery): Promise<string | null> {
+    this.findElementQueries.push(query);
+    return this.elementId;
+  }
+  async findElements(query: AndroidQuery): Promise<string[]> {
+    this.findElementsQueries.push(query);
+    return this.elements;
+  }
+  async click(id: string): Promise<void> {
+    this.clicks.push(id);
+  }
+  async setValue(id: string, text: string): Promise<void> {
+    this.setValues.push({ id, text });
+  }
+  async getText(): Promise<string | null> {
+    return this.text;
+  }
+  async pressKeyCode(code: number): Promise<void> {
+    this.keyCodes.push(code);
+  }
+  async screenshotPng(): Promise<Buffer> {
+    return this.png;
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+  }
+}
+
+describe("parseAndroidSelector (PROWL-058 selector dialect)", () => {
+  it("parses id selectors (bare, quoted, and fully qualified)", () => {
+    expect(parseAndroidSelector("id=save")).toEqual({ by: "id", value: "save" });
+    expect(parseAndroidSelector('id="save"')).toEqual({ by: "id", value: "save" });
+    expect(parseAndroidSelector("id=com.example:id/save")).toEqual({
+      by: "id",
+      value: "com.example:id/save"
+    });
+  });
+
+  it("maps label= to content-desc (accessibility id)", () => {
+    expect(parseAndroidSelector('label="Submit"')).toEqual({ by: "accessibilityId", value: "Submit" });
+    expect(parseAndroidSelector("label=Submit")).toEqual({ by: "accessibilityId", value: "Submit" });
+  });
+
+  it("parses role selectors with and without a name", () => {
+    expect(parseAndroidSelector("role=android.widget.Button")).toEqual({
+      by: "role",
+      role: "android.widget.Button"
+    });
+    expect(parseAndroidSelector('role=android.widget.Button[name="Save"]')).toEqual({
+      by: "role",
+      role: "android.widget.Button",
+      name: "Save"
+    });
+  });
+
+  it("parses text selectors and falls back to bare text", () => {
+    expect(parseAndroidSelector('text="Save"')).toEqual({ by: "text", value: "Save" });
+    expect(parseAndroidSelector("text=Welcome")).toEqual({ by: "text", value: "Welcome" });
+    expect(parseAndroidSelector("Just some label")).toEqual({ by: "text", value: "Just some label" });
+  });
+
+  it("maps :focus to the focused element", () => {
+    expect(parseAndroidSelector(":focus")).toEqual({ by: "focused" });
+  });
+});
+
+describe("androidQueryToLocator", () => {
+  it("uses native strategies for id and content-desc", () => {
+    expect(androidQueryToLocator({ by: "id", value: "save" })).toEqual({ using: "id", value: "save" });
+    expect(androidQueryToLocator({ by: "accessibilityId", value: "Submit" })).toEqual({
+      using: "accessibility id",
+      value: "Submit"
+    });
+  });
+
+  it("composes a UiSelector for substring text (mirrors macOS text= semantics)", () => {
+    expect(androidQueryToLocator({ by: "text", value: "Save" })).toEqual({
+      using: "-android uiautomator",
+      value: 'new UiSelector().textContains("Save")'
+    });
+  });
+
+  it("maps a bare role to a class name and a role+name to class + text", () => {
+    expect(androidQueryToLocator({ by: "role", role: "android.widget.Button" })).toEqual({
+      using: "class name",
+      value: "android.widget.Button"
+    });
+    expect(androidQueryToLocator({ by: "role", role: "android.widget.Button", name: "Save" })).toEqual({
+      using: "-android uiautomator",
+      value: 'new UiSelector().className("android.widget.Button").textContains("Save")'
+    });
+  });
+
+  it("resolves the focused element", () => {
+    expect(androidQueryToLocator({ by: "focused" })).toEqual({
+      using: "-android uiautomator",
+      value: "new UiSelector().focused(true)"
+    });
+  });
+
+  it("escapes quotes and backslashes to keep UiSelector expressions safe", () => {
+    expect(escapeUiSelectorArg('a"b\\c')).toBe('a\\"b\\\\c');
+    expect(androidQueryToLocator({ by: "text", value: 'He said "hi"' })).toEqual({
+      using: "-android uiautomator",
+      value: 'new UiSelector().textContains("He said \\"hi\\"")'
+    });
+  });
+});
+
+describe("unwrapAndroidTextSelector", () => {
+  it("returns inner text for text= selectors, null otherwise", () => {
+    expect(unwrapAndroidTextSelector('text="Delete"')).toBe("Delete");
+    expect(unwrapAndroidTextSelector("text=Delete")).toBe("Delete");
+    expect(unwrapAndroidTextSelector("id=x")).toBeNull();
+    expect(unwrapAndroidTextSelector('label="Delete"')).toBeNull();
+  });
+});
+
+describe("createAndroidDriver", () => {
+  it("declares only the honest capability set", () => {
+    const driver = createAndroidDriver(new FakeAgent());
+    expect([...driver.capabilities].sort()).toEqual(["interact", "query", "screenshot", "wait"]);
+    expect(driver.capabilities.has("navigate")).toBe(false);
+    expect(driver.capabilities.has("evaluate")).toBe(false);
+  });
+
+  it("counts via findElements", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["a", "b", "c"];
+    const driver = createAndroidDriver(agent);
+    expect(await driver.count("id=row")).toBe(3);
+    expect(agent.findElementsQueries.at(-1)).toEqual({ by: "id", value: "row" });
+  });
+
+  it("resolves then clicks an element", async () => {
+    const agent = new FakeAgent();
+    const driver = createAndroidDriver(agent);
+    await driver.click("id=save");
+    expect(agent.findElementQueries.at(-1)).toEqual({ by: "id", value: "save" });
+    expect(agent.clicks).toEqual(["el-1"]);
+  });
+
+  it("throws a clear error when no element matches a click", async () => {
+    const agent = new FakeAgent();
+    agent.elementId = null;
+    const driver = createAndroidDriver(agent);
+    await expect(driver.click("id=missing")).rejects.toThrow("No element matched selector: id=missing");
+  });
+
+  it("fills the focused element for :focus (type step) and by selector otherwise", async () => {
+    const agent = new FakeAgent();
+    const driver = createAndroidDriver(agent);
+    await driver.fill(":focus", "hello");
+    expect(agent.findElementQueries.at(-1)).toEqual({ by: "focused" });
+    expect(agent.setValues.at(-1)).toEqual({ id: "el-1", text: "hello" });
+    await driver.fill("id=email", "a@b.c");
+    expect(agent.findElementQueries.at(-1)).toEqual({ by: "id", value: "email" });
+    expect(agent.setValues.at(-1)).toEqual({ id: "el-1", text: "a@b.c" });
+  });
+
+  it("maps press keys to Android key codes and rejects unknown keys", async () => {
+    const agent = new FakeAgent();
+    const driver = createAndroidDriver(agent);
+    await driver.press("id=field", "Enter");
+    await driver.press("id=field", "back");
+    expect(agent.keyCodes).toEqual([66, 4]);
+    await expect(driver.press("id=field", "F13")).rejects.toThrow('Unsupported key "F13"');
+  });
+
+  it("waits for a selector, polling until it appears", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["el-1"];
+    const driver = createAndroidDriver(agent);
+    await expect(driver.waitForSelector("id=ready", { timeout: 1000 })).resolves.toBeUndefined();
+  });
+
+  it("times out waiting for a selector that never appears", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [];
+    const driver = createAndroidDriver(agent);
+    await expect(driver.waitForSelector("id=never", { timeout: 30 })).rejects.toThrow(
+      "Timed out after 30ms waiting for selector: id=never"
+    );
+  });
+
+  it("writes a screenshot to disk from PNG bytes", async () => {
+    const agent = new FakeAgent();
+    agent.png = Buffer.from("SCREENSHOT-BYTES");
+    const driver = createAndroidDriver(agent);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-android-shot-"));
+    const target = path.join(dir, "out.png");
+    try {
+      await driver.screenshot({ path: target, fullPage: true });
+      expect(fs.readFileSync(target).toString()).toBe("SCREENSHOT-BYTES");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("sends role/label semantic queries", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["x"];
+    const driver = createAndroidDriver(agent);
+    await driver.countByRole("android.widget.Button", "Save");
+    expect(agent.findElementsQueries.at(-1)).toEqual({
+      by: "role",
+      role: "android.widget.Button",
+      name: "Save"
+    });
+    await driver.fillFirstByLabel("Email", "a@b.c");
+    expect(agent.findElementQueries.at(-1)).toEqual({ by: "accessibilityId", value: "Email" });
+    expect(agent.setValues.at(-1)).toEqual({ id: "el-1", text: "a@b.c" });
+  });
+
+  it("returns element text or null", async () => {
+    const present = new FakeAgent();
+    present.text = "Saved";
+    expect(await createAndroidDriver(present).textContent("text=Saved")).toBe("Saved");
+
+    const missing = new FakeAgent();
+    missing.elementId = null;
+    expect(await createAndroidDriver(missing).textContent("id=x")).toBeNull();
+  });
+
+  it("exposes the package label via currentUrl and unwraps text selectors", () => {
+    const driver = createAndroidDriver(new FakeAgent(), { appLabel: "com.example.app" });
+    expect(driver.currentUrl()).toBe("android:com.example.app");
+    expect(driver.parseTextSelector('text="Delete"')).toBe("Delete");
+    expect(driver.parseTextSelector("id=x")).toBeNull();
+  });
+
+  it("rejects web-only and touch-incompatible verbs with a clear message", async () => {
+    const driver = createAndroidDriver(new FakeAgent());
+    await expect(driver.goto("http://x")).rejects.toThrow("navigate is not supported by the Android target");
+    await expect(driver.evaluate("1+1")).rejects.toThrow("evalScript is not supported by the Android target");
+    await expect(driver.setInputFiles("id=x", "f")).rejects.toThrow(
+      "setInputFiles is not supported by the Android target"
+    );
+    await expect(driver.hover("id=x")).rejects.toThrow("hover is not supported by the Android target");
+    await expect(driver.scrollIntoView("id=x")).rejects.toThrow(
+      "scrollTo is not supported by the Android target"
+    );
+    await expect(driver.waitForDownloadEvent()).rejects.toThrow(
+      "waitForDownload is not supported by the Android target"
+    );
+  });
+
+  it("propagates agent errors", async () => {
+    const agent = new FakeAgent();
+    agent.findElement = async () => {
+      throw new Error("device offline");
+    };
+    const driver = createAndroidDriver(agent);
+    await expect(driver.click("id=x")).rejects.toThrow("device offline");
+  });
+});
