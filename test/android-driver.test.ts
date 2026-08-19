@@ -195,9 +195,11 @@ describe("createAndroidDriver", () => {
 
   it("waits for a selector, polling until it appears", async () => {
     const agent = new FakeAgent();
-    agent.elements = ["el-1"];
     const driver = createAndroidDriver(agent);
+    let calls = 0;
+    agent.findElements = async () => (++calls < 3 ? [] : ["el-1"]);
     await expect(driver.waitForSelector("id=ready", { timeout: 1000 })).resolves.toBeUndefined();
+    expect(calls).toBe(3);
   });
 
   it("times out waiting for a selector that never appears", async () => {
@@ -269,6 +271,10 @@ describe("createAndroidDriver", () => {
     await expect(driver.waitForDownloadEvent()).rejects.toThrow(
       "waitForDownload is not supported by the Android target"
     );
+    expect(() => driver.onResponse(() => {})).toThrow(
+      "onResponse is not supported by the Android target"
+    );
+    expect(() => driver.onDialog("accept")).toThrow("onDialog is not supported by the Android target");
   });
 
   it("propagates agent errors", async () => {

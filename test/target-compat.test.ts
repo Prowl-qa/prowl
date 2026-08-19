@@ -198,11 +198,39 @@ describe("androidAppAllowedIdentities / assertAndroidAppAllowed", () => {
     expect(() => assertAndroidAppAllowed(["com.example.app"], "com.example.app")).not.toThrow();
   });
 
-  it("matches an .apk path by path or file name", () => {
-    const identities = androidAppAllowedIdentities("build/outputs/app-debug.apk");
-    expect(identities).toContain("app-debug.apk");
-    expect(identities).toContain("app-debug");
-    expect(() => assertAndroidAppAllowed(["app-debug.apk"], "build/outputs/app-debug.apk")).not.toThrow();
+  it("matches an .apk target by resolved package identity", () => {
+    const apkPath = "build/outputs/app-debug.apk";
+    expect(androidAppAllowedIdentities(apkPath, "com.example.app")).toContain("com.example.app");
+    expect(() => assertAndroidAppAllowed(["com.example.app"], apkPath, "com.example.app")).not.toThrow();
+  });
+
+  it("matches an .apk target by canonical full path", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-apk-"));
+    const apkPath = path.join(dir, "app-debug.apk");
+    fs.writeFileSync(apkPath, "x");
+    try {
+      expect(androidAppAllowedIdentities(apkPath)).toEqual([fs.realpathSync.native(apkPath)]);
+      expect(() => assertAndroidAppAllowed([apkPath], `${apkPath}/`)).not.toThrow();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an .apk with the same filename in a different directory", () => {
+    const allowedDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-allowed-apk-"));
+    const targetDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-target-apk-"));
+    const allowedApk = path.join(allowedDir, "app-debug.apk");
+    const targetApk = path.join(targetDir, "app-debug.apk");
+    fs.writeFileSync(allowedApk, "allowed");
+    fs.writeFileSync(targetApk, "target");
+    try {
+      expect(() => assertAndroidAppAllowed([allowedApk], targetApk, "com.target.app")).toThrow(
+        'Target app "'
+      );
+    } finally {
+      fs.rmSync(allowedDir, { recursive: true, force: true });
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    }
   });
 
   it("rejects an app excluded by a non-empty allowedApps", () => {

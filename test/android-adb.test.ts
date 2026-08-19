@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bootedDevices,
   clearPackage,
+  execFileAdbRunner,
   forceStop,
   forwardDynamicPort,
   installApk,
@@ -10,6 +11,7 @@ import {
   parseAaptPackage,
   parseAdbDevices,
   parseForwardPort,
+  removeForward,
   selectDeviceSerial,
   startInstrumentation,
   withSerial,
@@ -110,6 +112,18 @@ describe("adb lifecycle wrappers", () => {
     await expect(listDevices(broken)).rejects.toThrow("adb devices` failed");
   });
 
+  it("preserves adb spawn errors when stderr is empty", async () => {
+    const originalPath = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      const result = await execFileAdbRunner(["devices"], { timeoutMs: 100 });
+      expect(result.code).toBe(1);
+      expect(result.stderr).toMatch(/adb|ENOENT|spawn/i);
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
   it("installs an APK with replace/test/grant flags and detects FAILURE", async () => {
     const runner = fakeRunner(() => ({ stdout: "Success" }));
     await installApk(runner, "emulator-5554", "/tmp/app.apk");
@@ -152,6 +166,12 @@ describe("adb lifecycle wrappers", () => {
     const runner = fakeRunner(() => ({ stdout: "42042\n" }));
     expect(await forwardDynamicPort(runner, "s", 6790)).toBe(42042);
     expect(runner.calls.at(-1)).toEqual(["-s", "s", "forward", "tcp:0", "tcp:6790"]);
+  });
+
+  it("removes a forward and ignores adb failures", async () => {
+    const runner = fakeRunner(() => ({ code: 1, stderr: "no such forward" }));
+    await expect(removeForward(runner, "s", 42042)).resolves.toBeUndefined();
+    expect(runner.calls.at(-1)).toEqual(["-s", "s", "forward", "--remove", "tcp:42042"]);
   });
 
   it("clears package data for a cold start and requires Success", async () => {

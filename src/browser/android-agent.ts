@@ -4,7 +4,7 @@
  * `appium-uiautomator2-server` exposes W3C-WebDriver-shaped endpoints over plain
  * HTTP. This module speaks them with the global `fetch` (no heavy WebDriver SDK,
  * per the `ai.ts` ethos), mirroring the mac-helper client's ergonomics: a
- * per-request deadline via `AbortController`, unref'd timers, and cleanup on
+ * per-request deadline via `AbortController`, and cleanup on
  * every path. It exposes the semantic {@link AndroidAgentClient} the driver
  * consumes; tests fake either the `fetch` implementation or the client itself.
  */
@@ -63,9 +63,10 @@ export class Uia2Transport {
    * {@link Uia2HttpError} on a non-2xx response, or a timeout error when the
    * per-request deadline elapses.
    */
-  async request(method: string, path: string, body?: unknown): Promise<unknown> {
+  async request(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<unknown> {
+    const requestTimeoutMs = timeoutMs ?? this.requestTimeoutMs;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     timer.unref?.();
     const url = `${this.baseUrl}${path}`;
     let response: Response;
@@ -79,9 +80,9 @@ export class Uia2Transport {
     } catch (error) {
       if (controller.signal.aborted) {
         const shown =
-          this.requestTimeoutMs >= 1000
-            ? `${Math.round(this.requestTimeoutMs / 1000)}s`
-            : `${this.requestTimeoutMs}ms`;
+          requestTimeoutMs >= 1000
+            ? `${Math.round(requestTimeoutMs / 1000)}s`
+            : `${requestTimeoutMs}ms`;
         throw new Error(`uiautomator2 request ${method} ${path} timed out after ${shown}`);
       }
       throw error instanceof Error ? error : new Error(String(error));
@@ -168,7 +169,8 @@ export async function waitForAgentReady(
   let lastError: unknown;
   for (;;) {
     try {
-      const value = await transport.request("GET", "/status");
+      const remainingMs = Math.max(1, deadline - Date.now());
+      const value = await transport.request("GET", "/status", undefined, Math.min(remainingMs, 5000));
       const ready = (value as { ready?: unknown } | undefined)?.ready;
       if (ready === undefined || ready === true) {
         return;

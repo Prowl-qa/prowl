@@ -149,7 +149,7 @@ describe("ensureAllowedDomain", () => {
 });
 
 describe("loadConfig macOS target (PROWL-048)", () => {
-  function setupMacProject(configYml: string): string {
+  function setupTargetProject(configYml: string): string {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mac-"));
     fs.mkdirSync(path.join(tmpDir, ".prowl", "hunts"), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, ".prowl", "config.yml"), configYml);
@@ -170,7 +170,7 @@ describe("loadConfig macOS target (PROWL-048)", () => {
   });
 
   it("loads a macos target and does not inject an allowed domain", () => {
-    const project = setupMacProject(
+    const project = setupTargetProject(
       "target:\n  type: macos\n  app: 'com.example.App'\nguardrails:\n  allowedApps: ['com.example.App']\n"
     );
     const cwd = process.cwd();
@@ -188,7 +188,7 @@ describe("loadConfig macOS target (PROWL-048)", () => {
   });
 
   it("loads an android target with deviceSerial and coldStart and injects no domain", () => {
-    const project = setupMacProject(
+    const project = setupTargetProject(
       "target:\n  type: android\n  app: 'com.example.app'\n  deviceSerial: 'emulator-5554'\n  coldStart: true\nguardrails:\n  allowedApps: ['com.example.app']\n"
     );
     const cwd = process.cwd();
@@ -210,7 +210,7 @@ describe("loadConfig macOS target (PROWL-048)", () => {
   });
 
   it("omits optional android fields when they are not set", () => {
-    const project = setupMacProject("target:\n  type: android\n  app: 'com.example.app'\n");
+    const project = setupTargetProject("target:\n  type: android\n  app: 'com.example.app'\n");
     const cwd = process.cwd();
     try {
       process.chdir(project);

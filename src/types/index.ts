@@ -34,8 +34,8 @@ export type MacosTarget = {
  * package name (e.g. `com.example.app`) or an absolute/relative path to an `.apk`
  * file, which Prowl installs before launch. Optional `deviceSerial` selects one of
  * several attached devices/emulators; `coldStart` opts into a deterministic
- * `pm clear` before launch (default off). App-path guardrails match against the
- * package name (and, for an `.apk`, its path and file name).
+ * `pm clear` before launch (default off). Android guardrails match package IDs
+ * or canonical full APK paths; APK package IDs are resolved before install.
  */
 export type AndroidTarget = {
   type: "android";
@@ -73,7 +73,7 @@ export type Config = {
   guardrails: {
     maxSteps: number;
     allowedDomains: string[];
-    /** Native scope analog of `allowedDomains`: allowed bundle IDs, app bundle names, or `.app` paths. */
+    /** Native scope analog of `allowedDomains`: allowed bundle/package IDs or canonical app artifact paths. */
     allowedApps: string[];
     forbiddenSelectors: string[];
     selfHealing: boolean;

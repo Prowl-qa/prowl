@@ -86,6 +86,21 @@ describe("Uia2Transport error handling", () => {
       "uiautomator2 request GET /status timed out after 30ms"
     );
   });
+
+  it("uses a per-request timeout override when provided", async () => {
+    const fetchImpl: FetchLike = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    const transport = new Uia2Transport({
+      baseUrl: "http://127.0.0.1:6790/wd/hub",
+      requestTimeoutMs: 1000,
+      fetchImpl
+    });
+    await expect(transport.request("GET", "/status", undefined, 25)).rejects.toThrow(
+      "uiautomator2 request GET /status timed out after 25ms"
+    );
+  });
 });
 
 describe("createUia2AgentClient", () => {
@@ -117,6 +132,14 @@ describe("createUia2AgentClient", () => {
     expect(calls[0].body).toEqual({ text: "héllo 👋" });
   });
 
+  it("gets element text through the session element endpoint", async () => {
+    const { transport, calls } = transportWith(() => ({ body: "Ready" }));
+    const client = createUia2AgentClient(transport, "S1");
+    expect(await client.getText("E1")).toBe("Ready");
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/element/E1/text");
+  });
+
   it("presses a key code through the appium device endpoint", async () => {
     const { transport, calls } = transportWith(() => ({ body: null }));
     const client = createUia2AgentClient(transport, "S1");
@@ -131,6 +154,14 @@ describe("createUia2AgentClient", () => {
     const client = createUia2AgentClient(transport, "S1");
     expect((await client.screenshotPng()).toString()).toBe("PNGDATA");
   });
+
+  it("deletes the uiautomator2 session on close", async () => {
+    const { transport, calls } = transportWith(() => ({ body: null }));
+    const client = createUia2AgentClient(transport, "S1");
+    await client.close();
+    expect(calls[0].method).toBe("DELETE");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1");
+  });
 });
 
 describe("waitForAgentReady", () => {
@@ -143,6 +174,24 @@ describe("waitForAgentReady", () => {
     const { transport } = transportWith(() => ({ status: 500, body: { error: "not ready" } }), 100);
     await expect(waitForAgentReady(transport, { deadlineMs: 40, intervalMs: 10 })).rejects.toThrow(
       "did not become ready within 40ms"
+    );
+  });
+
+  it("caps each status probe by the remaining readiness deadline", async () => {
+    const observedTimeouts: Array<number | undefined> = [];
+    const transport = {
+      request: async (_method: string, _path: string, _body?: unknown, timeoutMs?: number) => {
+        observedTimeouts.push(timeoutMs);
+        throw new Error("not ready");
+      }
+    } as unknown as Uia2Transport;
+
+    await expect(waitForAgentReady(transport, { deadlineMs: 35, intervalMs: 5 })).rejects.toThrow(
+      "did not become ready within 35ms"
+    );
+    expect(observedTimeouts.length).toBeGreaterThan(0);
+    expect(observedTimeouts.every((timeout) => timeout !== undefined && timeout > 0 && timeout <= 35)).toBe(
+      true
     );
   });
 });

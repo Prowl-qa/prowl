@@ -10,8 +10,9 @@ import {
   assertTargetAppAllowed
 } from "../config/target.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
-import { launchMacSession, closeMacSession } from "../browser/mac-helper.js";
+import { launchMacSession, closeMacSession, type MacSession } from "../browser/mac-helper.js";
 import type { MacHelperClient } from "../browser/mac-driver.js";
+import type { SessionDriver } from "../browser/driver.js";
 import {
   launchAndroidSession,
   closeAndroidSession,
@@ -24,6 +25,32 @@ import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
 import { appendEntry as appendHistoryEntry } from "./history.js";
+
+type NativeTargetType = "macos" | "android";
+type NativeRunTarget = MacosTarget | AndroidTarget;
+type InterpolatedHunt = ReturnType<typeof interpolateHunt>["hunt"];
+type InterpolationRandomVars = ReturnType<typeof interpolateHunt>["randomVars"];
+type HuntOutcome = { result: RunResult; runDir: string; steps: Step[] };
+
+type NativeAttemptOptions<TSession> = {
+  targetType: NativeTargetType;
+  targetApp: string;
+  launchSession: () => Promise<TSession>;
+  closeSession: (session: TSession) => Promise<void>;
+  sessionDriver: (session: TSession) => SessionDriver;
+  sessionAppIdentity: (session: TSession) => string;
+};
+
+type NativeAttemptFunction<TTarget extends NativeRunTarget> = (
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: TTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+) => Promise<HuntOutcome>;
 
 export type RunOptions = {
   huntName: string;
@@ -344,30 +371,28 @@ export async function runHunt(
 // screenshots and the usual reports.
 // ---------------------------------------------------------------------------
 
-async function executeMacHuntAttempt(
+async function executeNativeHuntAttempt<TSession>(
   options: RunOptions,
   config: Config,
   configDir: string,
-  target: MacosTarget,
-  interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
+  interpolatedHunt: InterpolatedHunt,
   redactedFillSteps: Set<string>,
-  randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
-  allowedApps: string[]
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[],
+  native: NativeAttemptOptions<TSession>
+): Promise<HuntOutcome> {
   const maxSteps = config.guardrails.maxSteps;
   const runDir = path.join(configDir, "runs", timestamp());
   fs.mkdirSync(runDir, { recursive: true });
 
-  const session = await launchMacSession({
-    app: target.app,
-    timeoutMs: config.browser.timeout,
-    clientFactory: options.macClientFactory
-  });
+  const session = await native.launchSession();
 
   let result: RunResult;
   try {
-    const targetLabel = `macos:${session.bundleId}`;
-    const effectiveAllowedApps = [...new Set([...allowedApps, target.app, session.bundleId])];
+    const driver = native.sessionDriver(session);
+    const appIdentity = native.sessionAppIdentity(session);
+    const targetLabel = `${native.targetType}:${appIdentity}`;
+    const effectiveAllowedApps = [...new Set([...allowedApps, native.targetApp, appIdentity])];
     const startedAt = new Date().toISOString();
     const startTime = Date.now();
 
@@ -377,7 +402,8 @@ async function executeMacHuntAttempt(
 
     try {
       const stepExecution = await executeSteps({
-        driver: session.driver,
+        driver,
+        targetType: native.targetType,
         steps: interpolatedHunt.steps,
         targetUrl: targetLabel,
         runDir,
@@ -405,7 +431,7 @@ async function executeMacHuntAttempt(
 
     let finalScreenshot: string | undefined;
     try {
-      finalScreenshot = await captureFinalScreenshot(session.driver, runDir);
+      finalScreenshot = await captureFinalScreenshot(driver, runDir);
     } catch {
       finalScreenshot = undefined;
     }
@@ -429,10 +455,44 @@ async function executeMacHuntAttempt(
 
     result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
   } finally {
-    await closeMacSession(session);
+    await native.closeSession(session);
   }
 
   return { result, runDir, steps: interpolatedHunt.steps };
+}
+
+async function executeMacHuntAttempt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: MacosTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+): Promise<HuntOutcome> {
+  return executeNativeHuntAttempt<MacSession>(
+    options,
+    config,
+    configDir,
+    interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    allowedApps,
+    {
+      targetType: "macos",
+      targetApp: target.app,
+      launchSession: () =>
+        launchMacSession({
+          app: target.app,
+          timeoutMs: config.browser.timeout,
+          clientFactory: options.macClientFactory
+        }),
+      closeSession: closeMacSession,
+      sessionDriver: (session) => session.driver,
+      sessionAppIdentity: (session) => session.bundleId
+    }
+  );
 }
 
 async function runMacHunt(
@@ -440,54 +500,12 @@ async function runMacHunt(
   config: Config,
   configDir: string,
   target: MacosTarget
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
-  const hunt = loadHunt(options.huntName, configDir);
-  const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
-
-  // Fail fast on web-only steps/assertions and out-of-scope apps before launching anything.
-  assertStepsSupportedByTarget(interpolatedHunt.steps, "macos");
-  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, "macos");
-  assertTargetAppAllowed(config.guardrails.allowedApps, target.app);
-
-  const maxSteps = config.guardrails.maxSteps;
-  if (interpolatedHunt.steps.length > maxSteps) {
-    throw new Error(`Hunt has ${interpolatedHunt.steps.length} steps. Max allowed is ${maxSteps}.`);
-  }
-
-  const maxRetries = hunt.retry?.maxRetries ?? 0;
-  const retryDelay = hunt.retry?.delay ?? 0;
-  let lastResult: { result: RunResult; runDir: string; steps: Step[] } | undefined;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0 && retryDelay > 0) {
-      await delay(retryDelay);
-    }
-    lastResult = await executeMacHuntAttempt(
-      options,
-      config,
-      configDir,
-      target,
-      interpolatedHunt,
-      redactedFillSteps,
-      randomVars,
-      config.guardrails.allowedApps
-    );
-    if (lastResult.result.status === "pass") {
-      if (attempt > 0) {
-        lastResult.result.artifacts.summary = `Passed on attempt ${attempt + 1} of ${maxRetries + 1}`;
-      }
-      recordHistory(configDir, lastResult, config.history.maxRuns);
-      return lastResult;
-    }
-  }
-
-  if (maxRetries > 0 && lastResult) {
-    lastResult.result.artifacts.summary = `Failed after ${maxRetries + 1} attempts`;
-  }
-  if (lastResult) {
-    recordHistory(configDir, lastResult, config.history.maxRuns);
-  }
-  return lastResult!;
+): Promise<HuntOutcome> {
+  return runNativeHunt(options, config, configDir, target, {
+    targetType: "macos",
+    assertAppAllowed: (allowedApps, nativeTarget) => assertTargetAppAllowed(allowedApps, nativeTarget.app),
+    attempt: executeMacHuntAttempt
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -502,93 +520,36 @@ async function executeAndroidHuntAttempt(
   config: Config,
   configDir: string,
   target: AndroidTarget,
-  interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
+  interpolatedHunt: InterpolatedHunt,
   redactedFillSteps: Set<string>,
-  randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
+  randomVars: InterpolationRandomVars,
   allowedApps: string[]
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
-  const maxSteps = config.guardrails.maxSteps;
-  const runDir = path.join(configDir, "runs", timestamp());
-  fs.mkdirSync(runDir, { recursive: true });
-
+): Promise<HuntOutcome> {
   const launch = options.androidSessionFactory ?? launchAndroidSession;
-  const session = await launch({
-    app: target.app,
-    deviceSerial: target.deviceSerial,
-    coldStart: target.coldStart,
-    timeoutMs: config.browser.timeout
-  });
-
-  let result: RunResult;
-  try {
-    const targetLabel = `android:${session.package}`;
-    const effectiveAllowedApps = [...new Set([...allowedApps, target.app, session.package])];
-    const startedAt = new Date().toISOString();
-    const startTime = Date.now();
-
-    let stepResults: StepResult[] = [];
-    let stepScreenshots: string[] = [];
-    let stepFailed = false;
-
-    try {
-      const stepExecution = await executeSteps({
-        driver: session.driver,
-        targetType: "android",
-        steps: interpolatedHunt.steps,
-        targetUrl: targetLabel,
-        runDir,
-        screenshotsMode: config.artifacts.screenshots,
-        forbiddenSelectors: config.guardrails.forbiddenSelectors,
-        allowedDomains: [],
-        allowedApps: effectiveAllowedApps,
-        maxSteps,
-        maxTotalTimeMs: config.assertions.maxTotalTimeMs,
-        selfHealing: config.guardrails.selfHealing,
-        redactedFillSteps,
-        randomVars,
-        configDir,
-        huntStack: [options.huntName],
-        onStep: options.onStep
-      });
-      stepResults = stepExecution.results;
-      stepScreenshots = stepExecution.screenshots;
-      stepFailed = stepExecution.failed;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Step execution failed";
-      stepResults = [{ type: "steps", status: "fail", durationMs: 0, error: message }];
-      stepFailed = true;
+  return executeNativeHuntAttempt<AndroidSession>(
+    options,
+    config,
+    configDir,
+    interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    allowedApps,
+    {
+      targetType: "android",
+      targetApp: target.app,
+      launchSession: () =>
+        launch({
+          app: target.app,
+          deviceSerial: target.deviceSerial,
+          coldStart: target.coldStart,
+          timeoutMs: config.browser.timeout,
+          allowedApps
+        }),
+      closeSession: closeAndroidSession,
+      sessionDriver: (session) => session.driver,
+      sessionAppIdentity: (session) => session.package
     }
-
-    let finalScreenshot: string | undefined;
-    try {
-      finalScreenshot = await captureFinalScreenshot(session.driver, runDir);
-    } catch {
-      finalScreenshot = undefined;
-    }
-
-    const durationMs = Date.now() - startTime;
-    const status: "pass" | "fail" = stepFailed ? "fail" : "pass";
-    const artifacts: RunResult["artifacts"] = {
-      screenshots: finalScreenshot ? [...stepScreenshots, finalScreenshot] : stepScreenshots
-    };
-
-    const runResult = buildRunResult({
-      status,
-      startedAt,
-      durationMs,
-      hunt: options.huntName,
-      targetUrl: targetLabel,
-      steps: stepResults,
-      assertions: [],
-      artifacts
-    });
-
-    result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
-  } finally {
-    await closeAndroidSession(session);
-  }
-
-  return { result, runDir, steps: interpolatedHunt.steps };
+  );
 }
 
 async function runAndroidHunt(
@@ -596,14 +557,36 @@ async function runAndroidHunt(
   config: Config,
   configDir: string,
   target: AndroidTarget
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+): Promise<HuntOutcome> {
+  return runNativeHunt(options, config, configDir, target, {
+    targetType: "android",
+    assertAppAllowed: (allowedApps, nativeTarget) => {
+      if (!nativeTarget.app.toLowerCase().endsWith(".apk")) {
+        assertAndroidAppAllowed(allowedApps, nativeTarget.app);
+      }
+    },
+    attempt: executeAndroidHuntAttempt
+  });
+}
+
+async function runNativeHunt<TTarget extends NativeRunTarget>(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: TTarget,
+  native: {
+    targetType: NativeTargetType;
+    assertAppAllowed: (allowedApps: string[], target: TTarget) => void;
+    attempt: NativeAttemptFunction<TTarget>;
+  }
+): Promise<HuntOutcome> {
   const hunt = loadHunt(options.huntName, configDir);
   const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
 
   // Fail fast on web-only steps/assertions and out-of-scope apps before launching anything.
-  assertStepsSupportedByTarget(interpolatedHunt.steps, "android");
-  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, "android");
-  assertAndroidAppAllowed(config.guardrails.allowedApps, target.app);
+  assertStepsSupportedByTarget(interpolatedHunt.steps, native.targetType);
+  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, native.targetType);
+  native.assertAppAllowed(config.guardrails.allowedApps, target);
 
   const maxSteps = config.guardrails.maxSteps;
   if (interpolatedHunt.steps.length > maxSteps) {
@@ -612,13 +595,13 @@ async function runAndroidHunt(
 
   const maxRetries = hunt.retry?.maxRetries ?? 0;
   const retryDelay = hunt.retry?.delay ?? 0;
-  let lastResult: { result: RunResult; runDir: string; steps: Step[] } | undefined;
+  let lastResult: HuntOutcome | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0 && retryDelay > 0) {
       await delay(retryDelay);
     }
-    lastResult = await executeAndroidHuntAttempt(
+    lastResult = await native.attempt(
       options,
       config,
       configDir,

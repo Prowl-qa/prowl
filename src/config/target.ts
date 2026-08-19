@@ -185,34 +185,45 @@ function looksLikeApkPath(app: string): boolean {
   return trimmed.includes("/") || trimmed.includes("\\") || trimmed.toLowerCase().endsWith(".apk");
 }
 
+function normalizeAndroidApkPath(app: string): string {
+  const resolved = path.resolve(trimTrailingPathSeparators(app));
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 /**
  * Accepted identities for an Android target app. A bare package name matches
- * itself; an `.apk` path also matches its trimmed/resolved path and its file
- * name (with and without the `.apk` suffix), so `allowedApps` can list either
- * the package name or the artifact path.
+ * itself. An `.apk` path is authorized only by its canonical full path; pass the
+ * resolved package name when validating an APK after `aapt` resolution so
+ * package-ID allowlists can authorize it before install.
  */
-export function androidAppAllowedIdentities(app: string): string[] {
-  const identities = new Set<string>([app]);
+export function androidAppAllowedIdentities(app: string, resolvedPackage?: string): string[] {
   if (looksLikeApkPath(app)) {
-    const trimmed = trimTrailingPathSeparators(app);
-    identities.add(trimmed);
-    identities.add(path.resolve(trimmed));
-    const base = path.basename(trimmed);
-    if (base) {
-      identities.add(base);
-      identities.add(base.replace(/\.apk$/i, ""));
-    }
+    return resolvedPackage
+      ? [normalizeAndroidApkPath(app), resolvedPackage]
+      : [normalizeAndroidApkPath(app)];
   }
-  return [...identities];
+  return [app];
 }
 
 /**
  * Android scope guardrail (PROWL-058): mirrors {@link assertTargetAppAllowed} but
- * resolves identities via {@link androidAppAllowedIdentities} (package name / apk
- * path) rather than macOS bundle identities.
+ * resolves identities via {@link androidAppAllowedIdentities} (package name or
+ * canonical APK path) rather than macOS bundle identities.
  */
-export function assertAndroidAppAllowed(allowedApps: string[], app: string): void {
-  assertNativeAppAllowed(allowedApps, app, androidAppAllowedIdentities);
+export function assertAndroidAppAllowed(
+  allowedApps: string[],
+  app: string,
+  resolvedPackage?: string
+): void {
+  assertNativeAppAllowed(
+    allowedApps,
+    app,
+    (value) => androidAppAllowedIdentities(value, value === app ? resolvedPackage : undefined)
+  );
 }
 
 function assertNativeAppAllowed(

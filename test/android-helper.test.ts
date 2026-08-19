@@ -102,10 +102,11 @@ describe("launchAndroidSession", () => {
     expect(installs).toEqual(expect.arrayContaining([APKS.serverApk, APKS.testApk]));
 
     await closeAndroidSession(session);
+    await closeAndroidSession(session);
     expect(agent.closed).toBe(true);
     expect(killed.count).toBe(1);
-    expect(runner.calls.some((c) => c.includes("--remove"))).toBe(true);
-    expect(runner.calls.some((c) => c.includes("force-stop"))).toBe(true);
+    expect(runner.calls.filter((c) => c.includes("--remove"))).toHaveLength(1);
+    expect(runner.calls.filter((c) => c.includes("force-stop"))).toHaveLength(1);
   });
 
   it("clears package data when coldStart is set", async () => {
@@ -163,6 +164,29 @@ describe("launchAndroidSession", () => {
     }
   });
 
+  it("rejects an .apk whose resolved package is outside allowedApps before install", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-apk-"));
+    const apkPath = path.join(dir, "app-debug.apk");
+    fs.writeFileSync(apkPath, "not-a-real-apk");
+    const runner = fakeRunner("emulator-5554 device\n");
+    try {
+      await expect(
+        launchAndroidSession({
+          app: apkPath,
+          runner,
+          spawner: () => ({ kill: () => undefined }),
+          agentConnector: fakeConnector(new FakeAgent()),
+          apks: APKS,
+          aaptResolver: async () => "com.blocked.pkg",
+          allowedApps: ["com.allowed.pkg"]
+        })
+      ).rejects.toThrow("not in guardrails.allowedApps");
+      expect(runner.calls.some((c) => c.includes("install"))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("errors when an .apk package name cannot be determined", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-apk-"));
     const apkPath = path.join(dir, "app.apk");
@@ -178,9 +202,30 @@ describe("launchAndroidSession", () => {
           apks: APKS,
           aaptResolver: async () => null
         })
-      ).rejects.toThrow("could not determine its package name");
+      ).rejects.toThrow("Could not determine the package name");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("tears down instrumentation and the forward when the connector fails", async () => {
+    const runner = fakeRunner("emulator-5554 device\n");
+    const killed = { count: 0 };
+
+    await expect(
+      launchAndroidSession({
+        app: "com.example.app",
+        runner,
+        spawner: () => ({ kill: () => (killed.count += 1) }),
+        agentConnector: async () => {
+          throw new Error("agent unreachable");
+        },
+        apks: APKS
+      })
+    ).rejects.toThrow("agent unreachable");
+
+    expect(killed.count).toBe(1);
+    expect(runner.calls.some((c) => c.includes("--remove"))).toBe(true);
+    expect(runner.calls.some((c) => c.includes("force-stop"))).toBe(true);
   });
 });

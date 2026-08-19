@@ -38,7 +38,12 @@ export const execFileAdbRunner: AdbRunner = (args, options) =>
             : error
               ? 1
               : 0;
-        resolve({ stdout: stdout ?? "", stderr: stderr ?? "", code });
+        const capturedStderr = stderr ?? "";
+        resolve({
+          stdout: stdout ?? "",
+          stderr: capturedStderr.trim() ? capturedStderr : (error?.message ?? ""),
+          code
+        });
       }
     );
   });

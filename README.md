@@ -463,7 +463,7 @@ guardrails:
   forbiddenSelectors:                  # selectors that steps cannot use
     - "[data-danger]"
     - ".delete-btn"
-  allowedApps: []                      # native targets only: macOS bundle IDs/names/.app paths, or Android package names/.apk paths
+  allowedApps: []                      # native targets only: macOS bundle IDs/names/.app paths, or Android package IDs/canonical APK paths
 
 # Auth state from `prowl login`
 auth:
@@ -1104,8 +1104,9 @@ serials, if several are attached and no `deviceSerial` is set), installs the app
 port-forwards it on a **dynamically allocated** local port (so parallel sessions /
 CI jobs don't collide), and waits for the agent to report ready. Everything is
 torn down (agent session, instrumentation, port forward, `am force-stop`) after
-the run. `guardrails.allowedApps` accepts Android package names (and, for an
-`.apk`, its path or file name) and is enforced before launch.
+the run. `guardrails.allowedApps` accepts Android package IDs or canonical full
+`.apk` paths; when `target.app` is an APK, Prowl resolves its package ID and
+validates it before installing.
 
 ### Selector dialect (Android)
 

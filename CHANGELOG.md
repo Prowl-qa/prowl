@@ -26,7 +26,8 @@ All notable changes to Prowl will be documented in this file.
   so the existing target/step gating rejects web-only steps up front with an
   Android-labelled message; `type`/`fill` set text unicode-safely and `press` maps
   key names to Android key codes. `guardrails.allowedApps` is extended to Android
-  package names / `.apk` paths and enforced before launch. `hover`/`scrollTo` have
+  package IDs / canonical `.apk` paths, with APK package IDs resolved and
+  validated before install. `hover`/`scrollTo` have
   no touch equivalent yet and are rejected clearly (scroll-gesture support is a
   follow-up). New library exports include `launchAndroidSession`,
   `closeAndroidSession`, `createAndroidDriver`, `parseAndroidSelector`,

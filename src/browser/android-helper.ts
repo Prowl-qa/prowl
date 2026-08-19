@@ -38,6 +38,7 @@ import {
   Uia2Transport,
   waitForAgentReady
 } from "./android-agent.js";
+import { assertAndroidAppAllowed } from "../config/target.js";
 import type { SessionDriver } from "./driver.js";
 
 /** The remote port the uiautomator2 server listens on inside the device. */
@@ -147,6 +148,8 @@ export type LaunchAndroidOptions = {
   agentConnector?: AgentConnector;
   apks?: AgentApks;
   aaptResolver?: AaptResolver;
+  /** Optional app scope guardrail from config.guardrails.allowedApps. */
+  allowedApps?: string[];
 };
 
 /**
@@ -158,23 +161,26 @@ async function resolvePackage(
   app: string,
   runner: AdbRunner,
   serial: string,
-  aaptResolver: AaptResolver
+  aaptResolver: AaptResolver,
+  allowedApps: string[]
 ): Promise<string> {
   if (!looksLikeApk(app)) {
+    assertAndroidAppAllowed(allowedApps, app);
     return app;
   }
   const apkPath = path.resolve(app);
   if (!fs.existsSync(apkPath)) {
     throw new Error(`APK not found: ${apkPath}`);
   }
-  await installApk(runner, serial, apkPath);
   const pkg = await aaptResolver(apkPath);
   if (!pkg) {
     throw new Error(
-      `Installed "${app}" but could not determine its package name. Put Android build-tools ` +
+      `Could not determine the package name for "${app}". Put Android build-tools ` +
         "`aapt`/`aapt2` on PATH, or set target.app to the package name instead of the .apk path."
     );
   }
+  assertAndroidAppAllowed(allowedApps, apkPath, pkg);
+  await installApk(runner, serial, apkPath);
   return pkg;
 }
 
@@ -197,7 +203,7 @@ export async function launchAndroidSession(options: LaunchAndroidOptions): Promi
   const devices = await listDevices(runner);
   const serial = selectDeviceSerial(devices, options.deviceSerial);
 
-  const pkg = await resolvePackage(options.app, runner, serial, aaptResolver);
+  const pkg = await resolvePackage(options.app, runner, serial, aaptResolver, options.allowedApps ?? []);
 
   // Install the on-device agent (both APKs) before instrumenting.
   await installApk(runner, serial, apks.serverApk);
@@ -212,13 +218,20 @@ export async function launchAndroidSession(options: LaunchAndroidOptions): Promi
   let localPort: number | undefined;
   let client: AndroidAgentClient | undefined;
 
+  let tornDown = false;
   const teardown = async (): Promise<void> => {
+    if (tornDown) {
+      return;
+    }
+    tornDown = true;
     if (client) {
       await client.close().catch(() => undefined);
     }
     instrumentation?.kill();
-    if (localPort !== undefined) {
-      await removeForward(runner, serial, localPort);
+    const forwardedPort = localPort;
+    localPort = undefined;
+    if (forwardedPort !== undefined) {
+      await removeForward(runner, serial, forwardedPort);
     }
     await forceStop(runner, serial, pkg).catch(() => undefined);
   };

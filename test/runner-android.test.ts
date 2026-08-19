@@ -26,6 +26,12 @@ class FakeAgent implements AndroidAgentClient {
   async close(): Promise<void> {}
 }
 
+class FailingAgent extends FakeAgent {
+  async findElement(_query: AndroidQuery): Promise<string | null> {
+    throw new Error("transient Android failure");
+  }
+}
+
 type Harness = {
   factory: (options: LaunchAndroidOptions) => Promise<AndroidSession>;
   launched: LaunchAndroidOptions[];
@@ -92,6 +98,8 @@ describe("runHunt — Android target (PROWL-058)", () => {
       expect(h.launched[0]).toMatchObject({ app: "com.example.app" });
       expect(h.tornDown()).toBe(true);
       expect(fs.existsSync(path.join(runDir, "result.json"))).toBe(true);
+      expect(result.artifacts.screenshots.length).toBeGreaterThan(0);
+      expect(fs.existsSync(path.join(runDir, result.artifacts.screenshots[0]))).toBe(true);
     });
   });
 
@@ -167,6 +175,37 @@ describe("runHunt — Android target (PROWL-058)", () => {
         "not in guardrails.allowedApps"
       );
       expect(h.launched).toHaveLength(0);
+    });
+  });
+
+  it("retries an Android hunt and reports the successful attempt", async () => {
+    const project = setupProject(
+      ANDROID_CONFIG,
+      "retry",
+      "retry:\n  maxRetries: 1\n  delay: 0\nsteps:\n  - click: 'Save'\n"
+    );
+    const launched: LaunchAndroidOptions[] = [];
+    let tornDown = 0;
+    const factory = async (options: LaunchAndroidOptions): Promise<AndroidSession> => {
+      launched.push(options);
+      const agent = launched.length === 1 ? new FailingAgent() : new FakeAgent();
+      return {
+        client: agent,
+        driver: createAndroidDriver(agent, { appLabel: "com.example.app" }),
+        package: "com.example.app",
+        serial: "emulator-5554",
+        teardown: async () => {
+          tornDown += 1;
+        }
+      };
+    };
+
+    await withProject(project, async () => {
+      const { result } = await runHunt({ huntName: "retry", androidSessionFactory: factory });
+      expect(result.status).toBe("pass");
+      expect(result.artifacts.summary).toBe("Passed on attempt 2 of 2");
+      expect(launched).toHaveLength(2);
+      expect(tornDown).toBe(2);
     });
   });
 });
