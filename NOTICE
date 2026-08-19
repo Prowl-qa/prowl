@@ -12,6 +12,11 @@ attributions are provided for the benefit of downstream users.
 Direct Runtime Dependencies
 -------------------------------------------------------------------------------
 
+appium-uiautomator2-server
+  License: Apache-2.0
+  Copyright (c) Appium Contributors
+  https://github.com/appium/appium-uiautomator2-server
+
 chalk
   License: MIT
   https://github.com/chalk/chalk

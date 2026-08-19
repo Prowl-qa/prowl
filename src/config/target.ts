@@ -50,20 +50,27 @@ export function webOnlyReason(step: Step): string | null {
   return null;
 }
 
+/** Human-facing label for a native (non-web) target, used in error messages. */
+function nativeTargetLabel(target: Target["type"]): string {
+  return target === "android" ? "Android" : "macOS";
+}
+
 /**
  * Throw if any step in `steps` (recursing into `if`/`repeat` bodies) is not
  * supported by `target`. `runHunt` references are validated when the referenced
- * hunt itself runs. No-op for the web target.
+ * hunt itself runs. No-op for the web target; every native target (macOS,
+ * Android) rejects the same web-only step vocabulary.
  */
 export function assertStepsSupportedByTarget(steps: Step[], target: Target["type"]): void {
-  if (target !== "macos") {
+  if (target === "web") {
     return;
   }
+  const label = nativeTargetLabel(target);
   for (const step of steps) {
     const reason = webOnlyReason(step);
     if (reason) {
       throw new Error(
-        `Step "${reason}" is not supported by the macOS target. It is web-only; ` +
+        `Step "${reason}" is not supported by the ${label} target. It is web-only; ` +
           "use a portable step (click, fill, type, press, wait, assert visible, screenshot, etc.)."
       );
     }
@@ -83,11 +90,11 @@ export function assertHuntAssertionsSupportedByTarget(
   assertions: unknown[] | undefined,
   target: Target["type"]
 ): void {
-  if (target !== "macos" || !assertions || assertions.length === 0) {
+  if (target === "web" || !assertions || assertions.length === 0) {
     return;
   }
   throw new Error(
-    "Hunt-level assertions are not supported by the macOS target. " +
+    `Hunt-level assertions are not supported by the ${nativeTargetLabel(target)} target. ` +
       "Use inline assert visible/notVisible steps instead."
   );
 }
@@ -170,11 +177,65 @@ export function macosAppAllowedIdentities(app: string): string[] {
  * allowed — mirroring how allowedDomains auto-includes the web target's host.
  */
 export function assertTargetAppAllowed(allowedApps: string[], app: string): void {
+  assertNativeAppAllowed(allowedApps, app, macosAppAllowedIdentities);
+}
+
+function looksLikeApkPath(app: string): boolean {
+  const trimmed = trimTrailingPathSeparators(app);
+  return trimmed.includes("/") || trimmed.includes("\\") || trimmed.toLowerCase().endsWith(".apk");
+}
+
+function normalizeAndroidApkPath(app: string): string {
+  const resolved = path.resolve(trimTrailingPathSeparators(app));
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+/**
+ * Accepted identities for an Android target app. A bare package name matches
+ * itself. An `.apk` path is authorized only by its canonical full path; pass the
+ * resolved package name when validating an APK after `aapt` resolution so
+ * package-ID allowlists can authorize it before install.
+ */
+export function androidAppAllowedIdentities(app: string, resolvedPackage?: string): string[] {
+  if (looksLikeApkPath(app)) {
+    return resolvedPackage
+      ? [normalizeAndroidApkPath(app), resolvedPackage]
+      : [normalizeAndroidApkPath(app)];
+  }
+  return [app];
+}
+
+/**
+ * Android scope guardrail (PROWL-058): mirrors {@link assertTargetAppAllowed} but
+ * resolves identities via {@link androidAppAllowedIdentities} (package name or
+ * canonical APK path) rather than macOS bundle identities.
+ */
+export function assertAndroidAppAllowed(
+  allowedApps: string[],
+  app: string,
+  resolvedPackage?: string
+): void {
+  assertNativeAppAllowed(
+    allowedApps,
+    app,
+    (value) => androidAppAllowedIdentities(value, value === app ? resolvedPackage : undefined)
+  );
+}
+
+function assertNativeAppAllowed(
+  allowedApps: string[],
+  app: string,
+  resolveIdentities: (value: string) => string[]
+): void {
   if (allowedApps.length === 0) {
     return;
   }
-  const allowedIdentities = new Set(allowedApps.flatMap((allowedApp) => macosAppAllowedIdentities(allowedApp)));
-  if (macosAppAllowedIdentities(app).some((identity) => allowedIdentities.has(identity))) {
+  const allowedIdentities = new Set(allowedApps.flatMap((allowedApp) => resolveIdentities(allowedApp)));
+  if (resolveIdentities(app).some((identity) => allowedIdentities.has(identity))) {
     return;
   }
   throw new Error(

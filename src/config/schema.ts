@@ -20,10 +20,22 @@ const macosTargetSchema = z
   })
   .strict();
 
-// macos is tried first because it is the only branch with `type: "macos"`; a bare
-// `{ url }` (no type) falls through to web. An object with neither `url` nor a
-// macos `app` matches neither branch and is rejected with a union error.
-export const targetSchema = z.union([macosTargetSchema, webTargetSchema]);
+// Android native target (experimental, PROWL-058): requires `type: "android"` and
+// an app (package name or .apk path). `deviceSerial` picks one of several attached
+// devices; `coldStart` opts into a `pm clear` before launch.
+const androidTargetSchema = z
+  .object({
+    type: z.literal("android"),
+    app: z.string().min(1),
+    deviceSerial: z.string().min(1).optional(),
+    coldStart: z.boolean().optional()
+  })
+  .strict();
+
+// The typed branches are tried first because each is the only one with its own
+// `type` literal; a bare `{ url }` (no type) falls through to web. An object that
+// matches none of the branches is rejected with a union error.
+export const targetSchema = z.union([macosTargetSchema, androidTargetSchema, webTargetSchema]);
 
 export const configSchema = z
   .object({

@@ -149,7 +149,7 @@ describe("ensureAllowedDomain", () => {
 });
 
 describe("loadConfig macOS target (PROWL-048)", () => {
-  function setupMacProject(configYml: string): string {
+  function setupTargetProject(configYml: string): string {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-mac-"));
     fs.mkdirSync(path.join(tmpDir, ".prowl", "hunts"), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, ".prowl", "config.yml"), configYml);
@@ -170,7 +170,7 @@ describe("loadConfig macOS target (PROWL-048)", () => {
   });
 
   it("loads a macos target and does not inject an allowed domain", () => {
-    const project = setupMacProject(
+    const project = setupTargetProject(
       "target:\n  type: macos\n  app: 'com.example.App'\nguardrails:\n  allowedApps: ['com.example.App']\n"
     );
     const cwd = process.cwd();
@@ -181,6 +181,41 @@ describe("loadConfig macOS target (PROWL-048)", () => {
       expect(config.guardrails.allowedApps).toEqual(["com.example.App"]);
       // No url means allowedDomains stays at defaults (no host appended).
       expect(config.guardrails.allowedDomains).toEqual(["localhost", "127.0.0.1", "0.0.0.0"]);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("loads an android target with deviceSerial and coldStart and injects no domain", () => {
+    const project = setupTargetProject(
+      "target:\n  type: android\n  app: 'com.example.app'\n  deviceSerial: 'emulator-5554'\n  coldStart: true\nguardrails:\n  allowedApps: ['com.example.app']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({
+        type: "android",
+        app: "com.example.app",
+        deviceSerial: "emulator-5554",
+        coldStart: true
+      });
+      expect(config.guardrails.allowedApps).toEqual(["com.example.app"]);
+      expect(config.guardrails.allowedDomains).toEqual(["localhost", "127.0.0.1", "0.0.0.0"]);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("omits optional android fields when they are not set", () => {
+    const project = setupTargetProject("target:\n  type: android\n  app: 'com.example.app'\n");
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { config } = loadConfig();
+      expect(config.target).toEqual({ type: "android", app: "com.example.app" });
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });

@@ -424,11 +424,16 @@ Config lives at `.prowl/config.yml`. All options with defaults:
 ```yaml
 # Execution target. Defaults to the web target; existing configs work unchanged.
 target:
-  type: "web"                         # "web" (default) or "macos" (experimental)
+  type: "web"                         # "web" (default), "macos", or "android" (experimental)
   url: "http://localhost:3000"        # Required for web targets
   # For the experimental macOS target instead:
   #   type: "macos"
   #   app: "com.example.App"          # bundle id or /path/to/App.app  (see "macOS Target")
+  # For the experimental Android target instead:
+  #   type: "android"
+  #   app: "com.example.app"          # package name or /path/to/app.apk  (see "Android Target")
+  #   deviceSerial: "emulator-5554"   # optional; required only with several devices attached
+  #   coldStart: false                # optional; pm clear before launch
 
 # Browser settings
 browser:
@@ -458,7 +463,7 @@ guardrails:
   forbiddenSelectors:                  # selectors that steps cannot use
     - "[data-danger]"
     - ".delete-btn"
-  allowedApps: []                      # macOS target only: bundle IDs, bundle names, or .app paths
+  allowedApps: []                      # native targets only: macOS bundle IDs/names/.app paths, or Android package IDs/canonical APK paths
 
 # Auth state from `prowl login`
 auth:
@@ -1052,6 +1057,102 @@ after the run.
 > Docs follow-up: the customer-facing docs site (`prowl-docs`) should gain a "macOS
 > target" page mirroring this section (target type + step-compatibility matrix +
 > permission setup); tracked separately from this repo.
+
+---
+
+## Android Target (Experimental)
+
+> **Experimental (PROWL-058).** Prowl can drive **native Android apps** on an
+> emulator or a USB-connected device, in addition to the web and macOS targets.
+> It follows the same "external agent + JSON protocol" shape as the macOS target:
+> `adb` handles device lifecycle and the on-device
+> [`appium-uiautomator2-server`](https://github.com/appium/appium-uiautomator2-driver)
+> (Apache-2.0) handles UI interaction over a plain HTTP/JSON API driven with raw
+> `fetch`. The API, selector dialect, and step coverage may change.
+
+### Requirements
+
+- **`adb`** on your `PATH` (from the Android SDK platform-tools), plus at least
+  one **booted emulator or device** (`adb devices -l` should list it as `device`).
+- The two prebuilt agent APKs ship inside the `appium-uiautomator2-server` npm
+  dependency and are installed onto the device automatically — **nothing to build**.
+  No Appium server, no JVM, no gRPC.
+- If `target.app` is an **`.apk`**, Android build-tools **`aapt`/`aapt2`** must be
+  on `PATH` so Prowl can read the package name (or set `target.app` to the package
+  name directly and install the APK yourself).
+
+### Enabling it
+
+Point your config at an Android target:
+
+```yaml
+target:
+  type: android
+  app: "com.example.app"        # a package name, or a path to an .apk to install
+  # deviceSerial: "emulator-5554"  # required only when several devices are attached
+  # coldStart: true                # `pm clear` before launch for a deterministic start (default off)
+guardrails:
+  allowedApps:                     # optional scope; empty = allow the target app
+    - "com.example.app"
+```
+
+Then run a hunt as usual: `prowl run my-android-hunt`.
+
+On launch Prowl selects the device (failing with an actionable error, listing
+serials, if several are attached and no `deviceSerial` is set), installs the app
+(when given an `.apk`) and the agent, starts the agent via `am instrument`,
+port-forwards it on a **dynamically allocated** local port (so parallel sessions /
+CI jobs don't collide), and waits for the agent to report ready. Everything is
+torn down (agent session, instrumentation, port forward, `am force-stop`) after
+the run. `guardrails.allowedApps` accepts Android package IDs or canonical full
+`.apk` paths; when `target.app` is an APK, Prowl resolves its package ID and
+validates it before installing.
+
+### Selector dialect (Android)
+
+Native selectors address `resource-id`, `content-desc`, visible text, and widget
+class. Semantics match the macOS target so a selector means the same thing on both
+native targets:
+
+| Selector | Matches |
+|---|---|
+| `id=save` | element whose `resource-id` is `save` (bare name or full `com.pkg:id/save`) |
+| `label="Submit"` | element whose `content-desc` equals `Submit` (exact) |
+| `role=android.widget.Button` | element of that widget class |
+| `role=android.widget.Button[name="Save"]` | that widget class whose visible text contains `Save` |
+| `text="Save"` or bare `Save` | element whose visible text contains the text (substring) |
+
+Prefer `id=` (the native analog of `data-testid`). **Jetpack Compose caveat:**
+Compose nodes only expose a `resource-id` when the app sets
+`Modifier.testTag(...)` **and** enables `testTagsAsResourceId = true`; otherwise
+match Compose UI with `text=` or `label=` (from `Modifier.semantics { contentDescription = ... }`).
+`forbiddenSelectors` still applies (text patterns use the same substring semantics
+as the other targets).
+
+### Step compatibility
+
+Portable steps run on the Android target; web-only steps are rejected up front
+(with a clear error), and `prowl login` / URL guardrails do not apply.
+
+| Portable (Android) | Not supported on Android |
+|---|---|
+| `click`, `fill`, `type`, `press` | `navigate`, `waitForUrl`, `waitForNetworkIdle` |
+| `wait`, `waitForSelector` | `mockRoute` / `unmockRoute`, `evalScript`, `runScript` |
+| `assert: visible` / `notVisible` | `onDialog`, `select` / `selectOption`, `setInputFiles` |
+| `screenshot`, `assertScreenshot` | `waitForDownload`, `scroll`, `assert: urlIncludes` / `urlEquals` |
+| `repeat`, `if`, `runHunt`, `copyText` | `hover`, `scrollTo` (no touch equivalent yet — see below) |
+
+Notes: `type` and `fill` set text on the focused / matched field **unicode-safely**
+(via the agent's `element/value`, not `adb shell input text`); `press` maps key
+names (`Enter`, `Tab`, `Backspace`, `Back`, `Home`, arrow keys, …) onto Android key
+codes and dispatches them to the focused view. `hover` and `scrollTo` have no touch
+equivalent yet and are rejected with a clear message; scroll-gesture support is a
+follow-up. A degraded pure-`adb` fallback (`uiautomator dump` + `input tap`) is a
+possible future diagnostic mode, not the primary path.
+
+> Out of scope for PROWL-058 (tracked separately): `prowl analyze` for Android and
+> CI recipes (PROWL-061), the unified native selector engine (PROWL-060), and the
+> iOS targets (PROWL-059 / PROWL-062).
 
 ---
 

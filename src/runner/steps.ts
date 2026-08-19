@@ -6,7 +6,7 @@ import path from "node:path";
 import type { Page } from "playwright";
 import { createPlaywrightDriver } from "../browser/controller.js";
 import type { DriverCapability, DriverDownload, SessionDriver } from "../browser/driver.js";
-import type { Step, StepResult } from "../types/index.js";
+import type { Step, StepResult, Target } from "../types/index.js";
 import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { assertHuntAssertionsSupportedByTarget, assertStepsSupportedByTarget } from "../config/target.js";
@@ -17,8 +17,14 @@ export type StepCallback = (result: StepResult, step: Step, index: number) => vo
 export type StepExecutionContext = {
   /** Playwright page entrypoint for the web target; omitted for non-web drivers. */
   page?: Page;
-  /** Pre-built driver; required when `page` is omitted (e.g. the macOS target). */
+  /** Pre-built driver; required when `page` is omitted (e.g. the macOS/Android target). */
   driver?: SessionDriver;
+  /**
+   * The execution target type, used to gate web-only steps inside sub-hunts.
+   * Optional for back-compat: when omitted it is inferred from the driver's
+   * capabilities (navigate ⇒ web, otherwise macOS).
+   */
+  targetType?: Target["type"];
   steps: Step[];
   targetUrl: string;
   runDir: string;
@@ -771,11 +777,13 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         randomVars
       } = interpolateHunt(subHunt, process.env, h.context.randomVars);
       // Sub-hunts bypass the top-level target check, so re-run it here against
-      // the sub-hunt's own steps. The target type is derived from the driver: a
-      // driver without the `navigate` capability is the (non-web) macOS target,
+      // the sub-hunt's own steps. The target type comes from the run context
+      // (set by the native run paths); when absent it is derived from the
+      // driver: a driver without the `navigate` capability is a native target,
       // where web-only steps — including `assert: urlIncludes`/`urlEquals`
-      // against a bundle-id `currentUrl()` — must be rejected, not silently run.
-      const subTargetType = h.driver.capabilities.has("navigate") ? "web" : "macos";
+      // against a native `currentUrl()` — must be rejected, not silently run.
+      const subTargetType =
+        h.context.targetType ?? (h.driver.capabilities.has("navigate") ? "web" : "macos");
       assertStepsSupportedByTarget(interpolatedSubHunt.steps, subTargetType);
       assertHuntAssertionsSupportedByTarget(interpolatedSubHunt.assertions, subTargetType);
       h.policy.assertWithinMaxSteps(interpolatedSubHunt.steps.length, huntName);

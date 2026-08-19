@@ -29,7 +29,24 @@ export type MacosTarget = {
   app: string;
 };
 
-export type Target = WebTarget | MacosTarget;
+/**
+ * Android native execution target (experimental, PROWL-058). `app` is an Android
+ * package name (e.g. `com.example.app`) or an absolute/relative path to an `.apk`
+ * file, which Prowl installs before launch. Optional `deviceSerial` selects one of
+ * several attached devices/emulators; `coldStart` opts into a deterministic
+ * `pm clear` before launch (default off). Android guardrails match package IDs
+ * or canonical full APK paths; APK package IDs are resolved before install.
+ */
+export type AndroidTarget = {
+  type: "android";
+  app: string;
+  /** adb device serial to target when more than one device is attached. */
+  deviceSerial?: string;
+  /** Run `pm clear <package>` before launch for a deterministic cold start (default off). */
+  coldStart?: boolean;
+};
+
+export type Target = WebTarget | MacosTarget | AndroidTarget;
 
 export type Config = {
   target: Target;
@@ -56,7 +73,7 @@ export type Config = {
   guardrails: {
     maxSteps: number;
     allowedDomains: string[];
-    /** Native scope analog of `allowedDomains`: allowed bundle IDs, app bundle names, or `.app` paths. */
+    /** Native scope analog of `allowedDomains`: allowed bundle/package IDs or canonical app artifact paths. */
     allowedApps: string[];
     forbiddenSelectors: string[];
     selfHealing: boolean;

@@ -402,29 +402,6 @@ free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062
 devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
 swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
 
-{PROWL-058} **ARCH-009: Android target (emulators + real devices)**
-   *As a mobile developer, I want `target: { type: "android" }` so my app's smoke tests run as
-Prowl hunts on an emulator or USB device.*
-   Driver = `adb` for lifecycle/screenshots + the prebuilt `appium-uiautomator2-server` APK pair
-(Apache-2.0, ships as files inside its npm package) started via `am instrument`, port-forwarded
-with a **dynamically allocated** local port, driven over its W3C-shaped HTTP/JSON API with raw
-`fetch`.
-
-**Found during**: BrowserStack/mobile competitive research (2026-08-18)
-**Acceptance Criteria**:
-- `target: { type: "android", app: "<package-or-apk>" }`; guardrails `allowedApps` extended to
-  Android package names
-- Lifecycle: install/launch/terminate via adb; deterministic cold start (`pm clear` opt-in)
-- Verbs: tap/click, typeText (unicode-safe), press, waitFor, assert visible, screenshot — same
-  step vocabulary as macOS where applicable; `WEB_ONLY_STEP_TYPES` handling extended
-- Selector dialect maps onto the hierarchy: `id=` → `resource-id`, `label=` → `content-desc`,
-  `text=` → visible text, `role=` → widget class; Compose caveat (`testTagsAsResourceId`)
-  documented
-- Degraded pure-adb fallback (`uiautomator dump` + `input tap`) is a diagnostic mode only, not
-  the primary path
-- Preflight (`check`-style) validates adb on PATH + a booted device; actionable errors
-- Unit tests with a faked agent transport (mirroring the mac-helper test approach)
-
 {PROWL-059} **ARCH-010: iOS Simulator target**
    *As an iOS developer, I want `target: { type: "ios" }` so my app's smoke tests run as Prowl
 hunts on a booted simulator.*

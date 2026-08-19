@@ -1,22 +1,56 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AssertionResult, BrowserChannel, Config, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
+import type { AndroidTarget, AssertionResult, BrowserChannel, Config, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import {
+  assertAndroidAppAllowed,
   assertHuntAssertionsSupportedByTarget,
   assertStepsSupportedByTarget,
   assertTargetAppAllowed
 } from "../config/target.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
-import { launchMacSession, closeMacSession } from "../browser/mac-helper.js";
+import { launchMacSession, closeMacSession, type MacSession } from "../browser/mac-helper.js";
 import type { MacHelperClient } from "../browser/mac-driver.js";
+import type { SessionDriver } from "../browser/driver.js";
+import {
+  launchAndroidSession,
+  closeAndroidSession,
+  type AndroidSession,
+  type LaunchAndroidOptions
+} from "../browser/android-helper.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
 import { appendEntry as appendHistoryEntry } from "./history.js";
+
+type NativeTargetType = "macos" | "android";
+type NativeRunTarget = MacosTarget | AndroidTarget;
+type InterpolatedHunt = ReturnType<typeof interpolateHunt>["hunt"];
+type InterpolationRandomVars = ReturnType<typeof interpolateHunt>["randomVars"];
+type HuntOutcome = { result: RunResult; runDir: string; steps: Step[] };
+
+type NativeAttemptOptions<TSession> = {
+  targetType: NativeTargetType;
+  targetApp: string;
+  launchSession: () => Promise<TSession>;
+  closeSession: (session: TSession) => Promise<void>;
+  sessionDriver: (session: TSession) => SessionDriver;
+  sessionAppIdentity: (session: TSession) => string;
+};
+
+type NativeAttemptFunction<TTarget extends NativeRunTarget> = (
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: TTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+) => Promise<HuntOutcome>;
 
 export type RunOptions = {
   huntName: string;
@@ -32,6 +66,8 @@ export type RunOptions = {
   junit?: boolean;
   /** Inject a macOS helper client (tests / a prebuilt binary); defaults to spawning the helper. */
   macClientFactory?: () => MacHelperClient;
+  /** Inject an Android session factory (tests); defaults to {@link launchAndroidSession}. */
+  androidSessionFactory?: (options: LaunchAndroidOptions) => Promise<AndroidSession>;
 };
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
@@ -261,6 +297,10 @@ export async function runHunt(
     return runMacHunt(options, config, configDir, config.target);
   }
 
+  if (config.target.type === "android") {
+    return runAndroidHunt(options, config, configDir, config.target);
+  }
+
   const hunt = loadHunt(options.huntName, configDir);
   const {
     hunt: interpolatedHunt,
@@ -331,30 +371,28 @@ export async function runHunt(
 // screenshots and the usual reports.
 // ---------------------------------------------------------------------------
 
-async function executeMacHuntAttempt(
+async function executeNativeHuntAttempt<TSession>(
   options: RunOptions,
   config: Config,
   configDir: string,
-  target: MacosTarget,
-  interpolatedHunt: ReturnType<typeof interpolateHunt>["hunt"],
+  interpolatedHunt: InterpolatedHunt,
   redactedFillSteps: Set<string>,
-  randomVars: ReturnType<typeof interpolateHunt>["randomVars"],
-  allowedApps: string[]
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[],
+  native: NativeAttemptOptions<TSession>
+): Promise<HuntOutcome> {
   const maxSteps = config.guardrails.maxSteps;
   const runDir = path.join(configDir, "runs", timestamp());
   fs.mkdirSync(runDir, { recursive: true });
 
-  const session = await launchMacSession({
-    app: target.app,
-    timeoutMs: config.browser.timeout,
-    clientFactory: options.macClientFactory
-  });
+  const session = await native.launchSession();
 
   let result: RunResult;
   try {
-    const targetLabel = `macos:${session.bundleId}`;
-    const effectiveAllowedApps = [...new Set([...allowedApps, target.app, session.bundleId])];
+    const driver = native.sessionDriver(session);
+    const appIdentity = native.sessionAppIdentity(session);
+    const targetLabel = `${native.targetType}:${appIdentity}`;
+    const effectiveAllowedApps = [...new Set([...allowedApps, native.targetApp, appIdentity])];
     const startedAt = new Date().toISOString();
     const startTime = Date.now();
 
@@ -364,7 +402,8 @@ async function executeMacHuntAttempt(
 
     try {
       const stepExecution = await executeSteps({
-        driver: session.driver,
+        driver,
+        targetType: native.targetType,
         steps: interpolatedHunt.steps,
         targetUrl: targetLabel,
         runDir,
@@ -392,7 +431,7 @@ async function executeMacHuntAttempt(
 
     let finalScreenshot: string | undefined;
     try {
-      finalScreenshot = await captureFinalScreenshot(session.driver, runDir);
+      finalScreenshot = await captureFinalScreenshot(driver, runDir);
     } catch {
       finalScreenshot = undefined;
     }
@@ -416,10 +455,44 @@ async function executeMacHuntAttempt(
 
     result = writeReports(runDir, runResult, { junit: options.junit ?? config.artifacts.junit });
   } finally {
-    await closeMacSession(session);
+    await native.closeSession(session);
   }
 
   return { result, runDir, steps: interpolatedHunt.steps };
+}
+
+async function executeMacHuntAttempt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: MacosTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+): Promise<HuntOutcome> {
+  return executeNativeHuntAttempt<MacSession>(
+    options,
+    config,
+    configDir,
+    interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    allowedApps,
+    {
+      targetType: "macos",
+      targetApp: target.app,
+      launchSession: () =>
+        launchMacSession({
+          app: target.app,
+          timeoutMs: config.browser.timeout,
+          clientFactory: options.macClientFactory
+        }),
+      closeSession: closeMacSession,
+      sessionDriver: (session) => session.driver,
+      sessionAppIdentity: (session) => session.bundleId
+    }
+  );
 }
 
 async function runMacHunt(
@@ -427,14 +500,93 @@ async function runMacHunt(
   config: Config,
   configDir: string,
   target: MacosTarget
-): Promise<{ result: RunResult; runDir: string; steps: Step[] }> {
+): Promise<HuntOutcome> {
+  return runNativeHunt(options, config, configDir, target, {
+    targetType: "macos",
+    assertAppAllowed: (allowedApps, nativeTarget) => assertTargetAppAllowed(allowedApps, nativeTarget.app),
+    attempt: executeMacHuntAttempt
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Android native target (PROWL-058). Mirrors the macOS run path: no browser, no
+// console/network assertions or HAR/trace. Steps run through the AndroidDriver
+// over the on-device uiautomator2 agent; artifacts are step + final screenshots
+// and the usual reports.
+// ---------------------------------------------------------------------------
+
+async function executeAndroidHuntAttempt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: AndroidTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+): Promise<HuntOutcome> {
+  const launch = options.androidSessionFactory ?? launchAndroidSession;
+  return executeNativeHuntAttempt<AndroidSession>(
+    options,
+    config,
+    configDir,
+    interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    allowedApps,
+    {
+      targetType: "android",
+      targetApp: target.app,
+      launchSession: () =>
+        launch({
+          app: target.app,
+          deviceSerial: target.deviceSerial,
+          coldStart: target.coldStart,
+          timeoutMs: config.browser.timeout,
+          allowedApps
+        }),
+      closeSession: closeAndroidSession,
+      sessionDriver: (session) => session.driver,
+      sessionAppIdentity: (session) => session.package
+    }
+  );
+}
+
+async function runAndroidHunt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: AndroidTarget
+): Promise<HuntOutcome> {
+  return runNativeHunt(options, config, configDir, target, {
+    targetType: "android",
+    assertAppAllowed: (allowedApps, nativeTarget) => {
+      if (!nativeTarget.app.toLowerCase().endsWith(".apk")) {
+        assertAndroidAppAllowed(allowedApps, nativeTarget.app);
+      }
+    },
+    attempt: executeAndroidHuntAttempt
+  });
+}
+
+async function runNativeHunt<TTarget extends NativeRunTarget>(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: TTarget,
+  native: {
+    targetType: NativeTargetType;
+    assertAppAllowed: (allowedApps: string[], target: TTarget) => void;
+    attempt: NativeAttemptFunction<TTarget>;
+  }
+): Promise<HuntOutcome> {
   const hunt = loadHunt(options.huntName, configDir);
   const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
 
   // Fail fast on web-only steps/assertions and out-of-scope apps before launching anything.
-  assertStepsSupportedByTarget(interpolatedHunt.steps, "macos");
-  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, "macos");
-  assertTargetAppAllowed(config.guardrails.allowedApps, target.app);
+  assertStepsSupportedByTarget(interpolatedHunt.steps, native.targetType);
+  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, native.targetType);
+  native.assertAppAllowed(config.guardrails.allowedApps, target);
 
   const maxSteps = config.guardrails.maxSteps;
   if (interpolatedHunt.steps.length > maxSteps) {
@@ -443,13 +595,13 @@ async function runMacHunt(
 
   const maxRetries = hunt.retry?.maxRetries ?? 0;
   const retryDelay = hunt.retry?.delay ?? 0;
-  let lastResult: { result: RunResult; runDir: string; steps: Step[] } | undefined;
+  let lastResult: HuntOutcome | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0 && retryDelay > 0) {
       await delay(retryDelay);
     }
-    lastResult = await executeMacHuntAttempt(
+    lastResult = await native.attempt(
       options,
       config,
       configDir,

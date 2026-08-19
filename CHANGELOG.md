@@ -5,6 +5,36 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Android execution target (ARCH-009 / PROWL-058).** Prowl can now drive native
+  Android apps on an emulator or USB device via `target: { type: "android", app }`,
+  where `app` is a package name or an `.apk` path to install. It follows the macOS
+  target's "external agent + JSON protocol" shape: `adb` handles device lifecycle,
+  screenshots, install, launch (`am start`/monkey), teardown (`am force-stop`), and
+  an opt-in deterministic cold start (`coldStart: true` → `pm clear`); the on-device
+  **`appium-uiautomator2-server`** (Apache-2.0, its two prebuilt APKs ship inside
+  the npm dependency — never committed here) handles UI interaction over its
+  W3C-shaped HTTP/JSON API, driven with raw `fetch` (no Appium server, JVM, gRPC, or
+  WebdriverIO). The agent is started with `am instrument` and port-forwarded on a
+  **dynamically allocated** local port (`adb forward tcp:0`) so parallel sessions /
+  CI jobs don't collide. Device selection fails with an actionable error listing
+  serials when several devices are attached and no `deviceSerial` is set; preflight
+  covers adb-on-PATH, a booted device, and agent readiness. The selector dialect
+  mirrors macOS — `id=` → `resource-id` (bare or `pkg:id/name`), `label=` →
+  `content-desc` (exact), `text=` → visible text (substring), `role=` → widget class
+  (+ substring text name) — with the Jetpack Compose `testTagsAsResourceId` caveat
+  documented. Capabilities are `{query, interact, wait, screenshot}` (no navigate),
+  so the existing target/step gating rejects web-only steps up front with an
+  Android-labelled message; `type`/`fill` set text unicode-safely and `press` maps
+  key names to Android key codes. `guardrails.allowedApps` is extended to Android
+  package IDs / canonical `.apk` paths, with APK package IDs resolved and
+  validated before install. `hover`/`scrollTo` have
+  no touch equivalent yet and are rejected clearly (scroll-gesture support is a
+  follow-up). New library exports include `launchAndroidSession`,
+  `closeAndroidSession`, `createAndroidDriver`, `parseAndroidSelector`,
+  `Uia2Transport`, the adb helpers (`parseAdbDevices`, `selectDeviceSerial`, …), and
+  the `AndroidTarget` / `AndroidAgentClient` / `AndroidSession` types. iOS
+  (PROWL-059/062), the unified selector engine (PROWL-060), and `prowl analyze` +
+  CI recipes for Android (PROWL-061) are tracked separately.
 - **`prowl analyze` for the macOS target (ARCH-007 / PROWL-055).** The analyzer
   now works on native apps, not just web pages: when the loaded config has
   `target.type: macos` (or you pass `--app <bundle-id|.app-path>` to run without a
