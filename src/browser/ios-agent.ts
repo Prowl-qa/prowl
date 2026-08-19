@@ -192,14 +192,17 @@ export async function waitForWdaReady(
       const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
       throw new Error(`WebDriverAgent did not become ready within ${options.deadlineMs}ms${detail}`);
     }
+    // A ref'd sleep here (unlike the per-request abort timer) keeps the event loop
+    // alive between probes: WDA is reached directly, so before its HTTP server
+    // binds the port is refused and each fetch rejects immediately — an unref'd
+    // timer would let Node go idle and leave this poll pending forever.
     await sleep(Math.min(interval, Math.max(0, deadline - Date.now())));
   }
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    timer.unref?.();
+    setTimeout(resolve, ms);
   });
 }
 
