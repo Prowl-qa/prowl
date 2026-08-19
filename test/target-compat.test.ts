@@ -6,8 +6,11 @@ import {
   androidAppAllowedIdentities,
   assertAndroidAppAllowed,
   assertHuntAssertionsSupportedByTarget,
+  assertIosAppAllowed,
   assertStepsSupportedByTarget,
   assertTargetAppAllowed,
+  iosAppAllowedIdentities,
+  readIosBundleIdentifier,
   webOnlyReason
 } from "../src/config/target.js";
 import type { Step } from "../src/types/index.js";
@@ -236,6 +239,70 @@ describe("androidAppAllowedIdentities / assertAndroidAppAllowed", () => {
   it("rejects an app excluded by a non-empty allowedApps", () => {
     expect(() => assertAndroidAppAllowed(["com.other.app"], "com.example.app")).toThrow(
       'Target app "com.example.app" is not in guardrails.allowedApps'
+    );
+  });
+});
+
+describe("iOS target gating (PROWL-059)", () => {
+  it("rejects web-only steps with an iOS-labelled message", () => {
+    expect(() => assertStepsSupportedByTarget([{ navigate: "/" }], "ios")).toThrow(
+      'Step "navigate" is not supported by the iOS target'
+    );
+    expect(() => assertHuntAssertionsSupportedByTarget([{ selectorExists: "x" }], "ios")).toThrow(
+      "Hunt-level assertions are not supported by the iOS target"
+    );
+  });
+
+  it("accepts a fully portable iOS hunt and recurses into bodies", () => {
+    const steps: Step[] = [
+      { click: "Save" },
+      { type: "hello" },
+      { assert: { visible: "Saved" } },
+      { if: { visible: "X", then: [{ press: { selector: ":focus", key: "Enter" } }] } }
+    ];
+    expect(() => assertStepsSupportedByTarget(steps, "ios")).not.toThrow();
+  });
+});
+
+describe("iosAppAllowedIdentities / assertIosAppAllowed", () => {
+  /** Build a minimal iOS `.app` bundle (root Info.plist) and return its path. */
+  function makeAppBundle(bundleId: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-app-"));
+    const appPath = path.join(dir, "Example.app");
+    fs.mkdirSync(appPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(appPath, "Info.plist"),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>` +
+        `<key>CFBundleIdentifier</key><string>${bundleId}</string></dict></plist>\n`
+    );
+    return appPath;
+  }
+
+  it("treats a bare bundle id as its own identity", () => {
+    expect(iosAppAllowedIdentities("com.example.App")).toEqual(["com.example.App"]);
+    expect(() => assertIosAppAllowed([], "com.example.App")).not.toThrow();
+    expect(() => assertIosAppAllowed(["com.example.App"], "com.example.App")).not.toThrow();
+  });
+
+  it("reads the bundle id from a .app root Info.plist and authorizes by it or by path", () => {
+    const appPath = makeAppBundle("com.derived.App");
+    try {
+      expect(readIosBundleIdentifier(appPath)).toBe("com.derived.App");
+      const identities = iosAppAllowedIdentities(appPath);
+      expect(identities).toContain("com.derived.App");
+      expect(identities).toContain(path.resolve(appPath));
+      // Allowlisted by bundle id even though the target is given as a path.
+      expect(() => assertIosAppAllowed(["com.derived.App"], appPath)).not.toThrow();
+      // Allowlisted by the .app path.
+      expect(() => assertIosAppAllowed([appPath], appPath)).not.toThrow();
+    } finally {
+      fs.rmSync(path.dirname(appPath), { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an app excluded by a non-empty allowedApps", () => {
+    expect(() => assertIosAppAllowed(["com.other.App"], "com.example.App")).toThrow(
+      'Target app "com.example.App" is not in guardrails.allowedApps'
     );
   });
 });
