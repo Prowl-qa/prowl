@@ -424,7 +424,7 @@ Config lives at `.prowl/config.yml`. All options with defaults:
 ```yaml
 # Execution target. Defaults to the web target; existing configs work unchanged.
 target:
-  type: "web"                         # "web" (default), "macos", or "android" (experimental)
+  type: "web"                         # "web" (default), "macos", "android", or "ios" (experimental)
   url: "http://localhost:3000"        # Required for web targets
   # For the experimental macOS target instead:
   #   type: "macos"
@@ -434,6 +434,11 @@ target:
   #   app: "com.example.app"          # package name or /path/to/app.apk  (see "Android Target")
   #   deviceSerial: "emulator-5554"   # optional; required only with several devices attached
   #   coldStart: false                # optional; pm clear before launch
+  # For the experimental iOS simulator target instead:
+  #   type: "ios"
+  #   app: "com.example.App"          # bundle id or /path/to/App.app  (see "iOS Target")
+  #   udid: "..."                     # optional; required only with several booted simulators
+  #   coldStart: false                # optional; uninstall+reinstall before launch (needs a .app)
 
 # Browser settings
 browser:
@@ -463,7 +468,7 @@ guardrails:
   forbiddenSelectors:                  # selectors that steps cannot use
     - "[data-danger]"
     - ".delete-btn"
-  allowedApps: []                      # native targets only: macOS bundle IDs/names/.app paths, or Android package IDs/canonical APK paths
+  allowedApps: []                      # native targets only: macOS bundle IDs/names/.app paths, Android package IDs/canonical APK paths, or iOS bundle IDs/.app paths
 
 # Auth state from `prowl login`
 auth:
@@ -1151,8 +1156,108 @@ follow-up. A degraded pure-`adb` fallback (`uiautomator dump` + `input tap`) is 
 possible future diagnostic mode, not the primary path.
 
 > Out of scope for PROWL-058 (tracked separately): `prowl analyze` for Android and
-> CI recipes (PROWL-061), the unified native selector engine (PROWL-060), and the
-> iOS targets (PROWL-059 / PROWL-062).
+> CI recipes (PROWL-061), the unified native selector engine (PROWL-060), and real
+> iOS devices (PROWL-062). The iOS **simulator** target ships below.
+
+---
+
+## iOS Target (Experimental)
+
+> **Experimental (PROWL-059).** Prowl can drive **native iOS apps** on a **booted
+> iOS Simulator**, in addition to the web, macOS, and Android targets. It follows
+> the same "external agent + JSON protocol" shape: `xcrun simctl` handles simulator
+> lifecycle and screenshots, and the on-simulator
+> [WebDriverAgent](https://github.com/appium/WebDriverAgent) (Apache-2.0) handles UI
+> interaction over its W3C-shaped HTTP/JSON API driven with raw `fetch`. The API,
+> selector dialect, and step coverage may change. **Real devices are out of scope**
+> (PROWL-062) — simulators only.
+
+### Requirements
+
+- **macOS with a full Xcode** (not just the command-line tools) installed and
+  selected (`xcode-select -p`), so `xcrun simctl` and `xcodebuild` are available.
+- At least one **booted simulator** (`xcrun simctl list devices | grep Booted`, or
+  boot one with `xcrun simctl boot <udid>` / from Xcode).
+- The **WebDriverAgent** runner is built **once** from the `appium-webdriveragent`
+  npm dependency (`xcodebuild build-for-testing`) and cached under
+  `~/.prowl/wda/<wda-version>-xcode<xcode-version>/`; the first run prints a one-time
+  "building WebDriverAgent…" notice and can take a few minutes. Simulators need **no
+  code signing**. Set `PROWL_WDA_RUNNER` to a prebuilt `WebDriverAgentRunner-Runner.app`
+  to skip the build (e.g. in CI with a cached runner).
+
+### Enabling it
+
+Point your config at an iOS target:
+
+```yaml
+target:
+  type: ios
+  app: "com.example.App"          # a bundle id, or a path to a built .app to install
+  # udid: "ABCD-1234"                # required only when several simulators are booted
+  # coldStart: true                  # uninstall+reinstall before launch (requires a .app path)
+guardrails:
+  allowedApps:                       # optional scope; empty = allow the target app
+    - "com.example.App"
+```
+
+Then run a hunt as usual: `prowl run my-ios-hunt`.
+
+On launch Prowl selects the booted simulator (failing with an actionable error,
+listing candidates, if several are booted and no `udid` is set), installs the app
+(when given a `.app`, reading its bundle id from the bundle's **root** `Info.plist`),
+builds/caches and installs the WebDriverAgent runner, launches it on a
+**dynamically allocated** port (passed via `SIMCTL_CHILD_USE_PORT` so parallel
+sessions / CI jobs don't collide), launches the target app, and waits for WDA to
+report ready. Everything is torn down (WDA session, `simctl terminate` of the runner
+and the app) after the run. `guardrails.allowedApps` accepts iOS bundle ids or
+`.app` paths; a `.app` path is authorized by its path, bundle name, or the bundle id
+read from its root `Info.plist`. Note: a bare `target.app` ending in `.app` is
+treated as a **bundle id** unless a directory of that name exists, so bundle ids like
+`com.company.app` are not mistaken for paths.
+
+### Selector dialect (iOS)
+
+Native selectors address accessibility ids, labels, visible text, and element type.
+Semantics match the macOS/Android targets so a selector means the same thing across
+native targets:
+
+| Selector | Matches |
+|---|---|
+| `id=save` | element whose accessibility id (`accessibilityIdentifier` / name) is `save` |
+| `label="Submit"` | element whose `accessibilityLabel` equals `Submit` (exact) |
+| `role=XCUIElementTypeButton` | element of that type (shorthand `role=Button` works too) |
+| `role=Button[name="Save"]` | that type whose visible `label`/`value` contains `Save` |
+| `text="Save"` or bare `Save` | element whose `label` or `value` contains the text (substring) |
+| `:focus` | the element with keyboard focus (`hasKeyboardFocus == 1`) |
+
+Prefer `id=` (set `accessibilityIdentifier` in your app — the native analog of
+`data-testid`). Text/label/role+name selectors compile to WDA NSPredicate strings
+(quotes and backslashes are escaped). `forbiddenSelectors` still applies.
+
+### Step compatibility
+
+Portable steps run on the iOS target; web-only steps are rejected up front (with a
+clear error), and URL guardrails do not apply.
+
+| Portable (iOS) | Not supported on iOS |
+|---|---|
+| `click`, `fill`, `type`, `press` | `navigate`, `waitForUrl`, `waitForNetworkIdle` |
+| `wait`, `waitForSelector` | `mockRoute` / `unmockRoute`, `evalScript`, `runScript` |
+| `assert: visible` / `notVisible` | `onDialog`, `select` / `selectOption`, `setInputFiles` |
+| `screenshot`, `assertScreenshot` | `waitForDownload`, `scroll`, `assert: urlIncludes` / `urlEquals` |
+| `repeat`, `if`, `runHunt`, `copyText` | `hover`, `scrollTo` (no touch equivalent yet) |
+
+Notes: `type` and `fill` set text on the focused / matched field via WDA's
+`element/value`; `press` supports a small honest key set — `enter`/`return` and
+`delete`/`backspace` (sent through WDA's key endpoint to the focused element) and
+`home` (returns to the springboard) — and rejects other keys with the supported-keys
+message. Screenshots are captured with `simctl` (not WDA), so artifacts still work
+even if the agent wedges. `hover` and `scrollTo` have no touch equivalent yet and are
+rejected with a clear message; scroll-gesture support is a follow-up.
+
+> Out of scope for PROWL-059 (tracked separately): `prowl analyze` for iOS and CI
+> recipes (PROWL-061), the unified native selector engine (PROWL-060), and real iOS
+> devices (PROWL-062).
 
 ---
 
