@@ -11,8 +11,10 @@ All notable changes to Prowl will be documented in this file.
   installs are unchanged — mobile targets still work out of the box — but a
   failed agent download no longer breaks installing Prowl itself, and web-only
   users can install lean with `npm install -g prowl-tools --omit=optional`. If a
-  mobile target runs without its agent present, it fails with the exact
-  `npm install` command to restore it.
+  mobile target runs without its agent present, it fails with scoped recovery
+  commands for global npm installs (`npm install -g ...`) and local project
+  installs (`npm install ...`) so the agent package is restored where Prowl can
+  resolve it.
 - **npm publishing now authenticates via OIDC Trusted Publishing (REL-001 /
   PROWL-057).** The tag-triggered publish workflow no longer reads the
   `NPM_TOKEN` secret: `npm publish` authenticates through GitHub Actions' OIDC

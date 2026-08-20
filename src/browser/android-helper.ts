@@ -72,7 +72,9 @@ export function resolveAgentApks(requireFn: NodeRequire = createRequire(import.m
     throw new Error(
       "The Android target requires the `appium-uiautomator2-server` package (its prebuilt APKs). " +
         "It is an optional dependency of prowl-tools; it may have been skipped (--omit=optional) " +
-        "or failed to install. Restore it with: npm install appium-uiautomator2-server@10.6.2"
+        "or failed to install. Restore it for a global Prowl install with: " +
+        "npm install -g appium-uiautomator2-server@10.6.2. If Prowl is installed locally in a " +
+        "project, run: npm install appium-uiautomator2-server@10.6.2"
     );
   }
   const pkgDir = path.dirname(pkgJsonPath);

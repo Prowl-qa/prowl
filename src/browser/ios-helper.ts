@@ -84,7 +84,9 @@ export function resolveWdaProject(requireFn: NodeRequire = createRequire(import.
     throw new Error(
       "The iOS target requires the `appium-webdriveragent` package (its WDA Xcode project). " +
         "It is an optional dependency of prowl-tools; it may have been skipped (--omit=optional) " +
-        "or failed to install. Restore it with: npm install appium-webdriveragent@16.4.0"
+        "or failed to install. Restore it for a global Prowl install with: " +
+        "npm install -g appium-webdriveragent@16.4.0. If Prowl is installed locally in a " +
+        "project, run: npm install appium-webdriveragent@16.4.0"
     );
   }
   const pkgDir = path.dirname(pkgJsonPath);

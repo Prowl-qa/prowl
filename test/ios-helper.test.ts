@@ -86,6 +86,26 @@ describe("resolveWdaProject", () => {
     expect(projectPath).toMatch(/WebDriverAgent\.xcodeproj$/);
     expect(version).toMatch(/^\d+\.\d+/);
   });
+
+  it("reports recovery commands when the optional WDA package is missing", () => {
+    const requireFn = Object.assign(
+      (() => {
+        throw new Error("unexpected require call");
+      }) as NodeRequire,
+      {
+        resolve: () => {
+          throw new Error("missing optional dependency");
+        }
+      }
+    );
+
+    expect(() => resolveWdaProject(requireFn)).toThrow(
+      "npm install -g appium-webdriveragent@16.4.0"
+    );
+    expect(() => resolveWdaProject(requireFn)).toThrow(
+      "npm install appium-webdriveragent@16.4.0"
+    );
+  });
 });
 
 describe("launchIosSession", () => {

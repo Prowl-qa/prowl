@@ -64,8 +64,19 @@ but skippable for a leaner web-only install:
 npm install -g prowl-tools --omit=optional
 ```
 
-If a mobile target later needs an omitted agent, it fails with the exact
-`npm install` command to restore it.
+If a mobile target later needs an omitted agent, it fails with exact recovery
+commands for global and local installs. For a global npm install, restore the
+agents with:
+
+```bash
+npm install -g appium-uiautomator2-server@10.6.2 appium-webdriveragent@16.4.0
+```
+
+For a local project install, omit `-g`:
+
+```bash
+npm install appium-uiautomator2-server@10.6.2 appium-webdriveragent@16.4.0
+```
 
 ### 2. Initialize
 

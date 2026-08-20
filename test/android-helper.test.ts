@@ -67,6 +67,26 @@ describe("resolveAgentApks", () => {
     expect(apks.serverApk).toMatch(/appium-uiautomator2-server-v[\d.]+\.apk$/);
     expect(apks.testApk).toMatch(/androidTest\.apk$/);
   });
+
+  it("reports recovery commands when the optional agent package is missing", () => {
+    const requireFn = Object.assign(
+      (() => {
+        throw new Error("unexpected require call");
+      }) as NodeRequire,
+      {
+        resolve: () => {
+          throw new Error("missing optional dependency");
+        }
+      }
+    );
+
+    expect(() => resolveAgentApks(requireFn)).toThrow(
+      "npm install -g appium-uiautomator2-server@10.6.2"
+    );
+    expect(() => resolveAgentApks(requireFn)).toThrow(
+      "npm install appium-uiautomator2-server@10.6.2"
+    );
+  });
 });
 
 describe("launchAndroidSession", () => {
