@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AndroidTarget, AssertionResult, BrowserChannel, Config, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
+import type { AndroidTarget, AssertionResult, BrowserChannel, Config, IosTarget, MacosTarget, RunResult, Step, StepResult, TraceCorrelation } from "../types/index.js";
 import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import {
   assertAndroidAppAllowed,
   assertHuntAssertionsSupportedByTarget,
+  assertIosAppAllowed,
   assertStepsSupportedByTarget,
   assertTargetAppAllowed
 } from "../config/target.js";
@@ -19,6 +20,12 @@ import {
   type AndroidSession,
   type LaunchAndroidOptions
 } from "../browser/android-helper.js";
+import {
+  launchIosSession,
+  closeIosSession,
+  type IosSession,
+  type LaunchIosOptions
+} from "../browser/ios-helper.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
 import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
@@ -26,8 +33,8 @@ import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
 import { appendEntry as appendHistoryEntry } from "./history.js";
 
-type NativeTargetType = "macos" | "android";
-type NativeRunTarget = MacosTarget | AndroidTarget;
+type NativeTargetType = "macos" | "android" | "ios";
+type NativeRunTarget = MacosTarget | AndroidTarget | IosTarget;
 type InterpolatedHunt = ReturnType<typeof interpolateHunt>["hunt"];
 type InterpolationRandomVars = ReturnType<typeof interpolateHunt>["randomVars"];
 type HuntOutcome = { result: RunResult; runDir: string; steps: Step[] };
@@ -68,6 +75,8 @@ export type RunOptions = {
   macClientFactory?: () => MacHelperClient;
   /** Inject an Android session factory (tests); defaults to {@link launchAndroidSession}. */
   androidSessionFactory?: (options: LaunchAndroidOptions) => Promise<AndroidSession>;
+  /** Inject an iOS session factory (tests); defaults to {@link launchIosSession}. */
+  iosSessionFactory?: (options: LaunchIosOptions) => Promise<IosSession>;
 };
 
 function parseViewportFlag(value: string): string | { width: number; height: number } {
@@ -299,6 +308,10 @@ export async function runHunt(
 
   if (config.target.type === "android") {
     return runAndroidHunt(options, config, configDir, config.target);
+  }
+
+  if (config.target.type === "ios") {
+    return runIosHunt(options, config, configDir, config.target);
   }
 
   const hunt = loadHunt(options.huntName, configDir);
@@ -566,6 +579,62 @@ async function runAndroidHunt(
       }
     },
     attempt: executeAndroidHuntAttempt
+  });
+}
+
+// ---------------------------------------------------------------------------
+// iOS simulator native target (PROWL-059). Mirrors the Android run path: no
+// browser, no console/network assertions or HAR/trace. Steps run through the
+// IosDriver over the on-simulator WebDriverAgent; screenshots come from simctl.
+// ---------------------------------------------------------------------------
+
+async function executeIosHuntAttempt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: IosTarget,
+  interpolatedHunt: InterpolatedHunt,
+  redactedFillSteps: Set<string>,
+  randomVars: InterpolationRandomVars,
+  allowedApps: string[]
+): Promise<HuntOutcome> {
+  const launch = options.iosSessionFactory ?? launchIosSession;
+  return executeNativeHuntAttempt<IosSession>(
+    options,
+    config,
+    configDir,
+    interpolatedHunt,
+    redactedFillSteps,
+    randomVars,
+    allowedApps,
+    {
+      targetType: "ios",
+      targetApp: target.app,
+      launchSession: () =>
+        launch({
+          app: target.app,
+          udid: target.udid,
+          coldStart: target.coldStart,
+          timeoutMs: config.browser.timeout,
+          allowedApps
+        }),
+      closeSession: closeIosSession,
+      sessionDriver: (session) => session.driver,
+      sessionAppIdentity: (session) => session.bundleId
+    }
+  );
+}
+
+async function runIosHunt(
+  options: RunOptions,
+  config: Config,
+  configDir: string,
+  target: IosTarget
+): Promise<HuntOutcome> {
+  return runNativeHunt(options, config, configDir, target, {
+    targetType: "ios",
+    assertAppAllowed: (allowedApps, nativeTarget) => assertIosAppAllowed(allowedApps, nativeTarget.app),
+    attempt: executeIosHuntAttempt
   });
 }
 

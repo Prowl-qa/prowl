@@ -402,24 +402,6 @@ free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062
 devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
 swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
 
-{PROWL-059} **ARCH-010: iOS Simulator target**
-   *As an iOS developer, I want `target: { type: "ios" }` so my app's smoke tests run as Prowl
-hunts on a booted simulator.*
-   Driver = `xcrun simctl` for lifecycle/screenshots/permission-pregrant + a prebuilt
-WebDriverAgent runner (Apache-2.0, Appium-maintained) preinstalled and launched via
-`simctl launch`, driven over its WebDriver HTTP/JSON API with raw `fetch` on a dynamic port.
-No xcodebuild at session time (build-and-cache WDA keyed on Xcode version).
-
-**Found during**: BrowserStack/mobile competitive research (2026-08-18)
-**Acceptance Criteria**:
-- `target: { type: "ios", app: "<bundle-id-or-.app>" }`; `allowedApps` extended to iOS bundle ids
-- Simulators only — real devices explicitly out of scope ({PROWL-062})
-- Same verb/selector parity bar as PROWL-058: `id=` → accessibilityIdentifier, `label=` →
-  accessibilityLabel, `text=` → StaticText label/value, `role=` → XCUIElementType
-- Deterministic screenshots: `simctl statusbar override` support
-- Preflight validates macOS + Xcode/simctl + a booted sim; actionable errors
-- Unit tests with a faked WDA transport
-
 {PROWL-060} **ARCH-011: Unified native selector engine (snapshot-then-match)**
    Both mobile agents return full hierarchy snapshots (`/source`). Match selectors host-side in
 one shared TS engine so `id=`/`label=`/`text=`/`role=` mean the same thing on Android, iOS, and

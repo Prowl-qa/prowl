@@ -52,14 +52,20 @@ export function webOnlyReason(step: Step): string | null {
 
 /** Human-facing label for a native (non-web) target, used in error messages. */
 function nativeTargetLabel(target: Target["type"]): string {
-  return target === "android" ? "Android" : "macOS";
+  if (target === "android") {
+    return "Android";
+  }
+  if (target === "ios") {
+    return "iOS";
+  }
+  return "macOS";
 }
 
 /**
  * Throw if any step in `steps` (recursing into `if`/`repeat` bodies) is not
  * supported by `target`. `runHunt` references are validated when the referenced
  * hunt itself runs. No-op for the web target; every native target (macOS,
- * Android) rejects the same web-only step vocabulary.
+ * Android, iOS) rejects the same web-only step vocabulary.
  */
 export function assertStepsSupportedByTarget(steps: Step[], target: Target["type"]): void {
   if (target === "web") {
@@ -103,9 +109,31 @@ function trimTrailingPathSeparators(value: string): string {
   return value.replace(/[\\/]+$/g, "");
 }
 
-function looksLikeMacosAppPath(app: string): boolean {
+function looksLikeAppBundlePath(app: string): boolean {
   const trimmed = trimTrailingPathSeparators(app);
   return trimmed.includes("/") || trimmed.toLowerCase().endsWith(".app");
+}
+
+/**
+ * Whether an iOS `target.app` value is a `.app` bundle path rather than a bundle
+ * id. iOS bundle ids commonly end in `.app`/`.App` (e.g. `com.company.app`), which
+ * the macOS heuristic would misclassify, so a bare `*.app` value counts as a path
+ * only when it actually exists on disk as a directory. A path separator is always
+ * decisive.
+ */
+export function looksLikeIosAppPath(app: string): boolean {
+  const trimmed = trimTrailingPathSeparators(app);
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    return true;
+  }
+  if (trimmed.toLowerCase().endsWith(".app")) {
+    try {
+      return fs.statSync(normalizeAppPath(app)).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 function normalizeAppPath(app: string): string {
@@ -117,8 +145,14 @@ function parseBundleIdentifier(plist: string): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function readBundleIdentifier(appPath: string): string | null {
-  const infoPlistPath = path.join(normalizeAppPath(appPath), "Contents", "Info.plist");
+/**
+ * Read `CFBundleIdentifier` from an app bundle's `Info.plist`. macOS `.app`
+ * bundles keep it under `Contents/`, while iOS simulator `.app` bundles keep it
+ * at the bundle root, so `plistSubPath` names the plist's location within the
+ * bundle. XML plists are parsed directly; binary plists fall back to `plutil`.
+ */
+function readBundleIdentifier(appPath: string, ...plistSubPath: string[]): string | null {
+  const infoPlistPath = path.join(normalizeAppPath(appPath), ...plistSubPath);
   if (!fs.existsSync(infoPlistPath)) {
     return null;
   }
@@ -148,10 +182,29 @@ function readBundleIdentifier(appPath: string): string | null {
   }
 }
 
-export function macosAppAllowedIdentities(app: string): string[] {
+/** Read the bundle id from a macOS `.app` (`Contents/Info.plist`), or null. */
+export function readMacosBundleIdentifier(appPath: string): string | null {
+  return readBundleIdentifier(appPath, "Contents", "Info.plist");
+}
+
+/** Read the bundle id from an iOS `.app` (root `Info.plist`), or null. */
+export function readIosBundleIdentifier(appPath: string): string | null {
+  return readBundleIdentifier(appPath, "Info.plist");
+}
+
+/**
+ * Accepted identities for a native app-bundle target: the raw value, and for a
+ * `.app` path also its trimmed/normalized path, bundle name, and
+ * `CFBundleIdentifier`. `readBundleId` locates the plist per platform.
+ */
+function appBundleAllowedIdentities(
+  app: string,
+  readBundleId: (appPath: string) => string | null,
+  isAppPath: (app: string) => boolean = looksLikeAppBundlePath
+): string[] {
   const identities = new Set<string>([app]);
 
-  if (looksLikeMacosAppPath(app)) {
+  if (isAppPath(app)) {
     const normalizedPath = normalizeAppPath(app);
     identities.add(trimTrailingPathSeparators(app));
     identities.add(normalizedPath);
@@ -161,13 +214,26 @@ export function macosAppAllowedIdentities(app: string): string[] {
       identities.add(bundleName);
     }
 
-    const bundleId = readBundleIdentifier(app);
+    const bundleId = readBundleId(app);
     if (bundleId) {
       identities.add(bundleId);
     }
   }
 
   return [...identities];
+}
+
+export function macosAppAllowedIdentities(app: string): string[] {
+  return appBundleAllowedIdentities(app, readMacosBundleIdentifier);
+}
+
+/**
+ * Accepted identities for an iOS target app. A bare bundle id matches itself; a
+ * `.app` path is authorized by its path, bundle name, or the `CFBundleIdentifier`
+ * read from the bundle's root `Info.plist`.
+ */
+export function iosAppAllowedIdentities(app: string): string[] {
+  return appBundleAllowedIdentities(app, readIosBundleIdentifier, looksLikeIosAppPath);
 }
 
 /**
@@ -178,6 +244,15 @@ export function macosAppAllowedIdentities(app: string): string[] {
  */
 export function assertTargetAppAllowed(allowedApps: string[], app: string): void {
   assertNativeAppAllowed(allowedApps, app, macosAppAllowedIdentities);
+}
+
+/**
+ * iOS scope guardrail (PROWL-059): mirrors {@link assertTargetAppAllowed} but
+ * resolves identities via {@link iosAppAllowedIdentities} (bundle id or `.app`
+ * path with the id read from the bundle's root `Info.plist`).
+ */
+export function assertIosAppAllowed(allowedApps: string[], app: string): void {
+  assertNativeAppAllowed(allowedApps, app, iosAppAllowedIdentities);
 }
 
 function looksLikeApkPath(app: string): boolean {

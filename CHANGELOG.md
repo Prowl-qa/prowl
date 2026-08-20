@@ -5,6 +5,41 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **iOS simulator execution target (ARCH-010 / PROWL-059).** Prowl can now drive
+  native iOS apps on a **booted iOS Simulator** via `target: { type: "ios", app }`,
+  where `app` is a bundle id or a built `.app` path to install (real devices are out
+  of scope — PROWL-062). It mirrors the Android target's shape: `xcrun simctl`
+  handles simulator lifecycle, install, launch, teardown (`terminate`), screenshots
+  (`simctl io … screenshot`, used for artifacts so they survive an agent hang), and
+  an opt-in deterministic cold start (`coldStart: true` → uninstall+reinstall, which
+  requires the `.app` path); the on-simulator **WebDriverAgent** (`appium-webdriveragent`,
+  Apache-2.0) handles UI interaction over its W3C-shaped HTTP/JSON API, driven with
+  raw `fetch` (no Appium server, WebdriverIO, or tunnel — WDA is reachable directly).
+  WDA's runner app is built once with `xcodebuild build-for-testing` and cached under
+  `~/.prowl/wda/` keyed on the WDA + Xcode versions (a one-time notice is printed;
+  `PROWL_WDA_RUNNER` can point at a prebuilt runner to skip the build), then installed
+  and launched via `simctl` (no code signing on simulators) on a **dynamically
+  allocated** port passed through `SIMCTL_CHILD_USE_PORT`. Simulator selection fails
+  with an actionable error listing candidates when several are booted and no `udid`
+  is set; preflight covers Xcode/simctl, a booted simulator, WDA build, and agent
+  readiness. The selector dialect mirrors macOS/Android — `id=` → accessibility id,
+  `label=` → `label ==` (exact NSPredicate), `text=`/bare → `label`/`value` substring,
+  `role=` → `XCUIElementType…` class (shorthand like `Button` accepted; `role=…[name]`
+  → class + substring), `:focus` → `hasKeyboardFocus == 1`. Capabilities are
+  `{query, interact, wait, screenshot}` (no navigate), so the existing target/step
+  gating rejects web-only steps up front with an iOS-labelled message; `type`/`fill`
+  set text via WDA `element/value`, and `press` supports `enter`/`return`,
+  `delete`/`backspace` (via `/wda/keys`), and `home` (`/wda/homescreen`), rejecting
+  others clearly. `guardrails.allowedApps` is extended to iOS bundle ids / `.app`
+  paths (the id is read from the bundle's root `Info.plist`); iOS `.app`-path
+  detection requires an existing bundle directory so bundle ids ending in `.app`
+  (e.g. `com.company.app`) are not misread as paths. `hover`/`scrollTo` have no touch
+  equivalent yet and are rejected clearly. New library exports include
+  `launchIosSession`, `closeIosSession`, `createIosDriver`, `parseIosSelector`,
+  `WdaTransport`, the simctl helpers (`parseSimctlDevices`, `selectSimulatorUdid`, …),
+  and the `IosTarget` / `IosAgentClient` / `IosSession` types. The unified selector
+  engine (PROWL-060) and `prowl analyze` + CI recipes for iOS (PROWL-061) are tracked
+  separately; real iOS devices (PROWL-062) are intentionally deferred.
 - **Android execution target (ARCH-009 / PROWL-058).** Prowl can now drive native
   Android apps on an emulator or USB device via `target: { type: "android", app }`,
   where `app` is a package name or an `.apk` path to install. It follows the macOS
@@ -76,6 +111,13 @@ All notable changes to Prowl will be documented in this file.
   full-screen baselines captured by earlier macOS runs will no longer match the
   new window-scoped captures — delete and re-create them (`prowl update-baselines`
   or remove the stored baseline) after upgrading.
+
+### Fixed
+- Hardened the experimental iOS target startup path so WebDriverAgent startup
+  retries once with a fresh port after launch/readiness failures, selected
+  simulator UDIDs are reserved for the whole session, target-app launch failures
+  still tear down the WDA runner, WDA request deadlines cover response-body reads,
+  and the `press` key error list includes the accepted `del` alias.
 
 ## [0.1.4] - 2026-08-16
 

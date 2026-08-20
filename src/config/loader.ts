@@ -129,6 +129,19 @@ function resolveTarget(target: Config["target"] | undefined): Target {
       ...(androidTarget.coldStart !== undefined ? { coldStart: androidTarget.coldStart } : {})
     };
   }
+  if (type === "ios") {
+    const iosTarget = target as {
+      app: string;
+      udid?: string;
+      coldStart?: boolean;
+    };
+    return {
+      type: "ios",
+      app: iosTarget.app,
+      ...(iosTarget.udid !== undefined ? { udid: iosTarget.udid } : {}),
+      ...(iosTarget.coldStart !== undefined ? { coldStart: iosTarget.coldStart } : {})
+    };
+  }
   return {
     type: "web",
     url: (target as { url?: string } | undefined)?.url ?? DEFAULT_WEB_URL
