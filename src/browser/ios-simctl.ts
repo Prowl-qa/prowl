@@ -170,7 +170,11 @@ export async function reserveSimulatorUdid(
   throw simulatorReservedError(udid);
 }
 
-/** Allocate a free local TCP port by binding to :0 and releasing it. */
+/**
+ * Allocate a free local TCP port by binding to :0 and releasing it. The returned
+ * port is advisory after release; callers that hand it to another process must
+ * handle a later bind/readiness failure.
+ */
 export function findFreePort(): Promise<number> {
   return new Promise<number>((resolve, reject) => {
     const server = net.createServer();
