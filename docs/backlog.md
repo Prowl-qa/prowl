@@ -25,7 +25,8 @@ long-lived secret that must be rotated every 90 days. Should land before the nex
 
 **Found during**: v0.1.4 release prep (2026-08-17, token-rotation incident)
 **Status**: Partially complete (2026-08-20, branch oidc-publishing) — workflow migrated: token
-auth removed, OIDC upgrade step added (`npm@11`), publish step documented. Remaining, in order:
+auth removed, Trusted Publishing-supported Node 22.14.0 selected, OIDC upgrade step added
+(`npm@11`), publish step documented. Remaining, in order:
 (1) owner configures the trusted publisher on npmjs.com (`prowl-tools` package → Settings →
 Trusted Publisher: GitHub Actions, org/repo `prowl-tools/prowl`, workflow `publish.yml`) —
 must happen BEFORE the next tag push or publishing fails; (2) next release (v0.1.5) verifies
