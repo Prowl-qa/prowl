@@ -55,6 +55,18 @@ Prowl uses Playwright under the hood. Install the browser:
 npx playwright install chromium
 ```
 
+The on-device agents for the experimental Android/iOS targets
+(`appium-uiautomator2-server`, `appium-webdriveragent`) are **optional
+dependencies** — installed by default so mobile testing works out of the box,
+but skippable for a leaner web-only install:
+
+```bash
+npm install -g prowl-tools --omit=optional
+```
+
+If a mobile target later needs an omitted agent, it fails with the exact
+`npm install` command to restore it.
+
 ### 2. Initialize
 
 ```bash
