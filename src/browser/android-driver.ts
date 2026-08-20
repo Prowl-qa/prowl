@@ -43,8 +43,14 @@ export type AndroidQuery =
   | { by: "text"; value: string }
   | { by: "focused" };
 
-/** A W3C locator strategy ({@code using}) + its value, as the agent expects. */
-export type AndroidLocator = { using: string; value: string };
+/**
+ * A locator in the uiautomator2 server's native wire shape. The raw on-device
+ * server does NOT accept W3C `{using, value}` — that translation normally lives
+ * in Appium's driver layer, which we bypass — it requires `{strategy, selector}`
+ * (plus a `context` field, empty for a root-scoped search). Device-verified
+ * against appium-uiautomator2-server 10.6.2 (2026-08-19).
+ */
+export type AndroidLocator = { strategy: string; selector: string; context: string };
 
 /**
  * The semantic transport `AndroidDriver` talks to: element lookups return opaque
@@ -162,39 +168,58 @@ export function parseAndroidSelector(selector: string): AndroidQuery {
   return { by: "text", value: trimmed };
 }
 
+function locator(strategy: string, selector: string): AndroidLocator {
+  return { strategy, selector, context: "" };
+}
+
 /**
- * Translate an {@link AndroidQuery} into a W3C locator strategy the
- * uiautomator2 agent accepts. `id`/`accessibility id` are native strategies;
- * text/role(+name)/focused compose a `-android uiautomator` `UiSelector`.
+ * Qualify a bare resource-id with the app's package. The raw uiautomator2
+ * server matches resource-ids exactly (device-verified: bare names return no
+ * elements), so `id=save` becomes `<appPackage>:id/save`. Values that already
+ * contain a `:` (e.g. `android:id/title`) pass through untouched.
  */
-export function androidQueryToLocator(query: AndroidQuery): AndroidLocator {
+export function qualifyResourceId(value: string, appPackage?: string): string {
+  if (value.includes(":") || !appPackage) {
+    return value;
+  }
+  return `${appPackage}:id/${value}`;
+}
+
+/**
+ * Translate an {@link AndroidQuery} into the uiautomator2 server's native
+ * locator shape. `id`/`accessibility id` are native strategies;
+ * text/role(+name)/focused compose a `-android uiautomator` `UiSelector`.
+ * `appPackage` qualifies bare `id=` names ({@link qualifyResourceId}).
+ */
+export function androidQueryToLocator(
+  query: AndroidQuery,
+  options: { appPackage?: string } = {}
+): AndroidLocator {
   switch (query.by) {
     case "id":
-      // The agent's `id` strategy matches either a bare id name or a fully
-      // qualified `pkg:id/name` resource-id.
-      return { using: "id", value: query.value };
+      return locator("id", qualifyResourceId(query.value, options.appPackage));
     case "accessibilityId":
       // content-desc, exact match.
-      return { using: "accessibility id", value: query.value };
+      return locator("accessibility id", query.value);
     case "text":
       // Visible text, substring match — mirrors the macOS `text=` semantics.
-      return {
-        using: "-android uiautomator",
-        value: `new UiSelector().textContains("${escapeUiSelectorArg(query.value)}")`
-      };
+      return locator(
+        "-android uiautomator",
+        `new UiSelector().textContains("${escapeUiSelectorArg(query.value)}")`
+      );
     case "focused":
-      return { using: "-android uiautomator", value: "new UiSelector().focused(true)" };
+      return locator("-android uiautomator", "new UiSelector().focused(true)");
     case "role": {
       const className = escapeUiSelectorArg(query.role);
       if (query.name === undefined || query.name.length === 0) {
-        return { using: "class name", value: query.role };
+        return locator("class name", query.role);
       }
       // Widget class + visible-text (substring) name. Content-desc-only names are
       // not covered by this composed form — use `label=` for those. PROWL-060.
-      return {
-        using: "-android uiautomator",
-        value: `new UiSelector().className("${className}").textContains("${escapeUiSelectorArg(query.name)}")`
-      };
+      return locator(
+        "-android uiautomator",
+        `new UiSelector().className("${className}").textContains("${escapeUiSelectorArg(query.name)}")`
+      );
     }
   }
 }

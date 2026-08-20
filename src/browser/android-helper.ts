@@ -53,6 +53,8 @@ export type AgentConnector = (options: {
   port: number;
   requestTimeoutMs: number;
   readyDeadlineMs: number;
+  /** Target app's package name; qualifies bare `id=` selectors on the device. */
+  appPackage?: string;
 }) => Promise<AndroidAgentClient>;
 
 /** Resolve a package name from an `.apk` file, or null when it can't be determined. */
@@ -112,7 +114,8 @@ export const defaultAgentConnector: AgentConnector = async ({
   host,
   port,
   requestTimeoutMs,
-  readyDeadlineMs
+  readyDeadlineMs,
+  appPackage
 }) => {
   const transport = new Uia2Transport({
     baseUrl: `http://${host}:${port}/wd/hub`,
@@ -120,7 +123,7 @@ export const defaultAgentConnector: AgentConnector = async ({
   });
   await waitForAgentReady(transport, { deadlineMs: readyDeadlineMs });
   const sessionId = await createUia2Session(transport);
-  return createUia2AgentClient(transport, sessionId);
+  return createUia2AgentClient(transport, sessionId, { appPackage });
 };
 
 export type AndroidSession = {
@@ -239,7 +242,13 @@ export async function launchAndroidSession(options: LaunchAndroidOptions): Promi
   try {
     instrumentation = startInstrumentation(spawner, serial);
     localPort = await forwardDynamicPort(runner, serial, UIA2_REMOTE_PORT);
-    client = await connector({ host: "127.0.0.1", port: localPort, requestTimeoutMs, readyDeadlineMs });
+    client = await connector({
+      host: "127.0.0.1",
+      port: localPort,
+      requestTimeoutMs,
+      readyDeadlineMs,
+      appPackage: pkg
+    });
     const driver = createAndroidDriver(client, { appLabel: pkg });
     return { client, driver, package: pkg, serial, teardown };
   } catch (error) {

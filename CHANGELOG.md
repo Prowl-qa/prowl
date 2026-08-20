@@ -4,6 +4,21 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Android target: speak the uiautomator2 server's native locator wire shape.**
+  First device-verification of the Android target (Pixel 7 emulator, API 36,
+  `appium-uiautomator2-server` 10.6.2) caught two protocol mismatches the faked
+  transport in unit tests could not: element lookups sent W3C `{using, value}`
+  bodies, but the raw on-device server (driven without Appium's translating
+  driver layer) requires `{strategy, selector, context}` and rejected every
+  lookup with `400 invalid argument`; and bare `id=` resource-ids never matched
+  because the server matches resource-ids exactly. Locators now use the native
+  wire shape, and bare `id=` names are auto-qualified with the target app's
+  package (`id=save` → `com.pkg:id/save`; ids in other namespaces still work via
+  the full form, e.g. `id=android:id/title`). Verified end-to-end on the
+  emulator via `prowl run` (wait → assert by qualified and bare id → tap →
+  navigate → screenshot).
+
 ### Added
 - **iOS simulator execution target (ARCH-010 / PROWL-059).** Prowl can now drive
   native iOS apps on a **booted iOS Simulator** via `target: { type: "ios", app }`,

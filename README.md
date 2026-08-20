@@ -1121,7 +1121,7 @@ native targets:
 
 | Selector | Matches |
 |---|---|
-| `id=save` | element whose `resource-id` is `save` (bare name or full `com.pkg:id/save`) |
+| `id=save` | element whose `resource-id` is `save` — a bare name is auto-qualified with the target app's package (`com.pkg:id/save`); ids in other namespaces need the full form (e.g. `id=android:id/title`) |
 | `label="Submit"` | element whose `content-desc` equals `Submit` (exact) |
 | `role=android.widget.Button` | element of that widget class |
 | `role=android.widget.Button[name="Save"]` | that widget class whose visible text contains `Save` |

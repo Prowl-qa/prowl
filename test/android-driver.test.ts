@@ -91,44 +91,71 @@ describe("parseAndroidSelector (PROWL-058 selector dialect)", () => {
 });
 
 describe("androidQueryToLocator", () => {
-  it("uses native strategies for id and content-desc", () => {
-    expect(androidQueryToLocator({ by: "id", value: "save" })).toEqual({ using: "id", value: "save" });
+  it("uses the server's native strategy/selector/context wire shape (not W3C using/value)", () => {
+    expect(androidQueryToLocator({ by: "id", value: "com.app:id/save" })).toEqual({
+      strategy: "id",
+      selector: "com.app:id/save",
+      context: ""
+    });
     expect(androidQueryToLocator({ by: "accessibilityId", value: "Submit" })).toEqual({
-      using: "accessibility id",
-      value: "Submit"
+      strategy: "accessibility id",
+      selector: "Submit",
+      context: ""
+    });
+  });
+
+  it("qualifies bare resource-ids with the app package; qualified ids pass through", () => {
+    expect(androidQueryToLocator({ by: "id", value: "save" }, { appPackage: "com.app" })).toEqual({
+      strategy: "id",
+      selector: "com.app:id/save",
+      context: ""
+    });
+    expect(
+      androidQueryToLocator({ by: "id", value: "android:id/title" }, { appPackage: "com.app" })
+    ).toEqual({ strategy: "id", selector: "android:id/title", context: "" });
+    // Without a package the bare value passes through unchanged.
+    expect(androidQueryToLocator({ by: "id", value: "save" })).toEqual({
+      strategy: "id",
+      selector: "save",
+      context: ""
     });
   });
 
   it("composes a UiSelector for substring text (mirrors macOS text= semantics)", () => {
     expect(androidQueryToLocator({ by: "text", value: "Save" })).toEqual({
-      using: "-android uiautomator",
-      value: 'new UiSelector().textContains("Save")'
+      strategy: "-android uiautomator",
+      selector: 'new UiSelector().textContains("Save")',
+      context: ""
     });
   });
 
   it("maps a bare role to a class name and a role+name to class + text", () => {
     expect(androidQueryToLocator({ by: "role", role: "android.widget.Button" })).toEqual({
-      using: "class name",
-      value: "android.widget.Button"
+      strategy: "class name",
+      selector: "android.widget.Button",
+      context: ""
     });
     expect(androidQueryToLocator({ by: "role", role: "android.widget.Button", name: "Save" })).toEqual({
-      using: "-android uiautomator",
-      value: 'new UiSelector().className("android.widget.Button").textContains("Save")'
+      strategy: "-android uiautomator",
+      selector: 'new UiSelector().className("android.widget.Button").textContains("Save")',
+      context: ""
     });
   });
 
   it("resolves the focused element", () => {
     expect(androidQueryToLocator({ by: "focused" })).toEqual({
-      using: "-android uiautomator",
-      value: "new UiSelector().focused(true)"
+      strategy: "-android uiautomator",
+      selector: "new UiSelector().focused(true)",
+      context: ""
     });
   });
 
   it("escapes quotes and backslashes to keep UiSelector expressions safe", () => {
     expect(escapeUiSelectorArg('a"b\\c')).toBe('a\\"b\\\\c');
     expect(androidQueryToLocator({ by: "text", value: 'He said "hi"' })).toEqual({
-      using: "-android uiautomator",
-      value: 'new UiSelector().textContains("He said \\"hi\\"")'
+      strategy: "-android uiautomator",
+      selector: 'new UiSelector().textContains("He said \\"hi\\"")',
+      context: ""
     });
   });
 });
