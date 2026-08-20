@@ -20,6 +20,10 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
 
+      # npm's OIDC trusted publishing needs npm >= 11.5.1; Node 20 bundles npm 10.
+      - name: Upgrade npm for OIDC publishing
+        run: npm install -g npm@11
+
       - run: npm ci
 
       - name: Build
@@ -31,10 +35,14 @@ jobs:
       - name: Test
         run: npm test
 
+      # Auth is npm Trusted Publishing (OIDC): the `id-token: write` permission
+      # lets npm mint a short-lived credential from the workflow's identity — no
+      # NPM_TOKEN secret, nothing to rotate. Requires the trusted publisher to be
+      # configured on the npm package (prowl-tools → Settings → Trusted Publisher:
+      # GitHub Actions, repo prowl-tools/prowl, workflow publish.yml). Provenance
+      # is on by default with trusted publishing; the flag stays for clarity.
       - name: Publish
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Extract release notes
         id: notes
