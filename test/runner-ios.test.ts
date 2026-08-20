@@ -70,13 +70,11 @@ function setupProject(configYml: string, huntName: string, huntYml: string): str
 const IOS_CONFIG =
   "target:\n  type: ios\n  app: 'com.example.App'\nguardrails:\n  allowedApps: ['com.example.App']\n";
 
-async function withProject<T>(project: string, run: () => Promise<T>): Promise<T> {
-  const cwd = process.cwd();
+async function withProject<T>(project: string, run: (configPath: string) => Promise<T>): Promise<T> {
+  const configPath = path.join(project, ".prowl", "config.yml");
   try {
-    process.chdir(project);
-    return await run();
+    return await run(configPath);
   } finally {
-    process.chdir(cwd);
     fs.rmSync(project, { recursive: true, force: true });
   }
 }
@@ -89,8 +87,8 @@ describe("runHunt — iOS target (PROWL-059)", () => {
       "steps:\n  - click: { selector: 'id=save' }\n  - type: 'hello'\n  - assert: { visible: 'Saved' }\n"
     );
     const h = harness();
-    await withProject(project, async () => {
-      const { result, runDir } = await runHunt({ huntName: "portable", iosSessionFactory: h.factory });
+    await withProject(project, async (configPath) => {
+      const { result, runDir } = await runHunt({ huntName: "portable", iosSessionFactory: h.factory, configPath });
       expect(result.status).toBe("pass");
       expect(result.exitCode).toBe(0);
       expect(result.targetUrl).toBe("ios:com.example.App");
@@ -111,8 +109,8 @@ describe("runHunt — iOS target (PROWL-059)", () => {
       "steps:\n  - click: 'Save'\n"
     );
     const h = harness();
-    await withProject(project, async () => {
-      const { result } = await runHunt({ huntName: "portable", iosSessionFactory: h.factory });
+    await withProject(project, async (configPath) => {
+      const { result } = await runHunt({ huntName: "portable", iosSessionFactory: h.factory, configPath });
       expect(result.status).toBe("pass");
       expect(h.launched[0]).toMatchObject({
         app: "com.example.App",
@@ -125,8 +123,8 @@ describe("runHunt — iOS target (PROWL-059)", () => {
   it("rejects a web-only step before launching WDA", async () => {
     const project = setupProject(IOS_CONFIG, "weburl", "steps:\n  - navigate: '/'\n");
     const h = harness();
-    await withProject(project, async () => {
-      await expect(runHunt({ huntName: "weburl", iosSessionFactory: h.factory })).rejects.toThrow(
+    await withProject(project, async (configPath) => {
+      await expect(runHunt({ huntName: "weburl", iosSessionFactory: h.factory, configPath })).rejects.toThrow(
         'Step "navigate" is not supported by the iOS target'
       );
       expect(h.launched).toHaveLength(0);
@@ -140,9 +138,9 @@ describe("runHunt — iOS target (PROWL-059)", () => {
       "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
     );
     const h = harness();
-    await withProject(project, async () => {
+    await withProject(project, async (configPath) => {
       await expect(
-        runHunt({ huntName: "with-assertions", iosSessionFactory: h.factory })
+        runHunt({ huntName: "with-assertions", iosSessionFactory: h.factory, configPath })
       ).rejects.toThrow("Hunt-level assertions are not supported by the iOS target");
       expect(h.launched).toHaveLength(0);
     });
@@ -155,8 +153,8 @@ describe("runHunt — iOS target (PROWL-059)", () => {
       "steps:\n  - click: 'Save'\n"
     );
     const h = harness();
-    await withProject(project, async () => {
-      await expect(runHunt({ huntName: "portable", iosSessionFactory: h.factory })).rejects.toThrow(
+    await withProject(project, async (configPath) => {
+      await expect(runHunt({ huntName: "portable", iosSessionFactory: h.factory, configPath })).rejects.toThrow(
         "not in guardrails.allowedApps"
       );
       expect(h.launched).toHaveLength(0);
@@ -188,8 +186,8 @@ describe("runHunt — iOS target (PROWL-059)", () => {
       };
     };
 
-    await withProject(project, async () => {
-      const { result } = await runHunt({ huntName: "retry", iosSessionFactory: factory });
+    await withProject(project, async (configPath) => {
+      const { result } = await runHunt({ huntName: "retry", iosSessionFactory: factory, configPath });
       expect(result.status).toBe("pass");
       expect(result.artifacts.summary).toBe("Passed on attempt 2 of 2");
       expect(launched).toHaveLength(2);

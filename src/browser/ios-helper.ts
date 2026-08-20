@@ -23,6 +23,7 @@ import {
   installApp,
   launchApp,
   listSimulators,
+  reserveSimulatorUdid,
   selectSimulatorUdid,
   terminateApp,
   uninstallApp,
@@ -45,6 +46,8 @@ export const WDA_RUNNER_BUNDLE_ID = "com.facebook.WebDriverAgentRunner.xctrunner
 export const WDA_RUNNER_APP_NAME = "WebDriverAgentRunner-Runner.app";
 /** Env var WDA reads to pick its HTTP port (forwarded via `SIMCTL_CHILD_USE_PORT`). */
 export const WDA_USE_PORT_ENV = "USE_PORT";
+/** One retry covers the race where a released dynamic port is claimed before WDA binds. */
+const WDA_STARTUP_ATTEMPTS = 2;
 
 /** Establishes a live {@link IosAgentClient} against a running WDA HTTP server. */
 export type IosAgentConnector = (options: {
@@ -210,6 +213,8 @@ export type LaunchIosOptions = {
   wdaRunnerApp?: string;
   /** Optional app scope guardrail from config.guardrails.allowedApps. */
   allowedApps?: string[];
+  /** Override the simulator lock root; intended for tests. */
+  simulatorLockRoot?: string;
   logger?: (message: string) => void;
 };
 
@@ -272,49 +277,85 @@ export async function launchIosSession(options: LaunchIosOptions): Promise<IosSe
   // Preflight: simctl reachable + exactly one (or the requested) booted simulator.
   const devices = await listSimulators(runner);
   const udid = selectSimulatorUdid(devices, options.udid);
+  const reservation = await reserveSimulatorUdid(udid, { lockRoot: options.simulatorLockRoot });
 
-  const bundleId = await resolveBundleId(
-    options.app,
-    runner,
-    udid,
-    options.coldStart ?? false,
-    options.allowedApps ?? []
-  );
-
-  const wdaRunnerApp =
-    options.wdaRunnerApp ?? (await resolveWdaRunner({ runner, logger: options.logger }));
-
-  // Install and launch the WDA runner on a dynamically allocated port.
-  await installApp(runner, udid, wdaRunnerApp);
-  const port = await portAllocator();
-  await launchApp(runner, udid, WDA_RUNNER_BUNDLE_ID, { [WDA_USE_PORT_ENV]: String(port) });
-
-  // Launch the target app first so failure modes are clean before attaching WDA.
-  await launchApp(runner, udid, bundleId);
-
-  let client: IosAgentClient | undefined;
-  let tornDown = false;
-  const teardown = async (): Promise<void> => {
-    if (tornDown) {
+  let reservationReleased = false;
+  const releaseReservation = async (): Promise<void> => {
+    if (reservationReleased) {
       return;
     }
-    tornDown = true;
-    if (client) {
-      await client.close().catch(() => undefined);
-    }
-    await terminateApp(runner, udid, WDA_RUNNER_BUNDLE_ID);
-    await terminateApp(runner, udid, bundleId);
+    reservationReleased = true;
+    await reservation.release();
   };
 
   try {
-    client = await connector({ host: "127.0.0.1", port, bundleId, requestTimeoutMs, readyDeadlineMs });
-    const driver = createIosDriver(client, {
-      appLabel: bundleId,
-      captureScreenshot: (outPath: string) => captureScreenshot(runner, udid, outPath)
-    });
-    return { client, driver, bundleId, udid, teardown };
+    const bundleId = await resolveBundleId(
+      options.app,
+      runner,
+      udid,
+      options.coldStart ?? false,
+      options.allowedApps ?? []
+    );
+
+    const wdaRunnerApp =
+      options.wdaRunnerApp ?? (await resolveWdaRunner({ runner, logger: options.logger }));
+
+    await installApp(runner, udid, wdaRunnerApp);
+
+    for (let attempt = 1; attempt <= WDA_STARTUP_ATTEMPTS; attempt += 1) {
+      let client: IosAgentClient | undefined;
+      let tornDown = false;
+      let terminateWda = false;
+      let terminateTarget = false;
+      let stage: "port" | "wda-launch" | "target-launch" | "connect" = "port";
+      const teardownAttempt = async (): Promise<void> => {
+        if (tornDown) {
+          return;
+        }
+        tornDown = true;
+        if (client) {
+          await client.close().catch(() => undefined);
+        }
+        if (terminateWda) {
+          await terminateApp(runner, udid, WDA_RUNNER_BUNDLE_ID);
+        }
+        if (terminateTarget) {
+          await terminateApp(runner, udid, bundleId);
+        }
+      };
+
+      try {
+        const port = await portAllocator();
+        stage = "wda-launch";
+        terminateWda = true;
+        await launchApp(runner, udid, WDA_RUNNER_BUNDLE_ID, { [WDA_USE_PORT_ENV]: String(port) });
+
+        stage = "target-launch";
+        terminateTarget = true;
+        await launchApp(runner, udid, bundleId);
+
+        stage = "connect";
+        client = await connector({ host: "127.0.0.1", port, bundleId, requestTimeoutMs, readyDeadlineMs });
+        const driver = createIosDriver(client, {
+          appLabel: bundleId,
+          captureScreenshot: (outPath: string) => captureScreenshot(runner, udid, outPath)
+        });
+        const teardown = async (): Promise<void> => {
+          await teardownAttempt();
+          await releaseReservation();
+        };
+        return { client, driver, bundleId, udid, teardown };
+      } catch (error) {
+        await teardownAttempt();
+        if (stage === "target-launch" || attempt >= WDA_STARTUP_ATTEMPTS) {
+          throw error instanceof Error ? error : new Error(String(error));
+        }
+      }
+    }
+
+    throw new Error("WebDriverAgent startup failed without an error.");
   } catch (error) {
-    await teardown();
+    await releaseReservation().catch(() => undefined);
     throw error;
   }
 }

@@ -112,6 +112,13 @@ All notable changes to Prowl will be documented in this file.
   new window-scoped captures — delete and re-create them (`prowl update-baselines`
   or remove the stored baseline) after upgrading.
 
+### Fixed
+- Hardened the experimental iOS target startup path so WebDriverAgent startup
+  retries once with a fresh port after launch/readiness failures, selected
+  simulator UDIDs are reserved for the whole session, target-app launch failures
+  still tear down the WDA runner, WDA request deadlines cover response-body reads,
+  and the `press` key error list includes the accepted `del` alias.
+
 ## [0.1.4] - 2026-08-16
 
 ### Fixed

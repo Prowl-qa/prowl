@@ -70,6 +70,13 @@ export class WdaTransport {
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     timer.unref?.();
     const url = `${this.baseUrl}${path}`;
+    const timeoutError = (): Error => {
+      const shown =
+        requestTimeoutMs >= 1000
+          ? `${Math.round(requestTimeoutMs / 1000)}s`
+          : `${requestTimeoutMs}ms`;
+      return new Error(`WebDriverAgent request ${method} ${path} timed out after ${shown}`);
+    };
     let response: Response;
     try {
       response = await this.fetchImpl(url, {
@@ -79,19 +86,24 @@ export class WdaTransport {
         body: body !== undefined ? JSON.stringify(body) : undefined
       });
     } catch (error) {
+      clearTimeout(timer);
       if (controller.signal.aborted) {
-        const shown =
-          requestTimeoutMs >= 1000
-            ? `${Math.round(requestTimeoutMs / 1000)}s`
-            : `${requestTimeoutMs}ms`;
-        throw new Error(`WebDriverAgent request ${method} ${path} timed out after ${shown}`);
+        throw timeoutError();
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    let text: string;
+    try {
+      text = await response.text();
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw timeoutError();
       }
       throw error instanceof Error ? error : new Error(String(error));
     } finally {
       clearTimeout(timer);
     }
-
-    const text = await response.text();
     const parsed = parseJson(text);
     if (!response.ok) {
       const wdError = extractWebdriverError(parsed);

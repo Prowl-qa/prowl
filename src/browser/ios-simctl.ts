@@ -8,7 +8,10 @@
  * booted simulator or Xcode.
  */
 import { execFile } from "node:child_process";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
+import os from "node:os";
+import path from "node:path";
 
 /** Result of one `xcrun` invocation. */
 export type SimctlResult = { stdout: string; stderr: string; code: number };
@@ -27,6 +30,20 @@ export type SimDevice = {
   runtime: string;
   isAvailable: boolean;
 };
+
+export type SimulatorReservation = {
+  udid: string;
+  release(): Promise<void>;
+};
+
+export type ReserveSimulatorOptions = {
+  /** Override the lock directory root; intended for tests. */
+  lockRoot?: string;
+};
+
+export const DEFAULT_SIMULATOR_LOCK_ROOT = path.join(os.tmpdir(), "prowl-ios-simulator-locks");
+
+const SIMULATOR_LOCK_OWNER_FILE = "owner.json";
 
 /** Default {@link SimctlRunner}: shells out to the real `xcrun` on PATH. */
 export const execFileXcrunRunner: SimctlRunner = (args, options) =>
@@ -56,6 +73,102 @@ export const execFileXcrunRunner: SimctlRunner = (args, options) =>
       }
     );
   });
+
+function simulatorLockName(udid: string): string {
+  const safe = udid.replace(/[^A-Za-z0-9_.-]/g, "_");
+  return `${safe || "simulator"}.lock`;
+}
+
+function isErrno(error: unknown, code: string): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === code;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isErrno(error, "EPERM");
+  }
+}
+
+async function removeStaleSimulatorLock(lockPath: string): Promise<boolean> {
+  try {
+    const ownerText = await readFile(path.join(lockPath, SIMULATOR_LOCK_OWNER_FILE), "utf8");
+    const owner = JSON.parse(ownerText) as { pid?: unknown };
+    if (
+      typeof owner.pid === "number" &&
+      Number.isInteger(owner.pid) &&
+      owner.pid > 0 &&
+      !isProcessAlive(owner.pid)
+    ) {
+      await rm(lockPath, { recursive: true, force: true });
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function simulatorReservedError(udid: string): Error {
+  return new Error(
+    `iOS simulator "${udid}" is already reserved by another Prowl process. ` +
+      "Wait for that run to finish, or boot/select a different simulator with target.udid."
+  );
+}
+
+/**
+ * Reserve a simulator UDID across processes. The lock is held until `release` is
+ * called, preventing one session's teardown from terminating another session's
+ * WDA runner or target app on the same simulator.
+ */
+export async function reserveSimulatorUdid(
+  udid: string,
+  options: ReserveSimulatorOptions = {}
+): Promise<SimulatorReservation> {
+  const lockRoot = options.lockRoot ?? DEFAULT_SIMULATOR_LOCK_ROOT;
+  const lockPath = path.join(lockRoot, simulatorLockName(udid));
+  await mkdir(lockRoot, { recursive: true });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await mkdir(lockPath);
+    } catch (error) {
+      if (!isErrno(error, "EEXIST")) {
+        throw error instanceof Error ? error : new Error(String(error));
+      }
+      if (attempt === 0 && (await removeStaleSimulatorLock(lockPath))) {
+        continue;
+      }
+      throw simulatorReservedError(udid);
+    }
+
+    let released = false;
+    const release = async (): Promise<void> => {
+      if (released) {
+        return;
+      }
+      released = true;
+      await rm(lockPath, { recursive: true, force: true });
+    };
+
+    try {
+      await writeFile(
+        path.join(lockPath, SIMULATOR_LOCK_OWNER_FILE),
+        `${JSON.stringify({ pid: process.pid, udid, createdAt: new Date().toISOString() })}\n`,
+        { flag: "wx" }
+      );
+    } catch (error) {
+      await release().catch(() => undefined);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    return { udid, release };
+  }
+
+  throw simulatorReservedError(udid);
+}
 
 /** Allocate a free local TCP port by binding to :0 and releasing it. */
 export function findFreePort(): Promise<number> {

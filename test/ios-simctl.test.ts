@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   bootedSimulators,
@@ -9,6 +12,7 @@ import {
   listSimulators,
   parseSimctlDevices,
   parseXcodeVersion,
+  reserveSimulatorUdid,
   selectSimulatorUdid,
   terminateApp,
   uninstallApp,
@@ -178,5 +182,23 @@ describe("findFreePort", () => {
     const port = await findFreePort();
     expect(port).toBeGreaterThan(0);
     expect(port).toBeLessThanOrEqual(65535);
+  });
+});
+
+describe("reserveSimulatorUdid", () => {
+  it("holds an interprocess lock until release", async () => {
+    const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-lock-"));
+    try {
+      const first = await reserveSimulatorUdid("BBBB", { lockRoot });
+      await expect(reserveSimulatorUdid("BBBB", { lockRoot })).rejects.toThrow(
+        'iOS simulator "BBBB" is already reserved'
+      );
+
+      await first.release();
+      const second = await reserveSimulatorUdid("BBBB", { lockRoot });
+      await expect(second.release()).resolves.toBeUndefined();
+    } finally {
+      fs.rmSync(lockRoot, { recursive: true, force: true });
+    }
   });
 });

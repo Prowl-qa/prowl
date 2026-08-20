@@ -206,10 +206,13 @@ describe("createIosDriver", () => {
     const { driver } = driverFor(agent);
     await driver.press("id=field", "Enter");
     await driver.press("id=field", "Backspace");
+    await driver.press("id=field", "Del");
     await driver.press("id=field", "Home");
-    expect(agent.keySequences).toEqual([["\n"], ["\b"]]);
+    expect(agent.keySequences).toEqual([["\n"], ["\b"], ["\b"]]);
     expect(agent.homescreens).toBe(1);
-    await expect(driver.press("id=field", "F13")).rejects.toThrow('Unsupported key "F13"');
+    await expect(driver.press("id=field", "F13")).rejects.toThrow(
+      'Supported keys: backspace, del, delete, enter, home, return'
+    );
   });
 
   it("counts via findElements and returns text or null", async () => {

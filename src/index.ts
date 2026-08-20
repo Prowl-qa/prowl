@@ -60,9 +60,12 @@ export {
 export type { WdaTransportOptions } from "./browser/ios-agent.js";
 export {
   parseSimctlDevices, selectSimulatorUdid, bootedSimulators,
-  listSimulators, findFreePort, parseXcodeVersion
+  listSimulators, findFreePort, parseXcodeVersion,
+  reserveSimulatorUdid, DEFAULT_SIMULATOR_LOCK_ROOT
 } from "./browser/ios-simctl.js";
-export type { SimDevice, SimctlRunner, SimctlResult } from "./browser/ios-simctl.js";
+export type {
+  SimDevice, SimctlRunner, SimctlResult, SimulatorReservation, ReserveSimulatorOptions
+} from "./browser/ios-simctl.js";
 
 export {
   assertStepsSupportedByTarget, assertTargetAppAllowed, assertAndroidAppAllowed,

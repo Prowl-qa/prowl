@@ -90,7 +90,7 @@ const DEFAULT_WAIT_TIMEOUT_MS = 5000;
  * `return` send a newline, `delete`/`backspace` send a backspace (both via WDA's
  * key endpoint), and `home` returns to the springboard.
  */
-export const IOS_PRESS_KEYS: readonly string[] = ["backspace", "delete", "enter", "home", "return"];
+export const IOS_PRESS_KEYS: readonly string[] = ["backspace", "del", "delete", "enter", "home", "return"];
 
 function unquote(value: string): string {
   const trimmed = value.trim();

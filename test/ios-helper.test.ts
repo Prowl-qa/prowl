@@ -33,7 +33,10 @@ class FakeAgent implements IosAgentClient {
 
 type Call = { args: string[]; env?: NodeJS.ProcessEnv };
 
-function fakeRunner(devicesJson: string): SimctlRunner & { calls: Call[] } {
+function fakeRunner(
+  devicesJson: string,
+  responder: (args: string[]) => Partial<SimctlResult> = () => ({})
+): SimctlRunner & { calls: Call[] } {
   const calls: Call[] = [];
   const runner: SimctlRunner = async (args, options) => {
     calls.push({ args, env: options?.env });
@@ -41,7 +44,7 @@ function fakeRunner(devicesJson: string): SimctlRunner & { calls: Call[] } {
     if (args[0] === "simctl" && args[1] === "list") {
       return { ...result, stdout: devicesJson };
     }
-    return result;
+    return { ...result, ...responder(args) };
   };
   return Object.assign(runner, { calls });
 }
@@ -120,6 +123,99 @@ describe("launchIosSession", () => {
     expect(agent.closed).toBe(true);
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
+  });
+
+  it("retries WDA startup with a fresh port and cleans up the failed attempt", async () => {
+    const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-session-lock-"));
+    const runner = fakeRunner(BOOTED_JSON);
+    const agent = new FakeAgent();
+    const connectorPorts: number[] = [];
+    const ports = [8500, 8501];
+
+    try {
+      const session = await launchIosSession({
+        app: "com.example.App",
+        runner,
+        portAllocator: async () => ports.shift() ?? 8599,
+        agentConnector: async (options) => {
+          connectorPorts.push(options.port);
+          if (connectorPorts.length === 1) {
+            throw new Error("WDA not ready");
+          }
+          return agent;
+        },
+        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        simulatorLockRoot: lockRoot
+      });
+
+      expect(connectorPorts).toEqual([8500, 8501]);
+      const wdaLaunches = runner.calls.filter(
+        (c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
+      );
+      expect(wdaLaunches.map((c) => c.env)).toEqual([
+        { SIMCTL_CHILD_USE_PORT: "8500" },
+        { SIMCTL_CHILD_USE_PORT: "8501" }
+      ]);
+
+      const firstWdaLaunch = runner.calls.findIndex(
+        (c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
+      );
+      const secondWdaLaunch = runner.calls.findIndex(
+        (c, index) =>
+          index > firstWdaLaunch && c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
+      );
+      const failedWdaTerminate = runner.calls.findIndex(
+        (c, index) =>
+          index > firstWdaLaunch && c.args[1] === "terminate" && c.args[3] === WDA_RUNNER_BUNDLE_ID
+      );
+      expect(failedWdaTerminate).toBeGreaterThan(firstWdaLaunch);
+      expect(failedWdaTerminate).toBeLessThan(secondWdaLaunch);
+
+      await closeIosSession(session);
+      expect(
+        runner.calls.filter((c) => c.args[1] === "terminate" && c.args[3] === WDA_RUNNER_BUNDLE_ID)
+      ).toHaveLength(2);
+    } finally {
+      fs.rmSync(lockRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("holds the simulator reservation until teardown", async () => {
+    const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-session-lock-"));
+    try {
+      const first = await launchIosSession({
+        app: "com.example.App",
+        runner: fakeRunner(BOOTED_JSON),
+        portAllocator: async () => 8600,
+        agentConnector: fakeConnector(new FakeAgent()),
+        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        simulatorLockRoot: lockRoot
+      });
+
+      await expect(
+        launchIosSession({
+          app: "com.example.App",
+          runner: fakeRunner(BOOTED_JSON),
+          portAllocator: async () => 8601,
+          agentConnector: fakeConnector(new FakeAgent()),
+          wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+          simulatorLockRoot: lockRoot
+        })
+      ).rejects.toThrow('iOS simulator "BBBB" is already reserved');
+
+      await closeIosSession(first);
+      const second = await launchIosSession({
+        app: "com.example.App",
+        runner: fakeRunner(BOOTED_JSON),
+        portAllocator: async () => 8602,
+        agentConnector: fakeConnector(new FakeAgent()),
+        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        simulatorLockRoot: lockRoot
+      });
+      await closeIosSession(second);
+    } finally {
+      fs.rmSync(lockRoot, { recursive: true, force: true });
+    }
   });
 
   it("installs a .app and derives its bundle id from the root Info.plist", async () => {
@@ -230,5 +326,46 @@ describe("launchIosSession", () => {
     ).rejects.toThrow("WDA unreachable");
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
+  });
+
+  it("tears down and releases the simulator when the target app launch fails", async () => {
+    const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-session-lock-"));
+    const failingRunner = fakeRunner(BOOTED_JSON, (args) =>
+      args[1] === "launch" && args[3] === "com.example.App"
+        ? { code: 1, stderr: "not installed" }
+        : {}
+    );
+    try {
+      await expect(
+        launchIosSession({
+          app: "com.example.App",
+          runner: failingRunner,
+          portAllocator: async () => 8700,
+          agentConnector: fakeConnector(new FakeAgent()),
+          wdaRunnerApp: "/fake/runner.app",
+          simulatorLockRoot: lockRoot
+        })
+      ).rejects.toThrow('Failed to launch "com.example.App"');
+
+      expect(
+        failingRunner.calls.filter((c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID)
+      ).toHaveLength(1);
+      const terminates = failingRunner.calls
+        .filter((c) => c.args[1] === "terminate")
+        .map((c) => c.args[3]);
+      expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
+
+      const session = await launchIosSession({
+        app: "com.example.App",
+        runner: fakeRunner(BOOTED_JSON),
+        portAllocator: async () => 8701,
+        agentConnector: fakeConnector(new FakeAgent()),
+        wdaRunnerApp: "/fake/runner.app",
+        simulatorLockRoot: lockRoot
+      });
+      await closeIosSession(session);
+    } finally {
+      fs.rmSync(lockRoot, { recursive: true, force: true });
+    }
   });
 });
