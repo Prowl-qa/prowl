@@ -4,6 +4,17 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **npm publishing now authenticates via OIDC Trusted Publishing (REL-001 /
+  PROWL-057).** The tag-triggered publish workflow no longer reads the
+  `NPM_TOKEN` secret: `npm publish` authenticates through GitHub Actions' OIDC
+  identity (`id-token: write`) on Node 22.14.0 with npm 11, so the release job no
+  longer depends on a long-lived token with a 90-day rotation cycle or hits auth
+  failures masquerading as `404 Not Found` when one expires. Requires the trusted
+  publisher to be configured on the `prowl-tools` npm package (GitHub Actions ·
+  `prowl-tools/prowl` · `publish.yml`); provenance attestation is unchanged. No
+  effect on installs or the published artifact.
+
 ### Fixed
 - **Android target: speak the uiautomator2 server's native locator wire shape.**
   First device-verification of the Android target (Pixel 7 emulator, API 36,

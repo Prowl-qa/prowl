@@ -24,10 +24,19 @@ and the current `NPM_TOKEN` expires ~2026-11-15 (rotated 2026-08-17). Move
 long-lived secret that must be rotated every 90 days. Should land before the next token expiry.
 
 **Found during**: v0.1.4 release prep (2026-08-17, token-rotation incident)
+**Status**: Partially complete (2026-08-20, branch oidc-publishing) — workflow migrated: token
+auth removed, Trusted Publishing-supported Node 22.14.0 selected, OIDC upgrade step added
+(`npm@11`), publish step documented. Remaining, in order:
+(1) owner configures the trusted publisher on npmjs.com (`prowl-tools` package → Settings →
+Trusted Publisher: GitHub Actions, org/repo `prowl-tools/prowl`, workflow `publish.yml`) —
+must happen BEFORE the next tag push or publishing fails; (2) next release (v0.1.5) verifies
+the OIDC path end-to-end; (3) then delete the `NPM_TOKEN` repo secret; (4) then update the
+Release Configuration section in `CLAUDE.md` (deferred from the branch to avoid colliding with
+the owner's in-flight `CLAUDE.md` edit).
 **Acceptance Criteria**:
-- `publish.yml` authenticates to npm via OIDC (`permissions: id-token: write`, trusted publisher
-  configured on the `prowl-tools` npm package for `prowl-tools/prowl`)
-- `--provenance` retained
+- ~~`publish.yml` authenticates to npm via OIDC (`permissions: id-token: write`)~~ ✓ (branch)
+- trusted publisher configured on the `prowl-tools` npm package for `prowl-tools/prowl` (owner)
+- ~~`--provenance` retained~~ ✓
 - `NPM_TOKEN` repo secret deleted after the first successful OIDC-published release
 - Release Configuration section in `CLAUDE.md` updated (no more token-rotation choreography)
 
