@@ -104,12 +104,12 @@ describe("Uia2Transport error handling", () => {
 });
 
 describe("createUia2AgentClient", () => {
-  it("finds an element and returns its id", async () => {
+  it("finds an element and returns its id, sending the server's native locator shape", async () => {
     const { transport, calls } = transportWith(() => ({ body: { [W3C_ELEMENT_KEY]: "E1" } }));
-    const client = createUia2AgentClient(transport, "S1");
+    const client = createUia2AgentClient(transport, "S1", { appPackage: "com.app" });
     expect(await client.findElement({ by: "id", value: "save" })).toBe("E1");
     expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/element");
-    expect(calls[0].body).toEqual({ using: "id", value: "save" });
+    expect(calls[0].body).toEqual({ strategy: "id", selector: "com.app:id/save", context: "" });
   });
 
   it("returns null when the element is not found (404)", async () => {

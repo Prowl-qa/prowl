@@ -197,11 +197,19 @@ function sleep(ms: number): Promise<void> {
  * Build the semantic {@link AndroidAgentClient} over a live session. `close`
  * deletes the session (best effort); the transport itself is stateless.
  */
-export function createUia2AgentClient(transport: Uia2Transport, sessionId: string): AndroidAgentClient {
+export function createUia2AgentClient(
+  transport: Uia2Transport,
+  sessionId: string,
+  options: { appPackage?: string } = {}
+): AndroidAgentClient {
   const base = `/session/${sessionId}`;
 
   async function locate(query: AndroidQuery, path: string): Promise<unknown> {
-    return transport.request("POST", `${base}${path}`, androidQueryToLocator(query));
+    return transport.request(
+      "POST",
+      `${base}${path}`,
+      androidQueryToLocator(query, { appPackage: options.appPackage })
+    );
   }
 
   return {

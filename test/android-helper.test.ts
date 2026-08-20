@@ -71,9 +71,9 @@ describe("resolveAgentApks", () => {
 
 describe("launchAndroidSession", () => {
   function fakeConnector(agent: FakeAgent) {
-    const seen: { port: number }[] = [];
-    const connector = async (options: { port: number }) => {
-      seen.push({ port: options.port });
+    const seen: { port: number; appPackage?: string }[] = [];
+    const connector = async (options: { port: number; appPackage?: string }) => {
+      seen.push({ port: options.port, appPackage: options.appPackage });
       return agent;
     };
     return Object.assign(connector, { seen });
@@ -97,6 +97,8 @@ describe("launchAndroidSession", () => {
     expect(session.package).toBe("com.example.app");
     expect(session.serial).toBe("emulator-5554");
     expect(connector.seen[0].port).toBe(40000);
+    // The resolved package reaches the agent client so bare `id=` selectors qualify.
+    expect(connector.seen[0].appPackage).toBe("com.example.app");
     // Both agent APKs were installed.
     const installs = runner.calls.filter((c) => c.includes("install")).map((c) => c[c.length - 1]);
     expect(installs).toEqual(expect.arrayContaining([APKS.serverApk, APKS.testApk]));
