@@ -17,29 +17,6 @@
 - Consider filing a trademark application in Classes 9 and 42 specifically for QA testing tools
 - Using "Prowl" or "prowl" as the primary brand provides stronger differentiation
 
-{PROWL-057} **REL-001: Migrate npm publishing to OIDC Trusted Publishing**
-   npm has announced that 2FA-bypass granular tokens lose direct-publish rights in January 2027,
-and the current `NPM_TOKEN` expires ~2026-11-15 (rotated 2026-08-17). Move
-`.github/workflows/publish.yml` to npm Trusted Publishing (OIDC) so releases stop depending on a
-long-lived secret that must be rotated every 90 days. Should land before the next token expiry.
-
-**Found during**: v0.1.4 release prep (2026-08-17, token-rotation incident)
-**Status**: Partially complete (2026-08-20, branch oidc-publishing) — workflow migrated: token
-auth removed, Trusted Publishing-supported Node 22.14.0 selected, OIDC upgrade step added
-(`npm@11`), publish step documented. Remaining, in order:
-(1) owner configures the trusted publisher on npmjs.com (`prowl-tools` package → Settings →
-Trusted Publisher: GitHub Actions, org/repo `prowl-tools/prowl`, workflow `publish.yml`) —
-must happen BEFORE the next tag push or publishing fails; (2) next release (v0.1.5) verifies
-the OIDC path end-to-end; (3) then delete the `NPM_TOKEN` repo secret; (4) then update the
-Release Configuration section in `CLAUDE.md` (deferred from the branch to avoid colliding with
-the owner's in-flight `CLAUDE.md` edit).
-**Acceptance Criteria**:
-- ~~`publish.yml` authenticates to npm via OIDC (`permissions: id-token: write`)~~ ✓ (branch)
-- trusted publisher configured on the `prowl-tools` npm package for `prowl-tools/prowl` (owner)
-- ~~`--provenance` retained~~ ✓
-- `NPM_TOKEN` repo secret deleted after the first successful OIDC-published release
-- Release Configuration section in `CLAUDE.md` updated (no more token-rotation choreography)
-
 {PROWL-024} **P6-001: VS Code Extension**
    VS Code extension for Prowl hunt authoring and execution.
 
