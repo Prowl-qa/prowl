@@ -3,6 +3,7 @@
 All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
+- No unreleased changes.
 
 ## [0.1.5] - 2026-08-20
 
