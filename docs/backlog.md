@@ -410,6 +410,19 @@ and iOS sims on `macos-*` runners with cached WDA.
 - `prowl analyze` works against a booted emulator/simulator app: windows/screens, interactive
   elements, ranked selectors — same output contract as the macOS analyzer
 - GitHub Actions recipes for both platforms in docs; junit + artifacts wiring shown
+- **Self-hosted variant + Prowl's own device-verification gate** (added 2026-08-21): the
+  recipes also cover a self-hosted macOS runner (the Prowl Tools Mac mini: Apple Silicon,
+  Xcode present, Android SDK via `android-commandlinetools` with a persistent `prowl-ci` AVD),
+  and this repo's CI gains a real end-to-end job on that runner that boots the emulator
+  (`-no-window -no-audio -no-boot-anim`, wait for `sys.boot_completed`) and a simulator, then
+  runs a scratch hunt against a built-in app on each (Android: Settings `com.android.settings`
+  — wait → assert by qualified and bare `id=` → tap → screenshot; iOS: `com.apple.Preferences`
+  per the PROWL-059 smoke) through the real CLI. This turns the manual smoke tests that caught
+  the uiautomator2 wire-shape bug and the WDA readiness hang into a machine-run gate. Use its
+  own `concurrency` group (the box also serves Sentwise's `prowl-qa`), a PATH that includes
+  `platform-tools`/`emulator`/`build-tools` for the runner service user, and make the job
+  skip cleanly (not fail) when no self-hosted runner is online so forks/PRs from outside stay
+  green.
 - prowl-docs gains a mobile-target page (cross-repo duty)
 
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
