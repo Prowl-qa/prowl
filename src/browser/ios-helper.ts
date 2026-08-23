@@ -57,7 +57,7 @@ import type { SessionDriver } from "./driver.js";
 export const WDA_RUNNER_BUNDLE_ID = "com.facebook.WebDriverAgentRunner.xctrunner";
 /** Env var WDA reads to pick its HTTP port (injected into the runner's xctestrun env). */
 export const WDA_USE_PORT_ENV = "USE_PORT";
-/** Prefix of the temp directory each launch writes its port-injected xctestrun into. */
+/** Filename prefix each launch's port-injected xctestrun (a Products-dir sibling) carries. */
 const PREPARED_XCTESTRUN_PREFIX = "prowl-wda-xctestrun-";
 /** One retry covers the race where a released dynamic port is claimed before WDA binds. */
 const WDA_STARTUP_ATTEMPTS = 2;
@@ -129,7 +129,9 @@ function findXctestrunIn(dir: string): string | null {
   } catch {
     return null;
   }
-  const match = entries.filter((name) => name.endsWith(".xctestrun")).sort()[0];
+  const match = entries
+    .filter((name) => name.endsWith(".xctestrun") && !name.startsWith(PREPARED_XCTESTRUN_PREFIX))
+    .sort()[0];
   return match ? path.join(dir, match) : null;
 }
 
@@ -334,11 +336,18 @@ function runPlutil(args: string[]): Promise<string> {
 
 /**
  * Default preparer: reads the base xctestrun with `plutil` (JSON), injects
- * `USE_PORT`, and writes a fresh xctestrun into a temp dir. `plutil` ships with
- * macOS, so no extra dependency is added.
+ * `USE_PORT`, and writes a fresh, uniquely-named xctestrun **next to the base
+ * one**. This placement is required, not incidental: an xctestrun's product
+ * paths are relative to `__TESTROOT__`, which xcodebuild resolves to the
+ * directory containing the xctestrun file — so a copy written to a temp dir
+ * makes `xcodebuild test-without-building` fail with "Missing test product".
+ * Writing the sibling into the build's Products dir keeps `__TESTROOT__` pointing
+ * at the real products. The intermediate JSON goes to a temp dir; only the
+ * `.xctestrun` lands beside the products and is removed on teardown. `plutil`
+ * ships with macOS, so no extra dependency is added.
  */
 export const defaultWdaTestRunPreparer: WdaTestRunPreparer = async ({ xctestrunPath, port }) => {
-  const json = await runPlutil(["-convert", "json1", "-o", "-", xctestrunPath]);
+  const json = await runPlutil(["-convert", "json", "-o", "-", xctestrunPath]);
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -346,25 +355,33 @@ export const defaultWdaTestRunPreparer: WdaTestRunPreparer = async ({ xctestrunP
     throw new Error(`Could not parse the WebDriverAgent .xctestrun as JSON: ${xctestrunPath}`);
   }
   const injected = injectUsePortIntoXctestrun(parsed, port);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), PREPARED_XCTESTRUN_PREFIX));
-  const jsonPath = path.join(dir, "wda.json");
-  const outPath = path.join(dir, "wda.xctestrun");
+  // Unique per launch: the dynamic port is already unique on this host, and the
+  // pid disambiguates concurrent processes sharing the same cache.
+  const stem = `${PREPARED_XCTESTRUN_PREFIX}${port}-${process.pid}`;
+  const outPath = path.join(path.dirname(xctestrunPath), `${stem}.xctestrun`);
+  const jsonPath = path.join(os.tmpdir(), `${stem}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(injected));
-  await runPlutil(["-convert", "xml1", jsonPath, "-o", outPath]);
-  fs.rmSync(jsonPath, { force: true });
+  try {
+    await runPlutil(["-convert", "xml1", jsonPath, "-o", outPath]);
+  } finally {
+    fs.rmSync(jsonPath, { force: true });
+  }
   return outPath;
 };
 
-/** Remove a prepared xctestrun's temp dir (best effort; only our own temp dirs). */
+/**
+ * Remove a prepared sibling xctestrun (best effort). Only ever deletes a single
+ * file whose name carries our prefix — never a directory, so the WDA build cache
+ * it lives in is safe.
+ */
 function cleanupPreparedTestRun(preparedPath: string | undefined): void {
   if (!preparedPath) {
     return;
   }
-  const dir = path.dirname(preparedPath);
-  if (!path.basename(dir).startsWith(PREPARED_XCTESTRUN_PREFIX)) {
+  if (!path.basename(preparedPath).startsWith(PREPARED_XCTESTRUN_PREFIX)) {
     return;
   }
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(preparedPath, { force: true });
 }
 
 /** The `xcodebuild test-without-building` args that host WDA against `udid`. */
