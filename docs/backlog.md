@@ -399,6 +399,28 @@ one shared TS engine so `id=`/`label=`/`text=`/`role=` mean the same thing on An
 - Selector semantics documented in one compatibility matrix (web / macOS / Android / iOS)
 - Evaluate migrating macdriver matching onto it later; no behavior change required now
 
+{PROWL-069} **ARCH-013: iOS driver — WDA fails to launch on iOS 26+ simulators (`simctl launch` termination)**
+   The iOS driver starts WebDriverAgent by `simctl install`-ing the runner app and `simctl launch`-ing
+its `com.facebook.WebDriverAgentRunner.xctrunner` bundle (the "preinstalled WDA" approach,
+device-verified in PROWL-059 against **iOS 18.6**). On **iOS 26.x simulators this no longer works**:
+the runtime immediately terminates the directly-launched xctrunner (sim log: *"Executable for
+com.facebook.WebDriverAgentRunner.xctrunner … had no entitlements"* → RunningBoard termination), so
+WDA gets a PID but its HTTP server never binds and readiness times out at 60s. Found 2026-08-22 while
+live-verifying `prowl analyze` for {PROWL-061} on the self-hosted mini (Xcode 26.6 / iOS 26.5 — the
+only runtime `xcodebuild -downloadPlatform iOS` offers). **Impact:** iOS run/analyze and the iOS half
+of the mobile CI gate ({PROWL-061}) fail on iOS 26+; Android is unaffected and fully verified.
+
+**Found during**: PROWL-061 live device-verification (2026-08-22)
+**Acceptance Criteria**:
+- iOS driver launches WDA in a way iOS 26+ accepts — most likely `xcodebuild test-without-building`
+  with the generated `.xctestrun` (the standard XCTest host launch) rather than `simctl launch` of the
+  runner `.app`; keep the prebuilt-runner fast path where a runtime still allows it, or make xctestrun
+  the default.
+- Re-verified live on an iOS 26.x simulator (a real hunt + `prowl analyze` against `com.apple.Preferences`).
+- The {PROWL-061} `mobile-e2e.yml` iOS job goes green on the self-hosted runner.
+- Alternative/interim: document installing a WDA-compatible older iOS runtime on the runner if the
+  xctestrun path proves large; but the driver fix is the real resolution (users will hit iOS 26+).
+
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
 make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and

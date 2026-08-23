@@ -177,6 +177,9 @@ jobs:
           xcrun simctl boot "$IOS_SIM" || true
           xcrun simctl bootstatus "$IOS_SIM"
 
+      # NOTE (PROWL-069): on iOS 26+ simulators WDA is terminated when launched via
+      # `simctl launch` ("had no entitlements"), so this step fails until the iOS
+      # driver adopts an xctestrun-based launch. The Android job above is unaffected.
       - name: Run the iOS smoke hunt
         working-directory: ${{ runner.temp }}/ios
         # WDA builds+caches under ~/.prowl/wda/ on first run (~110s); cached after.
