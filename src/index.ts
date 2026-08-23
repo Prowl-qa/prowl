@@ -132,10 +132,22 @@ export type {
 export { parseXml, decodeXmlEntities } from "./analyzer/xml.js";
 export type { XmlElement } from "./analyzer/xml.js";
 
+// Re-export the unified native selector engine (PROWL-060)
+export {
+  parseNativeSelector, unquoteSelectorValue, quoteSelectorValue, unwrapNativeTextSelector,
+  qualifyResourceId, rankNativeSelectors, NATIVE_ATTRIBUTE_MAP,
+  nodeMatchesSelector, matchNativeTree, parseSnapshot,
+  ANDROID_MATCH_DIALECT, IOS_MATCH_DIALECT, MACOS_MATCH_DIALECT
+} from "./selector/native.js";
+export type {
+  NativeSelector, NativeSelectorKind, NativeRankFields, SelectorKindMapping,
+  NativePlatform, NativeNode, NativeMatchOptions, NativeMatchDialect
+} from "./selector/native.js";
+
 // Re-export the Android analyzer (PROWL-061)
 export {
   analyzeAndroidApp, rankAndroidSelectors, parseAndroidHierarchy,
-  isAndroidInteractive, ANDROID_INTERACTIVE_CLASSES
+  isAndroidInteractive, androidNodeToNative, matchAndroidSelector, ANDROID_INTERACTIVE_CLASSES
 } from "./analyzer/android.js";
 export type {
   AndroidAnalysisResult, AndroidAnalysisElement, AndroidUiNode,
@@ -145,7 +157,8 @@ export type {
 // Re-export the iOS analyzer (PROWL-061)
 export {
   analyzeIosApp, rankIosSelectors, parseIosHierarchy,
-  isIosInteractive, shortIosType, IOS_INTERACTIVE_TYPES, IOS_WINDOW_TYPE
+  isIosInteractive, shortIosType, iosNodeToNative, matchIosSelector,
+  IOS_INTERACTIVE_TYPES, IOS_WINDOW_TYPE
 } from "./analyzer/ios.js";
 export type {
   IosAnalysisResult, IosAnalysisElement, IosAnalysisWindow,

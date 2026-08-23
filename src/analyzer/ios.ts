@@ -24,7 +24,20 @@
  * Read-only: this never taps, types, or otherwise mutates the app — it only reads
  * the page source.
  */
+import {
+  IOS_MATCH_DIALECT,
+  matchNativeTree,
+  parseNativeSelector,
+  rankNativeSelectors,
+  shortIosType,
+  type NativeNode
+} from "../selector/native.js";
 import { parseXml, type XmlElement } from "./xml.js";
+
+// Re-export the iOS type-shorthand helper from the shared native selector engine
+// (PROWL-060), its single source of truth, so existing importers of
+// `shortIosType` from this module keep working.
+export { shortIosType } from "../selector/native.js";
 
 /**
  * Element types treated as interactive. Tuned to the common `XCUIElementType…`
@@ -129,46 +142,68 @@ export function parseIosHierarchy(xml: string): IosUiNode | null {
   return root ? toIosNode(root) : null;
 }
 
-/** Quote a selector value; the dialect strips surrounding quotes on parse. */
-function quote(value: string): string {
-  return `"${value}"`;
-}
-
-/** Strip the `XCUIElementType` prefix for a friendlier `role=` shorthand. */
-export function shortIosType(type: string): string {
-  return type.startsWith("XCUIElementType") ? type.slice("XCUIElementType".length) : type;
-}
-
 /** Whether `name` looks like a distinct accessibility identifier (not the label). */
 function hasAccessibilityId(node: IosUiNode): boolean {
   return node.name !== undefined && node.name !== node.label;
 }
 
 /**
- * Ranked selector candidates for a node, best first. Mirrors the iOS driver's
- * selector dialect (`id=` > `label=` > `role=…[name="…"]` > `text=`). Falls back
- * to a bare `role=<Type>` so every typed node stays addressable.
+ * Ranked selector candidates for a node, best first, via the shared native
+ * selector engine (PROWL-060). The iOS attribute mapping is applied here — `id=`←
+ * accessibility id (the `name` attribute, but only when it differs from the label;
+ * see the caveat above), `label=`←label, `role=`←the short element type, name←
+ * `label ?? value` — then {@link rankNativeSelectors} imposes the shared `id=` >
+ * `label=` > `role=…[name]` > `text=` order (with a bare `role=` fallback).
  */
 export function rankIosSelectors(node: IosUiNode): string[] {
-  const selectors: string[] = [];
-  const name = node.label ?? node.value;
+  return rankNativeSelectors({
+    id: hasAccessibilityId(node) ? node.name : undefined,
+    label: node.label,
+    role: node.type ? shortIosType(node.type) : undefined,
+    name: node.label ?? node.value
+  });
+}
 
-  if (hasAccessibilityId(node) && node.name) {
-    selectors.push(`id=${node.name}`);
+/**
+ * Project an {@link IosUiNode} into the neutral {@link NativeNode} the shared
+ * matcher compares against: `id`←accessibility id (name-when-≠-label), `label`←
+ * label, `role`←the full element type (the dialect normalizes a `Button`
+ * shorthand against it), and both label and value as `text=` substring sources.
+ */
+export function iosNodeToNative(node: IosUiNode): NativeNode {
+  const textValues: string[] = [];
+  if (node.label !== undefined) {
+    textValues.push(node.label);
   }
-  if (node.label) {
-    selectors.push(`label=${quote(node.label)}`);
+  if (node.value !== undefined) {
+    textValues.push(node.value);
   }
-  if (node.type && name) {
-    selectors.push(`role=${shortIosType(node.type)}[name=${quote(name)}]`);
+  return {
+    ...(hasAccessibilityId(node) && node.name !== undefined ? { id: node.name } : {}),
+    ...(node.label !== undefined ? { label: node.label } : {}),
+    ...(node.type !== undefined ? { role: node.type } : {}),
+    textValues
+  };
+}
+
+/**
+ * Host-side "snapshot-then-match": parse a WebDriverAgent `/source` dump and
+ * return every node the Prowl `selector` resolves to, in document order, using
+ * iOS's shared dialect semantics. Read-only and device-free. Exposed for tooling
+ * and a future runner/macdriver migration; the runner still matches on-device.
+ */
+export function matchIosSelector(xml: string, selector: string): IosUiNode[] {
+  const root = parseIosHierarchy(xml);
+  if (!root) {
+    return [];
   }
-  if (name) {
-    selectors.push(`text=${quote(name)}`);
-  }
-  if (selectors.length === 0 && node.type) {
-    selectors.push(`role=${shortIosType(node.type)}`);
-  }
-  return selectors;
+  return matchNativeTree(
+    IOS_MATCH_DIALECT,
+    parseNativeSelector(selector),
+    root,
+    iosNodeToNative,
+    (node) => node.children
+  );
 }
 
 function toElement(node: IosUiNode): IosAnalysisElement {
