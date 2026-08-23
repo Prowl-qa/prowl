@@ -4,12 +4,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   closeIosSession,
+  injectUsePortIntoXctestrun,
   launchIosSession,
   resolveWdaProject,
-  WDA_RUNNER_BUNDLE_ID
+  resolveWdaTestRun,
+  wdaTestRunArgs,
+  WDA_RUNNER_BUNDLE_ID,
+  type WdaTestRunPreparer
 } from "../src/browser/ios-helper.js";
 import type { IosAgentClient } from "../src/browser/ios-driver.js";
-import type { SimctlResult, SimctlRunner } from "../src/browser/ios-simctl.js";
+import type { SimctlResult, SimctlRunner, XcrunSpawner } from "../src/browser/ios-simctl.js";
 
 class FakeAgent implements IosAgentClient {
   closed = false;
@@ -49,9 +53,36 @@ function fakeRunner(
   return Object.assign(runner, { calls });
 }
 
+/** Records every spawned xcodebuild-test process and how many times it was killed. */
+function fakeSpawner(): XcrunSpawner & { spawns: { args: string[]; killCount: number }[] } {
+  const spawns: { args: string[]; killCount: number }[] = [];
+  const spawner: XcrunSpawner = (args) => {
+    const record = { args, killCount: 0 };
+    spawns.push(record);
+    return {
+      kill: () => {
+        record.killCount += 1;
+      }
+    };
+  };
+  return Object.assign(spawner, { spawns });
+}
+
+/** Preparer that records the port each launch requested and returns a port-tagged path. */
+function fakePreparer(): WdaTestRunPreparer & { ports: number[] } {
+  const ports: number[] = [];
+  const preparer: WdaTestRunPreparer = async ({ xctestrunPath, port }) => {
+    ports.push(port);
+    return `${xctestrunPath}#port=${port}`;
+  };
+  return Object.assign(preparer, { ports });
+}
+
+const BASE_TESTRUN = "/fake/WebDriverAgentRunner.xctestrun";
+
 const BOOTED_JSON = JSON.stringify({
   devices: {
-    "com.apple.CoreSimulator.SimRuntime.iOS-18-6": [
+    "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [
       { udid: "BBBB", name: "iPhone 16 Pro", state: "Booted", isAvailable: true }
     ]
   }
@@ -77,6 +108,12 @@ function makeAppBundle(bundleId: string): string {
       `<key>CFBundleIdentifier</key><string>${bundleId}</string></dict></plist>\n`
   );
   return appPath;
+}
+
+/** The `-xctestrun` argument of a recorded `xcodebuild test-without-building` spawn. */
+function xctestrunArg(args: string[]): string | undefined {
+  const index = args.indexOf("-xctestrun");
+  return index >= 0 ? args[index + 1] : undefined;
 }
 
 describe("resolveWdaProject", () => {
@@ -108,32 +145,123 @@ describe("resolveWdaProject", () => {
   });
 });
 
+describe("resolveWdaTestRun", () => {
+  it("resolves a PROWL_WDA_RUNNER runner .app override to the sibling Products xctestrun", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-wda-runner-"));
+    try {
+      const productsDir = path.join(root, "Build", "Products");
+      const appPath = path.join(productsDir, "Debug-iphonesimulator", "WebDriverAgentRunner-Runner.app");
+      const xctestrunPath = path.join(productsDir, "WebDriverAgentRunner_iphonesimulator.xctestrun");
+      fs.mkdirSync(appPath, { recursive: true });
+      fs.writeFileSync(xctestrunPath, "plist");
+
+      await expect(
+        resolveWdaTestRun({
+          env: { PROWL_WDA_RUNNER: appPath },
+          runner: fakeRunner(BOOTED_JSON)
+        })
+      ).resolves.toBe(xctestrunPath);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("wdaTestRunArgs", () => {
+  it("builds an `xcodebuild test-without-building` command for the destination", () => {
+    expect(wdaTestRunArgs("/tmp/wda.xctestrun", "BBBB")).toEqual([
+      "xcodebuild",
+      "test-without-building",
+      "-xctestrun",
+      "/tmp/wda.xctestrun",
+      "-destination",
+      "id=BBBB"
+    ]);
+  });
+});
+
+describe("injectUsePortIntoXctestrun", () => {
+  it("sets USE_PORT on a format-1 test target's EnvironmentVariables", () => {
+    const plist = {
+      WebDriverAgentRunner: {
+        TestHostPath: "__TESTROOT__/Runner.app",
+        TestBundlePath: "__TESTHOST__/PlugIns/WebDriverAgentRunner.xctest",
+        EnvironmentVariables: { DYLD_FRAMEWORK_PATH: "__TESTROOT__" }
+      },
+      __xctestrun_metadata__: { FormatVersion: 1 }
+    };
+    const out = injectUsePortIntoXctestrun(plist, 8123) as typeof plist;
+    expect(out.WebDriverAgentRunner.EnvironmentVariables).toMatchObject({
+      DYLD_FRAMEWORK_PATH: "__TESTROOT__",
+      USE_PORT: "8123"
+    });
+    // The original is not mutated.
+    expect(
+      (plist.WebDriverAgentRunner.EnvironmentVariables as Record<string, unknown>).USE_PORT
+    ).toBeUndefined();
+  });
+
+  it("sets USE_PORT on a format-2 TestConfigurations tree, creating env when absent", () => {
+    const plist = {
+      TestConfigurations: [
+        {
+          Name: "Configuration 1",
+          TestTargets: [
+            { BlueprintName: "WebDriverAgentRunner", TestBundlePath: "__TESTHOST__/WDA.xctest" }
+          ]
+        }
+      ],
+      __xctestrun_metadata__: { FormatVersion: 2 }
+    };
+    const out = injectUsePortIntoXctestrun(plist, 9001) as typeof plist;
+    expect(out.TestConfigurations[0].TestTargets[0]).toMatchObject({
+      EnvironmentVariables: { USE_PORT: "9001" }
+    });
+  });
+
+  it("throws when no test target can be found", () => {
+    expect(() => injectUsePortIntoXctestrun({ nothing: true }, 8100)).toThrow(
+      "Could not find a test target"
+    );
+  });
+});
+
 describe("launchIosSession", () => {
-  it("installs WDA + target app, launches on a dynamic port, and connects", async () => {
+  it("hosts WDA via xcodebuild test-without-building, launches the target app, and connects", async () => {
     const runner = fakeRunner(BOOTED_JSON);
+    const spawner = fakeSpawner();
+    const preparer = fakePreparer();
     const agent = new FakeAgent();
     const connector = fakeConnector(agent);
 
     const session = await launchIosSession({
       app: "com.example.App",
       runner,
+      spawner,
+      testRunPreparer: preparer,
       portAllocator: async () => 8100,
       agentConnector: connector,
-      wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app"
+      wdaTestRun: BASE_TESTRUN
     });
 
     expect(session.bundleId).toBe("com.example.App");
     expect(session.udid).toBe("BBBB");
     expect(connector.seen[0]).toEqual({ port: 8100, bundleId: "com.example.App" });
 
-    // WDA runner installed and launched with the USE_PORT child env.
-    const installs = runner.calls.filter((c) => c.args[1] === "install").map((c) => c.args[3]);
-    expect(installs).toContain("/fake/WebDriverAgentRunner-Runner.app");
-    const wdaLaunch = runner.calls.find(
-      (c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
-    );
-    expect(wdaLaunch?.env).toEqual({ SIMCTL_CHILD_USE_PORT: "8100" });
-    // Target app is launched too.
+    // The port was injected into the xctestrun, and WDA was hosted via xcodebuild.
+    expect(preparer.ports).toEqual([8100]);
+    expect(spawner.spawns).toHaveLength(1);
+    const spawnArgs = spawner.spawns[0].args;
+    expect(spawnArgs.slice(0, 2)).toEqual(["xcodebuild", "test-without-building"]);
+    expect(xctestrunArg(spawnArgs)).toBe(`${BASE_TESTRUN}#port=8100`);
+    expect(spawnArgs).toEqual(expect.arrayContaining(["-destination", "id=BBBB"]));
+
+    // The runner .app is never simctl-installed or simctl-launched now.
+    expect(runner.calls.some((c) => c.args[1] === "install")).toBe(false);
+    expect(
+      runner.calls.some((c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID)
+    ).toBe(false);
+    // The target app is launched via simctl.
     expect(
       runner.calls.some((c) => c.args[1] === "launch" && c.args[3] === "com.example.App")
     ).toBe(true);
@@ -141,13 +269,16 @@ describe("launchIosSession", () => {
     await closeIosSession(session);
     await closeIosSession(session);
     expect(agent.closed).toBe(true);
+    expect(spawner.spawns[0].killCount).toBe(1);
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
   });
 
-  it("retries WDA startup with a fresh port and cleans up the failed attempt", async () => {
+  it("retries WDA startup with a fresh port and kills the failed test process", async () => {
     const lockRoot = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-ios-session-lock-"));
     const runner = fakeRunner(BOOTED_JSON);
+    const spawner = fakeSpawner();
+    const preparer = fakePreparer();
     const agent = new FakeAgent();
     const connectorPorts: number[] = [];
     const ports = [8500, 8501];
@@ -156,6 +287,8 @@ describe("launchIosSession", () => {
       const session = await launchIosSession({
         app: "com.example.App",
         runner,
+        spawner,
+        testRunPreparer: preparer,
         portAllocator: async () => ports.shift() ?? 8599,
         agentConnector: async (options) => {
           connectorPorts.push(options.port);
@@ -164,37 +297,21 @@ describe("launchIosSession", () => {
           }
           return agent;
         },
-        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        wdaTestRun: BASE_TESTRUN,
         simulatorLockRoot: lockRoot
       });
 
       expect(connectorPorts).toEqual([8500, 8501]);
-      const wdaLaunches = runner.calls.filter(
-        (c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
-      );
-      expect(wdaLaunches.map((c) => c.env)).toEqual([
-        { SIMCTL_CHILD_USE_PORT: "8500" },
-        { SIMCTL_CHILD_USE_PORT: "8501" }
+      expect(preparer.ports).toEqual([8500, 8501]);
+      expect(spawner.spawns.map((s) => xctestrunArg(s.args))).toEqual([
+        `${BASE_TESTRUN}#port=8500`,
+        `${BASE_TESTRUN}#port=8501`
       ]);
-
-      const firstWdaLaunch = runner.calls.findIndex(
-        (c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
-      );
-      const secondWdaLaunch = runner.calls.findIndex(
-        (c, index) =>
-          index > firstWdaLaunch && c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID
-      );
-      const failedWdaTerminate = runner.calls.findIndex(
-        (c, index) =>
-          index > firstWdaLaunch && c.args[1] === "terminate" && c.args[3] === WDA_RUNNER_BUNDLE_ID
-      );
-      expect(failedWdaTerminate).toBeGreaterThan(firstWdaLaunch);
-      expect(failedWdaTerminate).toBeLessThan(secondWdaLaunch);
+      // The failed attempt's test process is killed before the retry spawns.
+      expect(spawner.spawns[0].killCount).toBe(1);
 
       await closeIosSession(session);
-      expect(
-        runner.calls.filter((c) => c.args[1] === "terminate" && c.args[3] === WDA_RUNNER_BUNDLE_ID)
-      ).toHaveLength(2);
+      expect(spawner.spawns[1].killCount).toBe(1);
     } finally {
       fs.rmSync(lockRoot, { recursive: true, force: true });
     }
@@ -206,9 +323,11 @@ describe("launchIosSession", () => {
       const first = await launchIosSession({
         app: "com.example.App",
         runner: fakeRunner(BOOTED_JSON),
+        spawner: fakeSpawner(),
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8600,
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        wdaTestRun: BASE_TESTRUN,
         simulatorLockRoot: lockRoot
       });
 
@@ -216,9 +335,11 @@ describe("launchIosSession", () => {
         launchIosSession({
           app: "com.example.App",
           runner: fakeRunner(BOOTED_JSON),
+          spawner: fakeSpawner(),
+          testRunPreparer: fakePreparer(),
           portAllocator: async () => 8601,
           agentConnector: fakeConnector(new FakeAgent()),
-          wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+          wdaTestRun: BASE_TESTRUN,
           simulatorLockRoot: lockRoot
         })
       ).rejects.toThrow('iOS simulator "BBBB" is already reserved');
@@ -227,9 +348,11 @@ describe("launchIosSession", () => {
       const second = await launchIosSession({
         app: "com.example.App",
         runner: fakeRunner(BOOTED_JSON),
+        spawner: fakeSpawner(),
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8602,
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/WebDriverAgentRunner-Runner.app",
+        wdaTestRun: BASE_TESTRUN,
         simulatorLockRoot: lockRoot
       });
       await closeIosSession(second);
@@ -245,9 +368,11 @@ describe("launchIosSession", () => {
       const session = await launchIosSession({
         app: appPath,
         runner,
+        spawner: fakeSpawner(),
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8200,
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/runner.app"
+        wdaTestRun: BASE_TESTRUN
       });
       expect(session.bundleId).toBe("com.derived.App");
       const installs = runner.calls.filter((c) => c.args[1] === "install").map((c) => c.args[3]);
@@ -266,9 +391,11 @@ describe("launchIosSession", () => {
         app: appPath,
         coldStart: true,
         runner,
+        spawner: fakeSpawner(),
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8300,
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/runner.app"
+        wdaTestRun: BASE_TESTRUN
       });
       expect(
         runner.calls.some((c) => c.args[1] === "uninstall" && c.args[3] === "com.derived.App")
@@ -279,71 +406,89 @@ describe("launchIosSession", () => {
     }
   });
 
-  it("rejects coldStart with a bare bundle id (actionable error) before connecting", async () => {
+  it("rejects coldStart with a bare bundle id (actionable error) before spawning", async () => {
     const runner = fakeRunner(BOOTED_JSON);
+    const spawner = fakeSpawner();
     const connector = fakeConnector(new FakeAgent());
     await expect(
       launchIosSession({
         app: "com.example.App",
         coldStart: true,
         runner,
+        spawner,
+        testRunPreparer: fakePreparer(),
         agentConnector: connector,
-        wdaRunnerApp: "/fake/runner.app"
+        wdaTestRun: BASE_TESTRUN
       })
     ).rejects.toThrow("coldStart requires target.app to be a built .app bundle path");
     expect(connector.seen).toHaveLength(0);
+    expect(spawner.spawns).toHaveLength(0);
   });
 
-  it("fails on multiple booted simulators before connecting", async () => {
+  it("fails on multiple booted simulators before spawning", async () => {
     const runner = fakeRunner(
       JSON.stringify({
         devices: {
-          "com.apple.CoreSimulator.SimRuntime.iOS-18-6": [
+          "com.apple.CoreSimulator.SimRuntime.iOS-26-5": [
             { udid: "BBBB", name: "iPhone 16 Pro", state: "Booted" },
             { udid: "DDDD", name: "iPhone 16", state: "Booted" }
           ]
         }
       })
     );
+    const spawner = fakeSpawner();
     const connector = fakeConnector(new FakeAgent());
     await expect(
       launchIosSession({
         app: "com.example.App",
         runner,
+        spawner,
+        testRunPreparer: fakePreparer(),
         agentConnector: connector,
-        wdaRunnerApp: "/fake/runner.app"
+        wdaTestRun: BASE_TESTRUN
       })
     ).rejects.toThrow("Multiple iOS simulators are booted");
     expect(connector.seen).toHaveLength(0);
+    expect(spawner.spawns).toHaveLength(0);
   });
 
-  it("rejects a target app outside allowedApps before install", async () => {
+  it("rejects a target app outside allowedApps before install/spawn", async () => {
     const runner = fakeRunner(BOOTED_JSON);
+    const spawner = fakeSpawner();
     await expect(
       launchIosSession({
         app: "com.example.App",
         runner,
+        spawner,
+        testRunPreparer: fakePreparer(),
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/runner.app",
+        wdaTestRun: BASE_TESTRUN,
         allowedApps: ["com.other.App"]
       })
     ).rejects.toThrow("not in guardrails.allowedApps");
     expect(runner.calls.some((c) => c.args[1] === "install")).toBe(false);
+    expect(spawner.spawns).toHaveLength(0);
   });
 
-  it("tears down the WDA runner and target app when the connector fails", async () => {
+  it("tears down the WDA test process and target app when the connector fails", async () => {
     const runner = fakeRunner(BOOTED_JSON);
+    const spawner = fakeSpawner();
     await expect(
       launchIosSession({
         app: "com.example.App",
         runner,
+        spawner,
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8400,
         agentConnector: async () => {
           throw new Error("WDA unreachable");
         },
-        wdaRunnerApp: "/fake/runner.app"
+        wdaTestRun: BASE_TESTRUN
       })
     ).rejects.toThrow("WDA unreachable");
+    // Both startup attempts spawn a test process; both are killed on teardown.
+    expect(spawner.spawns).toHaveLength(2);
+    expect(spawner.spawns.map((s) => s.killCount)).toEqual([1, 1]);
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
   });
@@ -355,21 +500,24 @@ describe("launchIosSession", () => {
         ? { code: 1, stderr: "not installed" }
         : {}
     );
+    const spawner = fakeSpawner();
     try {
       await expect(
         launchIosSession({
           app: "com.example.App",
           runner: failingRunner,
+          spawner,
+          testRunPreparer: fakePreparer(),
           portAllocator: async () => 8700,
           agentConnector: fakeConnector(new FakeAgent()),
-          wdaRunnerApp: "/fake/runner.app",
+          wdaTestRun: BASE_TESTRUN,
           simulatorLockRoot: lockRoot
         })
       ).rejects.toThrow('Failed to launch "com.example.App"');
 
-      expect(
-        failingRunner.calls.filter((c) => c.args[1] === "launch" && c.args[3] === WDA_RUNNER_BUNDLE_ID)
-      ).toHaveLength(1);
+      // A target-launch failure is not retried (it won't get better): one spawn, killed.
+      expect(spawner.spawns).toHaveLength(1);
+      expect(spawner.spawns[0].killCount).toBe(1);
       const terminates = failingRunner.calls
         .filter((c) => c.args[1] === "terminate")
         .map((c) => c.args[3]);
@@ -378,9 +526,11 @@ describe("launchIosSession", () => {
       const session = await launchIosSession({
         app: "com.example.App",
         runner: fakeRunner(BOOTED_JSON),
+        spawner: fakeSpawner(),
+        testRunPreparer: fakePreparer(),
         portAllocator: async () => 8701,
         agentConnector: fakeConnector(new FakeAgent()),
-        wdaRunnerApp: "/fake/runner.app",
+        wdaTestRun: BASE_TESTRUN,
         simulatorLockRoot: lockRoot
       });
       await closeIosSession(session);

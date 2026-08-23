@@ -7,7 +7,7 @@
  * so the whole surface is unit-testable with a fake — `npm test` never needs a
  * booted simulator or Xcode.
  */
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -21,6 +21,36 @@ export type SimctlRunner = (
   args: string[],
   options?: { timeoutMs?: number; env?: NodeJS.ProcessEnv }
 ) => Promise<SimctlResult>;
+
+/** A handle to a spawned long-running `xcrun` process (the WDA xcodebuild test host). */
+export type XcrunProcessHandle = { kill(): void };
+
+/**
+ * Spawns a long-running `xcrun` command in the background — used for the
+ * `xcodebuild test-without-building` run that hosts WebDriverAgent (which never
+ * exits on its own; it serves HTTP until killed). Mirrors the Android
+ * `AdbSpawner` so the launch flow stays unit-testable with a fake.
+ */
+export type XcrunSpawner = (
+  args: string[],
+  options?: { env?: NodeJS.ProcessEnv }
+) => XcrunProcessHandle;
+
+/** Default {@link XcrunSpawner}: spawns a detached-output `xcrun` child. */
+export const spawnXcrunProcess: XcrunSpawner = (args, options) => {
+  const child = spawn("xcrun", args, {
+    stdio: "ignore",
+    env: options?.env ? { ...process.env, ...options.env } : process.env
+  });
+  child.on("error", () => {
+    /* surfaced via readiness/preflight, not here */
+  });
+  return {
+    kill: () => {
+      child.kill();
+    }
+  };
+};
 
 /** One simulator device from `simctl list devices --json`. */
 export type SimDevice = {
