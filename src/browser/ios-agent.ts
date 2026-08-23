@@ -266,6 +266,14 @@ export function createWdaAgentClient(transport: WdaTransport, sessionId: string)
       // Session-independent springboard route.
       await transport.request("POST", "/wda/homescreen", {});
     },
+    async source(): Promise<string> {
+      // WDA returns the XML page source of the active app (session-independent).
+      const value = await transport.request("GET", "/source");
+      if (typeof value !== "string") {
+        throw new Error("WebDriverAgent /source did not return XML text; cannot analyze iOS UI hierarchy");
+      }
+      return value;
+    },
     async close(): Promise<void> {
       await transport.request("DELETE", base).catch(() => undefined);
     }

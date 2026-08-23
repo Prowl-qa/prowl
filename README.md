@@ -1178,9 +1178,52 @@ equivalent yet and are rejected with a clear message; scroll-gesture support is 
 follow-up. A degraded pure-`adb` fallback (`uiautomator dump` + `input tap`) is a
 possible future diagnostic mode, not the primary path.
 
-> Out of scope for PROWL-058 (tracked separately): `prowl analyze` for Android and
-> CI recipes (PROWL-061), the unified native selector engine (PROWL-060), and real
-> iOS devices (PROWL-062). The iOS **simulator** target ships below.
+### Finding selectors (Android)
+
+Don't guess selectors — dump them. `prowl analyze` works on the Android target the
+same way it does on the web and macOS: it attaches to the running app, reads the
+uiautomator UI hierarchy, and prints every interactive element with **ranked
+selector candidates** (best first). It is read-only, honors
+`guardrails.allowedApps`, and leaves the app running when done. Point it at a
+booted emulator/device:
+
+```bash
+# Uses the Android target from .prowl/config.yml:
+prowl analyze
+
+# …or force the Android target explicitly:
+prowl analyze --app com.android.settings --platform android
+prowl analyze --app ./app-debug.apk               # an .apk implies Android
+prowl analyze --app com.example.app --device emulator-5556   # pick a device
+
+# Machine-readable output for agents:
+prowl analyze --app com.android.settings --platform android --json
+```
+
+Ranking (best → last resort): `id=` (the package-qualified `resource-id`, the
+native `data-testid`) > `label=` (content-desc) > `role=<class>[name="<text>"]` >
+`text=`. Example (human-readable) output:
+
+```text
+  App Analysis: com.android.settings
+
+  Interactive Elements:
+    android.widget.EditText id=com.android.settings:id/search_src_text "Search settings"
+    android.widget.LinearLayout text="Network & internet" "Network & internet"
+    android.widget.Switch id=com.android.settings:id/switch_widget (disabled)
+
+  3 elements
+```
+
+> Platform selection for `--app`: an `.apk` implies Android; otherwise pass
+> `--platform android` (a bare bundle-id / package is ambiguous with the macOS and
+> iOS targets, which default to macOS unless a config `target.type` or `--platform`
+> says otherwise). With an Android `target.type` in `.prowl/config.yml`, a bare
+> `prowl analyze` needs no flag.
+>
+> Out of scope for PROWL-058 (tracked separately): the unified native selector
+> engine (PROWL-060) and real iOS devices (PROWL-062). `prowl analyze` for Android
+> and the CI recipes shipped in PROWL-061 (above, and see "Mobile targets in CI").
 
 ---
 
@@ -1278,9 +1321,165 @@ message. Screenshots are captured with `simctl` (not WDA), so artifacts still wo
 even if the agent wedges. `hover` and `scrollTo` have no touch equivalent yet and are
 rejected with a clear message; scroll-gesture support is a follow-up.
 
-> Out of scope for PROWL-059 (tracked separately): `prowl analyze` for iOS and CI
-> recipes (PROWL-061), the unified native selector engine (PROWL-060), and real iOS
-> devices (PROWL-062).
+### Finding selectors (iOS)
+
+Don't guess selectors — dump them. `prowl analyze` works on the iOS target the
+same way it does on the web, macOS, and Android: it attaches to the running app on
+a booted simulator, reads WebDriverAgent's UI hierarchy, and prints every
+interactive element (plus the app's windows) with **ranked selector candidates**
+(best first). It is read-only, honors `guardrails.allowedApps`, and leaves the app
+running when done:
+
+```bash
+# Uses the iOS target from .prowl/config.yml:
+prowl analyze
+
+# …or force the iOS target explicitly:
+prowl analyze --app com.apple.Preferences --platform ios
+prowl analyze --app com.example.App --platform ios --udid <SIM-UDID>
+
+# Machine-readable output for agents:
+prowl analyze --app com.apple.Preferences --platform ios --json
+```
+
+Ranking (best → last resort): `id=` (accessibility id) > `label=` > `role=<Type>
+[name="<text>"]` > `text=`. Because WDA's page source exposes only a single `name`
+attribute — the accessibility identifier when set, otherwise the label — `id=` is
+offered only when that `name` differs from the element's label. Example output:
+
+```text
+  App Analysis: com.apple.Preferences
+
+  Windows:
+    (untitled) role=Window
+
+  Interactive Elements:
+    XCUIElementTypeButton id=general_button "General"
+    XCUIElementTypeCell label="Wi-Fi" "Wi-Fi"
+    XCUIElementTypeSwitch label="Airplane Mode" "Airplane Mode" (disabled)
+
+  3 elements, 1 windows
+```
+
+> A bare bundle-id `--app` is ambiguous with the macOS target (which is the
+> default), so pass `--platform ios`. With an iOS `target.type` in
+> `.prowl/config.yml`, a bare `prowl analyze` needs no flag.
+>
+> Out of scope for PROWL-059 (tracked separately): the unified native selector
+> engine (PROWL-060) and real iOS devices (PROWL-062). `prowl analyze` for iOS and
+> the CI recipes shipped in PROWL-061 (above, and see "Mobile targets in CI").
+
+---
+
+## Mobile targets in CI
+
+The Android and iOS targets run in continuous integration, either on GitHub-hosted
+runners or on a self-hosted Mac. Every recipe runs the real `prowl` CLI against a
+booted emulator/simulator and uploads run artifacts (screenshots, JUnit, reports).
+
+### Android on `ubuntu-latest` (GitHub-hosted)
+
+GitHub's Linux runners support KVM, so a hardware-accelerated emulator boots in the
+job via [`reactivecircus/android-emulator-runner`](https://github.com/ReactiveCircus/android-emulator-runner).
+Prowl installs the uiautomator2 agent APKs from its optional dependency automatically.
+
+```yaml
+name: Android E2E
+on: [push, pull_request]
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+
+      # KVM must be accessible for a fast emulator.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run hunts against the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          disable-animations: true
+          # `prowl` is your installed CLI (e.g. `npx prowl` or a global install);
+          # the emulator is booted and on adb by the time this runs.
+          script: npx prowl ci --junit
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: .prowl/runs/**
+          if-no-files-found: ignore
+```
+
+### iOS simulators on `macos-*` (GitHub-hosted)
+
+macOS runners ship Xcode and the iOS simulator runtimes. Boot a simulator with
+`xcrun simctl`, and cache the one-time WebDriverAgent build (`~/.prowl/wda/`, keyed
+on the WDA + Xcode versions) so subsequent runs skip the ~2-minute `xcodebuild`.
+
+```yaml
+name: iOS E2E
+on: [push, pull_request]
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+
+      # Cache the built WebDriverAgent runner across runs.
+      - name: Cache WebDriverAgent
+        uses: actions/cache@v4
+        with:
+          path: ~/.prowl/wda
+          key: prowl-wda-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Boot a simulator
+        run: |
+          xcrun simctl boot "iPhone 16" || true
+          xcrun simctl bootstatus "iPhone 16"
+
+      - name: Run hunts against the simulator
+        run: npx prowl ci --junit
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-artifacts
+          path: .prowl/runs/**
+          if-no-files-found: ignore
+```
+
+### Self-hosted device-verification gate
+
+This repo also ships `.github/workflows/mobile-e2e.yml`, a real end-to-end gate on
+the Prowl Tools self-hosted Mac (labels `self-hosted, macOS, prowl-mobile`) that
+boots both a headless emulator and a simulator and drives Settings on each through
+the real CLI. It runs on `workflow_dispatch` (the owner's post-merge verification)
+and on same-repo pull requests, skipping cleanly (green) for forks/outside PRs that
+can't reach the runner, and uses its own `concurrency` group so it never collides
+with other jobs on the shared box. It is the machine-run version of the manual
+smoke tests that caught the uiautomator2 wire-shape bug and the WDA readiness hang.
 
 ---
 

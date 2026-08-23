@@ -251,6 +251,14 @@ export function createUia2AgentClient(
       }
       return Buffer.from(value, "base64");
     },
+    async source(): Promise<string> {
+      // uiautomator2 returns the `uiautomator dump` XML hierarchy as a string.
+      const value = await transport.request("GET", `${base}/source`);
+      if (typeof value !== "string") {
+        throw new Error("uiautomator2 /source did not return XML text; cannot analyze Android UI hierarchy");
+      }
+      return value;
+    },
     async close(): Promise<void> {
       await transport.request("DELETE", base).catch(() => undefined);
     }

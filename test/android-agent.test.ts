@@ -155,6 +155,24 @@ describe("createUia2AgentClient", () => {
     expect((await client.screenshotPng()).toString()).toBe("PNGDATA");
   });
 
+  it("reads the UI hierarchy XML via GET /source", async () => {
+    const xml = "<hierarchy rotation='0'><node class='android.widget.Button'/></hierarchy>";
+    const { transport, calls } = transportWith(() => ({ body: xml }));
+    const client = createUia2AgentClient(transport, "S1");
+    expect(await client.source?.()).toBe(xml);
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/source");
+  });
+
+  it("rejects non-string UI hierarchy responses", async () => {
+    const { transport } = transportWith(() => ({ body: { unexpected: true } }));
+    const client = createUia2AgentClient(transport, "S1");
+
+    await expect(client.source?.()).rejects.toThrow(
+      "uiautomator2 /source did not return XML text; cannot analyze Android UI hierarchy"
+    );
+  });
+
   it("deletes the uiautomator2 session on close", async () => {
     const { transport, calls } = transportWith(() => ({ body: null }));
     const client = createUia2AgentClient(transport, "S1");

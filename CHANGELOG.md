@@ -3,7 +3,54 @@
 All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes.
+
+### Fixed
+- **Mobile analysis review hardening.** Invalid XML numeric references now remain
+  literal instead of crashing analysis, Android/iOS `/source` protocol mismatches
+  fail with explicit errors instead of reporting an empty hierarchy, Android
+  `am start` launch failures preserve the failing adb phase and original cause,
+  config-based `prowl analyze` now lets `--device`/`--udid` override configured
+  identifiers, and the self-hosted mobile workflow skips the known PROWL-069 iOS
+  smoke on iOS 26+ runtimes while preserving the Android gate.
+- **Android app launch is now deterministic (`am start`, not `monkey`).** The
+  Android target launched apps with `monkey`, which is unreliable when adb runs
+  without a PTY (e.g. `execFile` in CI): on some emulator images — notably API 35
+  `google_apis` — non-interactive `monkey` emits debug noise and exits non-zero
+  even on success, so launches spuriously failed. `launchPackage` now resolves the
+  launcher activity via `cmd package resolve-activity` and starts it with
+  `am start -n <component>`. Verified live on an API 35 emulator (found while
+  device-verifying `prowl analyze`). This is what unblocks the self-hosted mobile
+  CI gate below on a standard API 35 AVD.
+
+### Added
+- **`prowl analyze` now works on the Android and iOS targets (PROWL-061).** The
+  native analog of the web/macOS analyzers: it attaches to a running app on a
+  booted emulator/simulator, reads the on-device UI hierarchy (Android via the
+  uiautomator2 agent's `GET /source`, iOS via WebDriverAgent's `GET /source`), and
+  prints every interactive element with **ranked selector candidates** in each
+  platform's dialect — Android `id=` (package-qualified `resource-id`) > `label=`
+  (content-desc) > `role=<class>[name]` > `text=`; iOS `id=` (accessibility id) >
+  `label=` > `role=<Type>[name]` > `text=`, plus a windows list. The `analyze`
+  command gained native routing: `--app` forces a native target, `--platform
+  <macos|android|ios>` disambiguates (an `.apk` implies Android; a bare bundle-id
+  still defaults to macOS for back-compat), and `--device`/`--udid` pick a
+  device/simulator. Config `target.type: android|ios` is honored when no URL or
+  `--app` is given. The `guardrails.allowedApps` scope is enforced before launch
+  (mirroring the run path) and analysis is strictly read-only. New library exports:
+  `analyzeAndroidApp`/`analyzeIosApp` (+ ranking/parse helpers and result types)
+  and a small dependency-free XML parser (`parseXml`) shared by both dialects. The
+  agent clients gained a read-only `source()` reader. iOS caveat: WDA's page source
+  exposes one `name` attribute (the accessibility identifier when set, else the
+  label), so `id=` is offered only when `name` differs from the label.
+- **CI recipes for the mobile targets (PROWL-061).** The README documents
+  copy-paste GitHub Actions recipes for both platforms — Android on `ubuntu-latest`
+  via `reactivecircus/android-emulator-runner` (KVM-accelerated), and iOS
+  simulators on `macos-*` with a cached WebDriverAgent build — plus a new
+  self-hosted `.github/workflows/mobile-e2e.yml` that boots a headless emulator and
+  a simulator and runs real Settings smoke hunts through the CLI on the Prowl Tools
+  Mac. That workflow triggers on `workflow_dispatch` and same-repo PRs, skips
+  cleanly (green) for forks/outside PRs that can't reach the runner, and uses its
+  own `concurrency` group so it never collides with other jobs on the shared box.
 
 ## [0.1.5] - 2026-08-20
 

@@ -63,6 +63,12 @@ export interface IosAgentClient {
   sendKeys(keys: string[]): Promise<void>;
   /** Return to the springboard home screen (WDA `/wda/homescreen`). */
   homescreen(): Promise<void>;
+  /**
+   * Return the current UI hierarchy as WebDriverAgent `/source` XML. Present on
+   * live clients and consumed by the analyzer (PROWL-061); optional so lighter
+   * fakes that only drive/query need not implement it.
+   */
+  source?(): Promise<string>;
   close(): Promise<void>;
 }
 
