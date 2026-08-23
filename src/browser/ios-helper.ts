@@ -150,12 +150,12 @@ function resolveOverrideXctestrun(override: string): string {
   }
   const candidates: string[] = [];
   const stat = fs.statSync(override);
-  if (stat.isDirectory()) {
-    // A derived-data dir, a Products dir, or any dir that directly holds one.
-    candidates.push(override, productsDir(override));
-  } else if (override.endsWith(".app")) {
+  if (override.endsWith(".app")) {
     // Build/Products/<Config>-iphonesimulator/Runner.app → Build/Products/*.xctestrun
     candidates.push(path.dirname(path.dirname(override)));
+  } else if (stat.isDirectory()) {
+    // A derived-data dir, a Products dir, or any dir that directly holds one.
+    candidates.push(override, productsDir(override));
   }
   for (const dir of candidates) {
     const found = findXctestrunIn(dir);

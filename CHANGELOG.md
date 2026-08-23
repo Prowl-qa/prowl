@@ -19,7 +19,9 @@ All notable changes to Prowl will be documented in this file.
   and works on iOS 18 and 26+ alike; the WDA build cache (`~/.prowl/wda/…`) and the
   `PROWL_WDA_RUNNER` override are preserved (the override may now point at the
   `.xctestrun`, its `Build/Products` directory, or the runner `.app`). The
-  self-hosted mobile CI gate's iOS smoke no longer skips iOS 26+ runtimes.
+  runner `.app` override is resolved before generic directory handling so it finds
+  the sibling `Build/Products/*.xctestrun` as documented. The self-hosted mobile
+  CI gate's iOS smoke no longer skips iOS 26+ runtimes.
 - **Mobile analysis review hardening.** Invalid XML numeric references now remain
   literal instead of crashing analysis, Android/iOS `/source` protocol mismatches
   fail with explicit errors instead of reporting an empty hierarchy, Android

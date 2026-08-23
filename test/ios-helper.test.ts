@@ -7,6 +7,7 @@ import {
   injectUsePortIntoXctestrun,
   launchIosSession,
   resolveWdaProject,
+  resolveWdaTestRun,
   wdaTestRunArgs,
   WDA_RUNNER_BUNDLE_ID,
   type WdaTestRunPreparer
@@ -52,15 +53,15 @@ function fakeRunner(
   return Object.assign(runner, { calls });
 }
 
-/** Records every spawned xcodebuild-test process and whether it was killed. */
-function fakeSpawner(): XcrunSpawner & { spawns: { args: string[]; killed: boolean }[] } {
-  const spawns: { args: string[]; killed: boolean }[] = [];
+/** Records every spawned xcodebuild-test process and how many times it was killed. */
+function fakeSpawner(): XcrunSpawner & { spawns: { args: string[]; killCount: number }[] } {
+  const spawns: { args: string[]; killCount: number }[] = [];
   const spawner: XcrunSpawner = (args) => {
-    const record = { args, killed: false };
+    const record = { args, killCount: 0 };
     spawns.push(record);
     return {
       kill: () => {
-        record.killed = true;
+        record.killCount += 1;
       }
     };
   };
@@ -141,6 +142,28 @@ describe("resolveWdaProject", () => {
     expect(() => resolveWdaProject(requireFn)).toThrow(
       "npm install appium-webdriveragent@16.4.0"
     );
+  });
+});
+
+describe("resolveWdaTestRun", () => {
+  it("resolves a PROWL_WDA_RUNNER runner .app override to the sibling Products xctestrun", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-wda-runner-"));
+    try {
+      const productsDir = path.join(root, "Build", "Products");
+      const appPath = path.join(productsDir, "Debug-iphonesimulator", "WebDriverAgentRunner-Runner.app");
+      const xctestrunPath = path.join(productsDir, "WebDriverAgentRunner_iphonesimulator.xctestrun");
+      fs.mkdirSync(appPath, { recursive: true });
+      fs.writeFileSync(xctestrunPath, "plist");
+
+      await expect(
+        resolveWdaTestRun({
+          env: { PROWL_WDA_RUNNER: appPath },
+          runner: fakeRunner(BOOTED_JSON)
+        })
+      ).resolves.toBe(xctestrunPath);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -246,7 +269,7 @@ describe("launchIosSession", () => {
     await closeIosSession(session);
     await closeIosSession(session);
     expect(agent.closed).toBe(true);
-    expect(spawner.spawns[0].killed).toBe(true);
+    expect(spawner.spawns[0].killCount).toBe(1);
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
   });
@@ -285,10 +308,10 @@ describe("launchIosSession", () => {
         `${BASE_TESTRUN}#port=8501`
       ]);
       // The failed attempt's test process is killed before the retry spawns.
-      expect(spawner.spawns[0].killed).toBe(true);
+      expect(spawner.spawns[0].killCount).toBe(1);
 
       await closeIosSession(session);
-      expect(spawner.spawns[1].killed).toBe(true);
+      expect(spawner.spawns[1].killCount).toBe(1);
     } finally {
       fs.rmSync(lockRoot, { recursive: true, force: true });
     }
@@ -465,7 +488,7 @@ describe("launchIosSession", () => {
     ).rejects.toThrow("WDA unreachable");
     // Both startup attempts spawn a test process; both are killed on teardown.
     expect(spawner.spawns).toHaveLength(2);
-    expect(spawner.spawns.every((s) => s.killed)).toBe(true);
+    expect(spawner.spawns.map((s) => s.killCount)).toEqual([1, 1]);
     const terminates = runner.calls.filter((c) => c.args[1] === "terminate").map((c) => c.args[3]);
     expect(terminates).toEqual(expect.arrayContaining([WDA_RUNNER_BUNDLE_ID, "com.example.App"]));
   });
@@ -494,7 +517,7 @@ describe("launchIosSession", () => {
 
       // A target-launch failure is not retried (it won't get better): one spawn, killed.
       expect(spawner.spawns).toHaveLength(1);
-      expect(spawner.spawns[0].killed).toBe(true);
+      expect(spawner.spawns[0].killCount).toBe(1);
       const terminates = failingRunner.calls
         .filter((c) => c.args[1] === "terminate")
         .map((c) => c.args[3]);
