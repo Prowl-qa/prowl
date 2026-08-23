@@ -937,16 +937,17 @@ Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS
 
 ## Native Selector Dialect (compatibility matrix)
 
-The three native targets (macOS, Android, iOS) share **one** selector dialect, so
-`id=` / `label=` / `text=` / `role=` mean the same *shape* of thing everywhere. The
-dialect — its grammar, per-platform attribute mapping, ranking order, and host-side
-matching — is defined in one place in the code (`src/selector/native.ts`); this
-table is its documentation. The web target speaks Playwright's own selector engines
-and is shown for contrast.
+Android and iOS now consume one shared selector dialect implementation, so `id=`
+/ `label=` / `text=` / `role=` mean the same *shape* of thing on both mobile
+targets. That shared grammar, per-platform attribute mapping, ranking order, and
+host-side matching live in `src/selector/native.ts`. macOS remains on its existing
+driver/analyzer implementation for now, with migration deferred, but follows the
+same documented selector shape. The web target speaks Playwright's own selector
+engines and is shown for contrast.
 
 | Kind | Web (Playwright) | macOS (AX) | Android (uiautomator2) | iOS (WebDriverAgent) |
 |---|---|---|---|---|
-| `id=` | use CSS `#id` / `[data-testid]` | `AXIdentifier`, exact | `resource-id`, exact (bare names are package-qualified: `save` → `<pkg>:id/save`) | accessibility id (the `name`, when it differs from the label), exact |
+| `id=` | use CSS `#id` / `[data-testid]` | `AXIdentifier`, exact | `resource-id`, exact (bare names are package-qualified: `save` → `<pkg>:id/save`) | accessibility id (the `name` attribute), exact |
 | `label=` | *(no native kind; analyzer surfaces the associated `<label>` text)* | `title`/`description`, **exact** | `content-desc`, **exact** | `accessibilityLabel`, **exact** |
 | `text=` (or bare) | text engine, substring, case-insensitive | `title`/`description`/`value`, substring | visible `text`, substring | `label` **or** `value`, substring |
 | `role=` | ARIA role engine | AX role (e.g. `AXButton`) | widget class (e.g. `android.widget.Button`) | element type (`XCUIElementType…`; shorthand `Button` accepted) |
@@ -960,9 +961,10 @@ label="Save"` will **not** match an element whose real label is "Save changes"; 
 silently fails rather than partially matching. Use `text=` when you want substring
 behavior in an assertion, and keep `label=` for the exact accessibility label. On
 iOS there is a second trap: WDA's page source exposes a single `name` attribute that
-is the `accessibilityIdentifier` when one is set and otherwise the label — so `id=`
-addresses the identifier only when it actually differs from the label; when they are
-equal, use `label=`.
+is the `accessibilityIdentifier` when one is set and otherwise the label. Prowl's
+analyzer only recommends `id=` when `name` differs from `label`, so it does not emit
+label-shaped ids, but runtime and host-side matching still resolve `id=` against
+WDA's `name`.
 
 Prefer `id=` on every native target — the native analog of `data-testid`. Per-target
 specifics (escaping, `statusItem`/`menu=` on macOS, the Compose `testTagsAsResourceId`

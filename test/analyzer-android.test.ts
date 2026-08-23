@@ -181,4 +181,8 @@ describe("matchAndroidSelector (host-side snapshot-then-match, PROWL-060)", () =
   it("returns an empty array for an empty snapshot", () => {
     expect(matchAndroidSelector("", "id=anything")).toEqual([]);
   });
+
+  it("rejects malformed selectors before parsing the snapshot", () => {
+    expect(() => matchAndroidSelector("", "label=")).toThrow('Invalid native selector "label="');
+  });
 });

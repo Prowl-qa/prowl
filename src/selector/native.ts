@@ -1,15 +1,15 @@
 /**
  * PROWL-060 / ARCH-011 — Unified native selector engine (snapshot-then-match).
  *
- * This module is the single source of truth for what Prowl's native selector
- * dialect (`id=` / `label=` / `text=` / `role=`, plus `:focus`) *means* on each
- * native platform. Before this module the dialect was defined three times over —
- * once in each mobile driver's locator translation (`androidQueryToLocator` /
- * `iosQueryToLocator`) and once in each analyzer's selector ranking
- * (`rankAndroidSelectors` / `rankIosSelectors`) — with the macOS analyzer
- * carrying a fourth copy of the same ranking shape. Consolidating the grammar,
- * the per-platform attribute mapping tables, the ranking order, and the
- * host-side matching semantics here means the dialect (and its documentation,
+ * This module is the single source of truth for what Prowl's Android/iOS native
+ * selector dialect (`id=` / `label=` / `text=` / `role=`, plus `:focus`) means.
+ * It also carries the macOS compatibility mapping for the deferred macdriver
+ * migration. Before this module the mobile dialect was defined three times over
+ * — once in each mobile driver's locator translation (`androidQueryToLocator` /
+ * `iosQueryToLocator`) and once in each mobile analyzer's selector ranking
+ * (`rankAndroidSelectors` / `rankIosSelectors`). Consolidating the grammar, the
+ * per-platform attribute mapping tables, the ranking order, and the host-side
+ * matching semantics here means the mobile dialect (and its documentation,
  * including the `label=`-in-assertions trap) lives in exactly one place.
  *
  * It has three surfaces:
@@ -18,8 +18,8 @@
  *      parse through it (then map the neutral kind onto their own wire query),
  *      so the accepted syntax can never drift between platforms.
  *   2. {@link rankNativeSelectors} + {@link NATIVE_ATTRIBUTE_MAP} — the ranking
- *      order and per-platform attribute mapping tables that every analyzer's
- *      selector ranking derives from.
+ *      order and per-platform attribute mapping tables that the mobile
+ *      analyzers' selector ranking derives from.
  *   3. {@link nodeMatchesSelector} / {@link matchNativeTree} — a dependency-free,
  *      host-side "snapshot-then-match" engine: given a parsed selector and a
  *      hierarchy node (projected from an agent's `/source` dump via
@@ -31,15 +31,16 @@
  * =====================================================================
  * Selector compatibility matrix — web / macOS / Android / iOS
  * =====================================================================
- * How each selector kind resolves on every target. The three native targets are
- * deliberately unified (`id=`/`label=`/`text=`/`role=` mean the same *shape* of
- * thing everywhere); the web target speaks Playwright's own selector engines and
- * is included for contrast.
+ * How each selector kind resolves on every target. Android and iOS consume this
+ * shared grammar/mapping/matcher today; macOS still uses its existing driver and
+ * analyzer implementation, with migration deferred, but follows the same
+ * documented selector shape. The web target speaks Playwright's own selector
+ * engines and is included for contrast.
  *
  *  Kind      Web (Playwright)          macOS (AX)              Android (uiautomator2)         iOS (WebDriverAgent)
  *  --------  ------------------------  ----------------------  -----------------------------  ------------------------------
- *  id=       (use CSS `#id` /          AXIdentifier            resource-id, EXACT             accessibility id (name when it
- *            `[data-testid]`)          (exact)                 (bare names are package-        differs from label), EXACT
+ *  id=       (use CSS `#id` /          AXIdentifier            resource-id, EXACT             accessibility id (name),
+ *            `[data-testid]`)          (exact)                 (bare names are package-        EXACT
  *                                                              qualified: `save` →
  *                                                              `<pkg>:id/save`)
  *  label=    (no native kind; the      title ?? description,   content-desc, EXACT            accessibilityLabel, EXACT
@@ -66,8 +67,9 @@
  * substring behavior in an assertion, and keep `label=` for the exact
  * accessibility label. On iOS there is a second, related trap: WDA's `/source`
  * exposes a single `name` attribute that is the `accessibilityIdentifier` when
- * one is set and otherwise the label — so `id=` addresses the identifier only
- * when it actually differs from the label; when they are equal, use `label=`.
+ * one is set and otherwise the label. The analyzer only ranks `id=` when `name`
+ * differs from `label`, so it does not recommend label-shaped ids, but matching
+ * still follows WDA and resolves `id=` against `name`.
  */
 import { parseXml } from "../analyzer/xml.js";
 
@@ -110,6 +112,11 @@ export function quoteSelectorValue(value: string): string {
 }
 
 const ROLE_SELECTOR_RE = /^role=([A-Za-z][\w.$-]*)(?:\[name=(.+)\])?$/s;
+const NATIVE_SELECTOR_PREFIX_RE = /^(id|label|text|role)=/;
+
+function invalidSelectorMessage(selector: string, reason: string): string {
+  return `Invalid native selector ${JSON.stringify(selector)}: ${reason}.`;
+}
 
 /**
  * Parse a Prowl selector string into a neutral {@link NativeSelector}. This is
@@ -120,6 +127,15 @@ const ROLE_SELECTOR_RE = /^role=([A-Za-z][\w.$-]*)(?:\[name=(.+)\])?$/s;
  */
 export function parseNativeSelector(selector: string): NativeSelector {
   const trimmed = selector.trim();
+
+  if (trimmed.length === 0) {
+    throw new Error(
+      invalidSelectorMessage(
+        selector,
+        "selector is empty; use id=, label=, text=, role=, :focus, or a bare text value"
+      )
+    );
+  }
 
   if (trimmed === ":focus") {
     return { kind: "focused" };
@@ -146,6 +162,16 @@ export function parseNativeSelector(selector: string): NativeSelector {
   const textMatch = /^text=(.+)$/s.exec(trimmed);
   if (textMatch) {
     return { kind: "text", value: unquoteSelectorValue(textMatch[1]) };
+  }
+
+  const prefix = NATIVE_SELECTOR_PREFIX_RE.exec(trimmed);
+  if (prefix) {
+    throw new Error(
+      invalidSelectorMessage(
+        selector,
+        `malformed ${prefix[1]}= selector; expected id=<value>, label=<value>, text=<value>, or role=<Type>[name=<value>]`
+      )
+    );
   }
 
   return { kind: "text", value: trimmed };
@@ -277,7 +303,7 @@ export const NATIVE_ATTRIBUTE_MAP: Readonly<
     role: { attribute: "class", match: "exact" }
   },
   ios: {
-    id: { attribute: "accessibility id (name when it differs from label)", match: "exact" },
+    id: { attribute: "accessibility id (name)", match: "exact" },
     label: { attribute: "label", match: "exact" },
     text: { attribute: "label | value", match: "substring" },
     role: { attribute: "type (XCUIElementType…)", match: "exact" }

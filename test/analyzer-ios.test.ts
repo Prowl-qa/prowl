@@ -134,13 +134,14 @@ describe("analyzeIosApp", () => {
 });
 
 describe("matchIosSelector (host-side snapshot-then-match, PROWL-060)", () => {
-  it("matches id= only when the name is a real accessibility id (differs from label)", () => {
+  it("matches id= against the WDA name attribute even when it equals label", () => {
     const matches = matchIosSelector(PREFERENCES_SOURCE, "id=general_button");
     expect(matches).toHaveLength(1);
     expect(matches[0].label).toBe("General");
-    // Wi-Fi's name equals its label, so it is NOT addressable by id= (the WDA
-    // name/label conflation trap) — matching mirrors that.
-    expect(matchIosSelector(PREFERENCES_SOURCE, "id=Wi-Fi")).toEqual([]);
+
+    const wifiMatches = matchIosSelector(PREFERENCES_SOURCE, "id=Wi-Fi");
+    expect(wifiMatches).toHaveLength(1);
+    expect(wifiMatches[0].value).toBe("Not Connected");
   });
 
   it("normalizes a role shorthand and matches by element type", () => {
@@ -158,5 +159,9 @@ describe("matchIosSelector (host-side snapshot-then-match, PROWL-060)", () => {
 
   it("returns an empty array for an empty snapshot", () => {
     expect(matchIosSelector("", "id=anything")).toEqual([]);
+  });
+
+  it("rejects malformed selectors before parsing the snapshot", () => {
+    expect(() => matchIosSelector("", "label=")).toThrow('Invalid native selector "label="');
   });
 });

@@ -58,6 +58,23 @@ describe("parseNativeSelector (shared grammar, PROWL-060)", () => {
     // An empty name bracket collapses to a bare role (no `name` key).
     expect(parseNativeSelector('role=Button[name=""]')).toEqual({ kind: "role", role: "Button" });
   });
+
+  it("rejects empty selectors and malformed recognized prefixes", () => {
+    const expectedEmpty =
+      'Invalid native selector "   ": selector is empty; ' +
+      "use id=, label=, text=, role=, :focus, or a bare text value.";
+    const expectedMalformed = (selector: string, prefix: string): string =>
+      `Invalid native selector ${JSON.stringify(selector)}: malformed ${prefix}= selector; ` +
+      "expected id=<value>, label=<value>, text=<value>, or role=<Type>[name=<value>].";
+
+    expect(() => parseNativeSelector("   ")).toThrow(expectedEmpty);
+    expect(() => parseNativeSelector("id=")).toThrow(expectedMalformed("id=", "id"));
+    expect(() => parseNativeSelector("label=")).toThrow(expectedMalformed("label=", "label"));
+    expect(() => parseNativeSelector("text=")).toThrow(expectedMalformed("text=", "text"));
+    expect(() => parseNativeSelector('role=Button[nme="Save"]')).toThrow(
+      expectedMalformed('role=Button[nme="Save"]', "role")
+    );
+  });
 });
 
 describe("quote/unquote helpers", () => {
@@ -127,6 +144,7 @@ describe("NATIVE_ATTRIBUTE_MAP (documentation-as-data)", () => {
       match: "exact (package-qualified)"
     });
     expect(NATIVE_ATTRIBUTE_MAP.android.text.match).toBe("substring");
+    expect(NATIVE_ATTRIBUTE_MAP.ios.id.attribute).toBe("accessibility id (name)");
     expect(NATIVE_ATTRIBUTE_MAP.ios.label.match).toBe("exact");
     expect(NATIVE_ATTRIBUTE_MAP.ios.text).toEqual({ attribute: "label | value", match: "substring" });
     expect(NATIVE_ATTRIBUTE_MAP.macos.role.attribute).toBe("AXRole");

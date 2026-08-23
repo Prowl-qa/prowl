@@ -187,13 +187,14 @@ export function matchAndroidSelector(
   selector: string,
   options: NativeMatchOptions = {}
 ): AndroidUiNode[] {
+  const parsedSelector = parseNativeSelector(selector);
   const root = parseAndroidHierarchy(xml);
   if (!root) {
     return [];
   }
   return matchNativeTree(
     ANDROID_MATCH_DIALECT,
-    parseNativeSelector(selector),
+    parsedSelector,
     root,
     androidNodeToNative,
     (node) => node.children,

@@ -17,9 +17,9 @@
  *
  * Identifier caveat: WDA's page source exposes a single `name` attribute that is
  * the element's `accessibilityIdentifier` when one is set, otherwise its label.
- * We therefore treat `name` as an accessibility id only when it differs from the
- * `label` — matching how WDA resolves the `accessibility id` locator. When they
- * are equal we fall through to `label=`/`text=`, which address the same element.
+ * We therefore rank `id=` only when `name` differs from `label`, so the analyzer
+ * does not recommend label-shaped ids. Host-side matching still follows WDA's
+ * `accessibility id` strategy and resolves `id=` against `name`.
  *
  * Read-only: this never taps, types, or otherwise mutates the app — it only reads
  * the page source.
@@ -166,9 +166,10 @@ export function rankIosSelectors(node: IosUiNode): string[] {
 
 /**
  * Project an {@link IosUiNode} into the neutral {@link NativeNode} the shared
- * matcher compares against: `id`←accessibility id (name-when-≠-label), `label`←
- * label, `role`←the full element type (the dialect normalizes a `Button`
- * shorthand against it), and both label and value as `text=` substring sources.
+ * matcher compares against: `id`←name (matching WDA's `accessibility id`
+ * strategy even when it equals the label), `label`←label, `role`←the full
+ * element type (the dialect normalizes a `Button` shorthand against it), and both
+ * label and value as `text=` substring sources.
  */
 export function iosNodeToNative(node: IosUiNode): NativeNode {
   const textValues: string[] = [];
@@ -179,7 +180,7 @@ export function iosNodeToNative(node: IosUiNode): NativeNode {
     textValues.push(node.value);
   }
   return {
-    ...(hasAccessibilityId(node) && node.name !== undefined ? { id: node.name } : {}),
+    ...(node.name !== undefined ? { id: node.name } : {}),
     ...(node.label !== undefined ? { label: node.label } : {}),
     ...(node.type !== undefined ? { role: node.type } : {}),
     textValues
@@ -193,13 +194,14 @@ export function iosNodeToNative(node: IosUiNode): NativeNode {
  * and a future runner/macdriver migration; the runner still matches on-device.
  */
 export function matchIosSelector(xml: string, selector: string): IosUiNode[] {
+  const parsedSelector = parseNativeSelector(selector);
   const root = parseIosHierarchy(xml);
   if (!root) {
     return [];
   }
   return matchNativeTree(
     IOS_MATCH_DIALECT,
-    parseNativeSelector(selector),
+    parsedSelector,
     root,
     iosNodeToNative,
     (node) => node.children
