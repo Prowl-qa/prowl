@@ -70,6 +70,12 @@ export interface AndroidAgentClient {
   pressKeyCode(keyCode: number): Promise<void>;
   /** Capture the current screen as PNG bytes. */
   screenshotPng(): Promise<Buffer>;
+  /**
+   * Return the current UI hierarchy as uiautomator2 `/source` XML. Present on
+   * live clients and consumed by the analyzer (PROWL-061); optional so lighter
+   * fakes that only drive/query need not implement it.
+   */
+  source?(): Promise<string>;
   close(): Promise<void>;
 }
 

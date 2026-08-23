@@ -171,6 +171,15 @@ describe("createWdaAgentClient", () => {
     expect(calls[0].url).toBe("http://127.0.0.1:8100/wda/homescreen");
   });
 
+  it("reads the UI hierarchy XML via GET /source", async () => {
+    const xml = "<XCUIElementTypeApplication name='Settings'/>";
+    const { transport, calls } = transportWith(() => ({ body: xml }));
+    const client = createWdaAgentClient(transport, "S1");
+    expect(await client.source?.()).toBe(xml);
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:8100/source");
+  });
+
   it("gets element text through the session element endpoint", async () => {
     const { transport, calls } = transportWith(() => ({ body: "Ready" }));
     const client = createWdaAgentClient(transport, "S1");
