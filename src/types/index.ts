@@ -219,6 +219,10 @@ export type AssertScreenshotStep = {
   };
 };
 
+export type AssertWithAiStep = {
+  assertWithAI: string;
+};
+
 export type Step =
   | NavigateStep
   | ClickStep
@@ -246,6 +250,7 @@ export type Step =
   | EvalScriptStep
   | RunScriptStep
   | AssertScreenshotStep
+  | AssertWithAiStep
   | CopyTextStep
   | WaitForDownloadStep;
 
@@ -259,7 +264,9 @@ export type Assertion =
 
 export type StepResult = {
   type: string;
-  status: "pass" | "fail";
+  // "warn" is a non-fatal outcome: the step neither passed nor failed the run
+  // (e.g. `assertWithAI` skipped because no AI provider is configured).
+  status: "pass" | "fail" | "warn";
   durationMs: number;
   selector?: string;
   value?: string;

@@ -352,6 +352,11 @@ function interpolateStep(
       }
     };
   }
+  if ("assertWithAI" in step) {
+    return {
+      assertWithAI: interpolateString(step.assertWithAI, vars).value
+    };
+  }
   if ("copyText" in step) {
     return {
       copyText: {

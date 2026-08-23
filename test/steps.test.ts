@@ -2669,3 +2669,115 @@ describe("waitForDownload step", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 });
+
+describe("assertWithAI step (PROWL-020)", () => {
+  // A page whose screenshot() actually writes bytes to disk, so the handler's
+  // readFileSync(...).toString("base64") has a real file to read.
+  function createScreenshotWritingPage() {
+    return {
+      goto: vi.fn(async () => undefined),
+      url: () => "http://localhost",
+      screenshot: vi.fn(async (options: { path: string }) => {
+        fs.writeFileSync(options.path, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+      })
+    };
+  }
+
+  const aiConfig = {
+    provider: "anthropic" as const,
+    model: "claude-sonnet-4-5-20250929",
+    apiKey: "test-key"
+  };
+
+  it("passes and records the model's reason when the verdict is pass", async () => {
+    const page = createScreenshotWritingPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-aiassert-"));
+    const assertVision = vi.fn(async () => ({ pass: true, reason: "Both fields are visible." }));
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps: [{ assertWithAI: "The form shows email and password fields" }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir,
+      resolveAiConfig: () => aiConfig,
+      assertVision
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].status).toBe("pass");
+    expect(result.results[0].value).toBe("Both fields are visible.");
+    expect(result.results[0].screenshot).toContain("assertWithAI_step_1.png");
+    // The screenshot bytes were forwarded to the vision call as base64.
+    expect(assertVision).toHaveBeenCalledWith(
+      expect.objectContaining({ mediaType: "image/png", assertion: "The form shows email and password fields" }),
+      aiConfig
+    );
+    const arg = assertVision.mock.calls[0][0] as { imageBase64: string };
+    expect(arg.imageBase64.length).toBeGreaterThan(0);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("fails with the model's reason when the verdict is fail", async () => {
+    const page = createScreenshotWritingPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-aiassert-"));
+    const assertVision = vi.fn(async () => ({ pass: false, reason: "The password field is missing." }));
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps: [{ assertWithAI: "The form shows email and password fields" }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir,
+      resolveAiConfig: () => aiConfig,
+      assertVision
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0].status).toBe("fail");
+    expect(result.results[0].error).toContain("AI assertion failed: The password field is missing.");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("skips with a warning (never fails, never a silent pass) when no AI is configured", async () => {
+    const page = createScreenshotWritingPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-aiassert-"));
+    const assertVision = vi.fn(async () => ({ pass: true, reason: "should not be called" }));
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      steps: [{ assertWithAI: "The form shows email and password fields" }],
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir,
+      resolveAiConfig: () => null,
+      assertVision
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results[0].status).toBe("warn");
+    expect(result.results[0].value).toContain("no AI provider configured");
+    // No screenshot taken and, crucially, the model was never consulted.
+    expect(page.screenshot).not.toHaveBeenCalled();
+    expect(assertVision).not.toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+});

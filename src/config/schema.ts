@@ -398,6 +398,12 @@ export const assertScreenshotStepSchema = z
   })
   .strict();
 
+export const assertWithAiStepSchema = z
+  .object({
+    assertWithAI: z.string().min(1)
+  })
+  .strict();
+
 export const copyTextStepSchema = z
   .object({
     copyText: z
@@ -450,6 +456,7 @@ export const stepSchema: z.ZodType<Step> = z.union([
   evalScriptStepSchema,
   runScriptStepSchema,
   assertScreenshotStepSchema,
+  assertWithAiStepSchema,
   copyTextStepSchema,
   waitForDownloadStepSchema
 ]);
