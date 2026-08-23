@@ -417,11 +417,11 @@ export function buildAnalyzeCommand(): Command {
           return;
         }
         if (target?.type === "android") {
-          await runAndroidAnalyze(target.app, config, options, target.deviceSerial ?? (options.device as string | undefined));
+          await runAndroidAnalyze(target.app, config, options, (options.device as string | undefined) ?? target.deviceSerial);
           return;
         }
         if (target?.type === "ios") {
-          await runIosAnalyze(target.app, config, options, target.udid ?? (options.udid as string | undefined));
+          await runIosAnalyze(target.app, config, options, (options.udid as string | undefined) ?? target.udid);
           return;
         }
 

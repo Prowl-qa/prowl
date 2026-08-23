@@ -180,6 +180,15 @@ describe("createWdaAgentClient", () => {
     expect(calls[0].url).toBe("http://127.0.0.1:8100/source");
   });
 
+  it("rejects non-string UI hierarchy responses", async () => {
+    const { transport } = transportWith(() => ({ body: { unexpected: true } }));
+    const client = createWdaAgentClient(transport, "S1");
+
+    await expect(client.source?.()).rejects.toThrow(
+      "WebDriverAgent /source did not return XML text; cannot analyze iOS UI hierarchy"
+    );
+  });
+
   it("gets element text through the session element endpoint", async () => {
     const { transport, calls } = transportWith(() => ({ body: "Ready" }));
     const client = createWdaAgentClient(transport, "S1");

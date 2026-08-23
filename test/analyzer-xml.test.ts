@@ -10,6 +10,13 @@ describe("decodeXmlEntities", () => {
 
   it("decodes decimal and hex numeric character references", () => {
     expect(decodeXmlEntities("&#65;&#x42;&#x1F600;")).toBe("AB\u{1F600}");
+    expect(decodeXmlEntities("&#x10ffff;")).toBe("\u{10FFFF}");
+  });
+
+  it("leaves unsafe or out-of-range numeric character references untouched", () => {
+    expect(decodeXmlEntities("bad &#x110000; and &#999999999999999999999999; and &#1A;")).toBe(
+      "bad &#x110000; and &#999999999999999999999999; and &#1A;"
+    );
   });
 
   it("leaves unknown entities and plain text untouched", () => {

@@ -426,6 +426,27 @@ describe("analyze command native Android/iOS routing", () => {
     expect(process.exitCode).toBeUndefined();
   });
 
+  it("lets --device override a configured Android device serial", async () => {
+    const config = makeMacConfig({
+      target: { type: "android", app: "com.configured.app", deviceSerial: "emulator-9999" },
+      guardrails: { allowedApps: [] }
+    });
+    mockDefaultConfig(config);
+    const session = makeAndroidSession("com.configured.app");
+    mockLaunchAndroidSession.mockResolvedValue(session);
+    mockAnalyzeAndroidApp.mockResolvedValue(makeAndroidResult("com.configured.app"));
+
+    await runAnalyzeCommand(["--device", "emulator-5556", "--json"]);
+
+    expect(mockLaunchAndroidSession).toHaveBeenCalledWith({
+      app: "com.configured.app",
+      deviceSerial: "emulator-5556",
+      timeoutMs: 30000,
+      allowedApps: []
+    });
+    expect(process.exitCode).toBeUndefined();
+  });
+
   it("uses a configured iOS target when no positional URL or --app is supplied", async () => {
     const config = makeMacConfig({
       target: { type: "ios", app: "com.configured.ios", udid: "SIM-1234" },
@@ -441,6 +462,27 @@ describe("analyze command native Android/iOS routing", () => {
     expect(mockLaunchIosSession).toHaveBeenCalledWith({
       app: "com.configured.ios",
       udid: "SIM-1234",
+      timeoutMs: 30000,
+      allowedApps: []
+    });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("lets --udid override a configured iOS simulator UDID", async () => {
+    const config = makeMacConfig({
+      target: { type: "ios", app: "com.configured.ios", udid: "SIM-CONFIG" },
+      guardrails: { allowedApps: [] }
+    });
+    mockDefaultConfig(config);
+    const session = makeIosSession("com.configured.ios");
+    mockLaunchIosSession.mockResolvedValue(session);
+    mockAnalyzeIosApp.mockResolvedValue(makeIosResult("com.configured.ios"));
+
+    await runAnalyzeCommand(["--udid", "SIM-FLAG", "--json"]);
+
+    expect(mockLaunchIosSession).toHaveBeenCalledWith({
+      app: "com.configured.ios",
+      udid: "SIM-FLAG",
       timeoutMs: 30000,
       allowedApps: []
     });

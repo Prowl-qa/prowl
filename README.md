@@ -1220,7 +1220,7 @@ native `data-testid`) > `label=` (content-desc) > `role=<class>[name="<text>"]` 
 > iOS targets, which default to macOS unless a config `target.type` or `--platform`
 > says otherwise). With an Android `target.type` in `.prowl/config.yml`, a bare
 > `prowl analyze` needs no flag.
-
+>
 > Out of scope for PROWL-058 (tracked separately): the unified native selector
 > engine (PROWL-060) and real iOS devices (PROWL-062). `prowl analyze` for Android
 > and the CI recipes shipped in PROWL-061 (above, and see "Mobile targets in CI").
@@ -1364,7 +1364,7 @@ offered only when that `name` differs from the element's label. Example output:
 > A bare bundle-id `--app` is ambiguous with the macOS target (which is the
 > default), so pass `--platform ios`. With an iOS `target.type` in
 > `.prowl/config.yml`, a bare `prowl analyze` needs no flag.
-
+>
 > Out of scope for PROWL-059 (tracked separately): the unified native selector
 > engine (PROWL-060) and real iOS devices (PROWL-062). `prowl analyze` for iOS and
 > the CI recipes shipped in PROWL-061 (above, and see "Mobile targets in CI").

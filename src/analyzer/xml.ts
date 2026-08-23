@@ -38,11 +38,11 @@ export function decodeXmlEntities(value: string): string {
   if (!value.includes("&")) {
     return value;
   }
-  return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, code: string) => {
+  return value.replace(/&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|[a-zA-Z]+);/g, (match, code: string) => {
     if (code[0] === "#") {
       const hex = code[1] === "x" || code[1] === "X";
       const num = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
-      return Number.isNaN(num) ? match : String.fromCodePoint(num);
+      return Number.isSafeInteger(num) && num <= 0x10ffff ? String.fromCodePoint(num) : match;
     }
     const named = ENTITIES[code];
     return named ?? match;

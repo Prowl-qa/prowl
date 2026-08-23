@@ -5,6 +5,13 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **Mobile analysis review hardening.** Invalid XML numeric references now remain
+  literal instead of crashing analysis, Android/iOS `/source` protocol mismatches
+  fail with explicit errors instead of reporting an empty hierarchy, Android
+  `am start` launch failures preserve the failing adb phase and original cause,
+  config-based `prowl analyze` now lets `--device`/`--udid` override configured
+  identifiers, and the self-hosted mobile workflow skips the known PROWL-069 iOS
+  smoke on iOS 26+ runtimes while preserving the Android gate.
 - **Android app launch is now deterministic (`am start`, not `monkey`).** The
   Android target launched apps with `monkey`, which is unreliable when adb runs
   without a PTY (e.g. `execFile` in CI): on some emulator images — notably API 35

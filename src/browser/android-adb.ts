@@ -200,7 +200,14 @@ export async function installApk(runner: AdbRunner, serial: string, apkPath: str
   }
 }
 
-/** Launch the default LAUNCHER activity of `pkg` via monkey. */
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function runnerPhaseError(message: string, error: unknown): Error {
+  return new Error(`${message}: ${formatUnknownError(error)}`, { cause: error });
+}
+
 /**
  * Parse the launcher component (`pkg/.Activity`) out of
  * `cmd package resolve-activity --brief` output — the last non-empty line.
@@ -226,19 +233,27 @@ export function parseResolvedComponent(stdout: string, pkg: string): string | nu
  * non-zero even on success. `am start` has none of that ambiguity.)
  */
 export async function launchPackage(runner: AdbRunner, serial: string, pkg: string): Promise<void> {
-  const resolved = await runner(
-    withSerial(serial, [
-      "shell",
-      "cmd",
-      "package",
-      "resolve-activity",
-      "--brief",
-      "-c",
-      "android.intent.category.LAUNCHER",
-      pkg
-    ]),
-    { timeoutMs: 30000 }
-  );
+  let resolved: AdbResult;
+  try {
+    resolved = await runner(
+      withSerial(serial, [
+        "shell",
+        "cmd",
+        "package",
+        "resolve-activity",
+        "--brief",
+        "-c",
+        "android.intent.category.LAUNCHER",
+        pkg
+      ]),
+      { timeoutMs: 30000 }
+    );
+  } catch (error) {
+    throw runnerPhaseError(
+      `Failed to resolve the launcher activity for Android package "${pkg}" via adb`,
+      error
+    );
+  }
   const component = parseResolvedComponent(resolved.stdout, pkg);
   if (resolved.code !== 0 || !component) {
     throw new Error(
@@ -246,9 +261,17 @@ export async function launchPackage(runner: AdbRunner, serial: string, pkg: stri
         `${(resolved.stdout + resolved.stderr).trim() ? `: ${(resolved.stdout + resolved.stderr).trim().slice(0, 300)}` : ""}. Is it installed?`
     );
   }
-  const start = await runner(withSerial(serial, ["shell", "am", "start", "-n", component]), {
-    timeoutMs: 30000
-  });
+  let start: AdbResult;
+  try {
+    start = await runner(withSerial(serial, ["shell", "am", "start", "-n", component]), {
+      timeoutMs: 30000
+    });
+  } catch (error) {
+    throw runnerPhaseError(
+      `Failed to launch Android package "${pkg}" with \`am start\` (${component}) via adb`,
+      error
+    );
+  }
   if (start.code !== 0 || /error|does not exist|cannot start/i.test(start.stdout + start.stderr)) {
     throw new Error(
       `Failed to launch Android package "${pkg}" (${component}, exit ${start.code}): ${

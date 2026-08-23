@@ -164,12 +164,42 @@ jobs:
         working-directory: ${{ runner.temp }}/android
         run: $PROWL run android-smoke
 
+      - name: Select iOS simulator runtime
+        id: ios-runtime
+        run: |
+          set -euo pipefail
+          runtime="$(xcrun simctl list runtimes | awk '/iOS/ && $0 !~ /unavailable/ {print $NF}' | tail -1)"
+          if [ -z "$runtime" ]; then
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No available iOS simulator runtime found; skipping iOS smoke."
+            exit 0
+          fi
+
+          major="$(printf '%s\n' "$runtime" | sed -E 's/.*iOS-([0-9]+).*/\1/')"
+          if ! [[ "$major" =~ ^[0-9]+$ ]]; then
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Could not determine iOS runtime major version from $runtime; skipping iOS smoke."
+            exit 0
+          fi
+
+          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+          if [ "$major" -ge 26 ]; then
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping iOS smoke on $runtime; PROWL-069 tracks WDA launch on iOS 26+."
+            exit 0
+          fi
+
+          echo "supported=true" >> "$GITHUB_OUTPUT"
+
       - name: Boot the iOS simulator
+        if: steps.ios-runtime.outputs.supported == 'true'
+        env:
+          IOS_RUNTIME: ${{ steps.ios-runtime.outputs.runtime }}
         run: |
           set -euo pipefail
           # Create the simulator if it does not already exist (safer than assuming).
           if ! xcrun simctl list devices | grep -q "$IOS_SIM"; then
-            runtime="$(xcrun simctl list runtimes | awk '/iOS/ {print $NF}' | tail -1)"
+            runtime="${IOS_RUNTIME:?}"
             devtype="com.apple.CoreSimulator.SimDeviceType.iPhone-16"
             echo "Creating simulator $IOS_SIM ($devtype, $runtime)"
             xcrun simctl create "$IOS_SIM" "$devtype" "$runtime"
@@ -178,9 +208,10 @@ jobs:
           xcrun simctl bootstatus "$IOS_SIM"
 
       # NOTE (PROWL-069): on iOS 26+ simulators WDA is terminated when launched via
-      # `simctl launch` ("had no entitlements"), so this step fails until the iOS
+      # `simctl launch` ("had no entitlements"), so this smoke is gated until the
       # driver adopts an xctestrun-based launch. The Android job above is unaffected.
       - name: Run the iOS smoke hunt
+        if: steps.ios-runtime.outputs.supported == 'true'
         working-directory: ${{ runner.temp }}/ios
         # WDA builds+caches under ~/.prowl/wda/ on first run (~110s); cached after.
         run: $PROWL run ios-smoke

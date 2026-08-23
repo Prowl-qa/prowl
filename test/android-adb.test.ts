@@ -21,12 +21,12 @@ import {
 } from "../src/browser/android-adb.js";
 
 function fakeRunner(
-  responder: (args: string[]) => Partial<AdbResult>
+  responder: (args: string[]) => Partial<AdbResult> | Promise<Partial<AdbResult>>
 ): AdbRunner & { calls: string[][] } {
   const calls: string[][] = [];
   const runner: AdbRunner = async (args) => {
     calls.push(args);
-    return { stdout: "", stderr: "", code: 0, ...responder(args) };
+    return { stdout: "", stderr: "", code: 0, ...(await responder(args)) };
   };
   return Object.assign(runner, { calls });
 }
@@ -190,6 +190,49 @@ describe("adb lifecycle wrappers", () => {
     await expect(launchPackage(failing, "s", "com.example.app")).rejects.toThrow(
       'Failed to launch Android package "com.example.app"'
     );
+  });
+
+  it("wraps resolve-activity runner rejections with the original cause", async () => {
+    const cause = new Error("adb unavailable");
+    const runner = fakeRunner(() => {
+      throw cause;
+    });
+    let thrown: unknown;
+
+    try {
+      await launchPackage(runner, "s", "com.example.app");
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain(
+      'Failed to resolve the launcher activity for Android package "com.example.app" via adb'
+    );
+    expect((thrown as Error & { cause?: unknown }).cause).toBe(cause);
+  });
+
+  it("wraps am start runner rejections with the original cause", async () => {
+    const cause = new Error("transport died");
+    const runner = fakeRunner((args) => {
+      if (args.includes("resolve-activity")) {
+        return { stdout: "com.example.app/.Main" };
+      }
+      throw cause;
+    });
+    let thrown: unknown;
+
+    try {
+      await launchPackage(runner, "s", "com.example.app");
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain(
+      'Failed to launch Android package "com.example.app" with `am start` (com.example.app/.Main) via adb'
+    );
+    expect((thrown as Error & { cause?: unknown }).cause).toBe(cause);
   });
 
   it("forwards a dynamic port and parses the allocated port", async () => {
