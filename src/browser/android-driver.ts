@@ -10,10 +10,11 @@
  * the runner never reaches them because both the target step-compatibility check
  * and the runtime capability gate reject web-only steps for native targets.
  *
- * Selector dialect (parsed here into an {@link AndroidQuery}; the agent then
- * matches on the device). Semantics mirror the macOS driver so `id=`/`label=`/
- * `text=`/`role=` mean the same thing on both native targets (PROWL-060 will
- * unify the engines later):
+ * Selector dialect (parsed by the shared native selector engine
+ * `../selector/native.ts` (PROWL-060) — the single source of truth for the
+ * grammar and attribute mapping — then mapped here to an {@link AndroidQuery} the
+ * agent matches on the device). Semantics mirror the macOS/iOS drivers so
+ * `id=`/`label=`/`text=`/`role=` mean the same thing across native targets:
  *   id=save                      → resource-id (bare name or full `pkg:id/name`)
  *   label="Submit"               → content-desc (exact)
  *   role=android.widget.Button   → widget class name
@@ -25,6 +26,12 @@
  * otherwise prefer `text=`/`label=`.
  */
 import fs from "node:fs";
+import {
+  parseNativeSelector,
+  qualifyResourceId,
+  unwrapNativeTextSelector,
+  type NativeSelector
+} from "../selector/native.js";
 import type {
   DialogAction,
   DriverCapability,
@@ -34,6 +41,11 @@ import type {
   NavigateOptions,
   SessionDriver
 } from "./driver.js";
+
+// Re-export the id-qualification rule from the shared native selector engine
+// (PROWL-060), which is its single source of truth, so existing importers of
+// `qualifyResourceId` from this module keep working.
+export { qualifyResourceId } from "../selector/native.js";
 
 /** A structured query the {@link AndroidAgentClient} resolves against the device. */
 export type AndroidQuery =
@@ -126,69 +138,45 @@ export const ANDROID_KEYCODES: Readonly<Record<string, number>> = {
   pagedown: 93
 };
 
-function unquote(value: string): string {
-  const trimmed = value.trim();
-  const first = trimmed[0];
-  if ((first === '"' || first === "'") && trimmed.endsWith(first) && trimmed.length >= 2) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
 /** Escape a string for embedding inside a `new UiSelector()...("...")` argument. */
 export function escapeUiSelectorArg(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/** Parse a Prowl selector string into an {@link AndroidQuery}. Bare text matches by text. */
+/**
+ * Map a neutral {@link NativeSelector} (parsed by the shared engine) onto this
+ * driver's on-device query shape. Android's `label=` targets the content-desc
+ * (`accessibility id` strategy); everything else maps one-to-one.
+ */
+function toAndroidQuery(selector: NativeSelector): AndroidQuery {
+  switch (selector.kind) {
+    case "focused":
+      return { by: "focused" };
+    case "id":
+      return { by: "id", value: selector.value };
+    case "role":
+      return selector.name !== undefined
+        ? { by: "role", role: selector.role, name: selector.name }
+        : { by: "role", role: selector.role };
+    case "label":
+      return { by: "accessibilityId", value: selector.value };
+    case "text":
+      return { by: "text", value: selector.value };
+  }
+}
+
+/**
+ * Parse a Prowl selector string into an {@link AndroidQuery}. Bare text matches by
+ * text. The grammar (and its `label=`-in-assertions trap) is defined once in the
+ * shared native selector engine ({@link parseNativeSelector}, PROWL-060); this
+ * only maps the neutral result onto Android's on-device query.
+ */
 export function parseAndroidSelector(selector: string): AndroidQuery {
-  const trimmed = selector.trim();
-
-  if (trimmed === ":focus") {
-    return { by: "focused" };
-  }
-
-  const idMatch = /^id=(.+)$/s.exec(trimmed);
-  if (idMatch) {
-    return { by: "id", value: unquote(idMatch[1]) };
-  }
-
-  const roleMatch = /^role=([A-Za-z][\w.$-]*)(?:\[name=(.+)\])?$/s.exec(trimmed);
-  if (roleMatch) {
-    const name = roleMatch[2] !== undefined ? unquote(roleMatch[2]) : undefined;
-    return name !== undefined && name.length > 0
-      ? { by: "role", role: roleMatch[1], name }
-      : { by: "role", role: roleMatch[1] };
-  }
-
-  const labelMatch = /^label=(.+)$/s.exec(trimmed);
-  if (labelMatch) {
-    return { by: "accessibilityId", value: unquote(labelMatch[1]) };
-  }
-
-  const textMatch = /^text=(.+)$/s.exec(trimmed);
-  if (textMatch) {
-    return { by: "text", value: unquote(textMatch[1]) };
-  }
-
-  return { by: "text", value: trimmed };
+  return toAndroidQuery(parseNativeSelector(selector));
 }
 
 function locator(strategy: string, selector: string): AndroidLocator {
   return { strategy, selector, context: "" };
-}
-
-/**
- * Qualify a bare resource-id with the app's package. The raw uiautomator2
- * server matches resource-ids exactly (device-verified: bare names return no
- * elements), so `id=save` becomes `<appPackage>:id/save`. Values that already
- * contain a `:` (e.g. `android:id/title`) pass through untouched.
- */
-export function qualifyResourceId(value: string, appPackage?: string): string {
-  if (value.includes(":") || !appPackage) {
-    return value;
-  }
-  return `${appPackage}:id/${value}`;
 }
 
 /**
@@ -221,7 +209,8 @@ export function androidQueryToLocator(
         return locator("class name", query.role);
       }
       // Widget class + visible-text (substring) name. Content-desc-only names are
-      // not covered by this composed form — use `label=` for those. PROWL-060.
+      // not covered by this composed form — use `label=` for those (see the
+      // shared dialect's compatibility matrix in ../selector/native.ts).
       return locator(
         "-android uiautomator",
         `new UiSelector().className("${className}").textContains("${escapeUiSelectorArg(query.name)}")`
@@ -232,11 +221,7 @@ export function androidQueryToLocator(
 
 /** The literal text a `text=` selector matches, else null (mirrors the web driver). */
 export function unwrapAndroidTextSelector(selector: string): string | null {
-  const trimmed = selector.trim();
-  if (!trimmed.startsWith("text=")) {
-    return null;
-  }
-  return unquote(trimmed.slice(5));
+  return unwrapNativeTextSelector(selector);
 }
 
 function keyCodeFor(key: string): number {

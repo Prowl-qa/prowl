@@ -388,17 +388,6 @@ free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062
 devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
 swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
 
-{PROWL-060} **ARCH-011: Unified native selector engine (snapshot-then-match)**
-   Both mobile agents return full hierarchy snapshots (`/source`). Match selectors host-side in
-one shared TS engine so `id=`/`label=`/`text=`/`role=` mean the same thing on Android, iOS, and
-(eventually) macOS — one place for dialect docs, one place for the `label=`-in-assertions trap.
-
-**Found during**: BrowserStack/mobile competitive research (2026-08-18)
-**Acceptance Criteria**:
-- Shared matcher module consumed by both mobile drivers; per-platform attribute mapping tables
-- Selector semantics documented in one compatibility matrix (web / macOS / Android / iOS)
-- Evaluate migrating macdriver matching onto it later; no behavior change required now
-
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
 make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and

@@ -13,10 +13,11 @@
  * Screenshots are captured via `simctl` (injected as `captureScreenshot`), not
  * WDA, so artifacts still work even if the agent wedges.
  *
- * Selector dialect (parsed here into an {@link IosQuery}; the agent then matches
- * on the simulator). Semantics mirror the macOS/Android drivers so `id=`/`label=`/
- * `text=`/`role=` mean the same thing across native targets (PROWL-060 will unify
- * the engines later):
+ * Selector dialect (parsed by the shared native selector engine
+ * `../selector/native.ts` (PROWL-060) — the single source of truth for the
+ * grammar and attribute mapping — then mapped here to an {@link IosQuery} the
+ * agent matches on the simulator). Semantics mirror the macOS/Android drivers so
+ * `id=`/`label=`/`text=`/`role=` mean the same thing across native targets:
  *   id=save                    → accessibility id (accessibilityIdentifier / name)
  *   label="Submit"             → predicate `label == "Submit"` (exact)
  *   role=XCUIElementTypeButton → element class (shorthand `Button` is accepted too)
@@ -24,6 +25,12 @@
  *   text="Save" | Save         → label/value substring
  *   :focus                     → predicate `hasKeyboardFocus == 1`
  */
+import {
+  normalizeXcuiClassName,
+  parseNativeSelector,
+  unwrapNativeTextSelector,
+  type NativeSelector
+} from "../selector/native.js";
 import type {
   DialogAction,
   DriverCapability,
@@ -33,6 +40,11 @@ import type {
   NavigateOptions,
   SessionDriver
 } from "./driver.js";
+
+// Re-export the role-normalization rule from the shared native selector engine
+// (PROWL-060), its single source of truth, so existing importers of
+// `normalizeXcuiClassName` from this module keep working.
+export { normalizeXcuiClassName } from "../selector/native.js";
 
 /** A structured query the {@link IosAgentClient} resolves against the simulator. */
 export type IosQuery =
@@ -98,57 +110,41 @@ const DEFAULT_WAIT_TIMEOUT_MS = 5000;
  */
 export const IOS_PRESS_KEYS: readonly string[] = ["backspace", "del", "delete", "enter", "home", "return"];
 
-function unquote(value: string): string {
-  const trimmed = value.trim();
-  const first = trimmed[0];
-  if ((first === '"' || first === "'") && trimmed.endsWith(first) && trimmed.length >= 2) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
 /** Escape a string for embedding inside a double-quoted NSPredicate string literal. */
 export function escapePredicateArg(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/** Prefix `XCUIElementType` onto a role shorthand (e.g. `Button`) when missing. */
-export function normalizeXcuiClassName(role: string): string {
-  return role.startsWith("XCUIElementType") ? role : `XCUIElementType${role}`;
+/**
+ * Map a neutral {@link NativeSelector} (parsed by the shared engine) onto this
+ * driver's WDA query shape. iOS's `id=` targets the accessibility id and `label=`
+ * the accessibility label; everything else maps one-to-one.
+ */
+function toIosQuery(selector: NativeSelector): IosQuery {
+  switch (selector.kind) {
+    case "focused":
+      return { by: "focused" };
+    case "id":
+      return { by: "accessibilityId", value: selector.value };
+    case "role":
+      return selector.name !== undefined
+        ? { by: "role", role: selector.role, name: selector.name }
+        : { by: "role", role: selector.role };
+    case "label":
+      return { by: "label", value: selector.value };
+    case "text":
+      return { by: "text", value: selector.value };
+  }
 }
 
-/** Parse a Prowl selector string into an {@link IosQuery}. Bare text matches by text. */
+/**
+ * Parse a Prowl selector string into an {@link IosQuery}. Bare text matches by
+ * text. The grammar (and its `label=`-in-assertions trap) is defined once in the
+ * shared native selector engine ({@link parseNativeSelector}, PROWL-060); this
+ * only maps the neutral result onto iOS's WDA query.
+ */
 export function parseIosSelector(selector: string): IosQuery {
-  const trimmed = selector.trim();
-
-  if (trimmed === ":focus") {
-    return { by: "focused" };
-  }
-
-  const idMatch = /^id=(.+)$/s.exec(trimmed);
-  if (idMatch) {
-    return { by: "accessibilityId", value: unquote(idMatch[1]) };
-  }
-
-  const roleMatch = /^role=([A-Za-z][\w.$-]*)(?:\[name=(.+)\])?$/s.exec(trimmed);
-  if (roleMatch) {
-    const name = roleMatch[2] !== undefined ? unquote(roleMatch[2]) : undefined;
-    return name !== undefined && name.length > 0
-      ? { by: "role", role: roleMatch[1], name }
-      : { by: "role", role: roleMatch[1] };
-  }
-
-  const labelMatch = /^label=(.+)$/s.exec(trimmed);
-  if (labelMatch) {
-    return { by: "label", value: unquote(labelMatch[1]) };
-  }
-
-  const textMatch = /^text=(.+)$/s.exec(trimmed);
-  if (textMatch) {
-    return { by: "text", value: unquote(textMatch[1]) };
-  }
-
-  return { by: "text", value: trimmed };
+  return toIosQuery(parseNativeSelector(selector));
 }
 
 /**
@@ -193,11 +189,7 @@ export function iosQueryToLocator(query: IosQuery): IosLocator {
 
 /** The literal text a `text=` selector matches, else null (mirrors the web driver). */
 export function unwrapIosTextSelector(selector: string): string | null {
-  const trimmed = selector.trim();
-  if (!trimmed.startsWith("text=")) {
-    return null;
-  }
-  return unquote(trimmed.slice(5));
+  return unwrapNativeTextSelector(selector);
 }
 
 function delay(ms: number): Promise<void> {

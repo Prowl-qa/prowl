@@ -39,6 +39,27 @@ All notable changes to Prowl will be documented in this file.
   CI gate below on a standard API 35 AVD.
 
 ### Added
+- **Unified native selector engine (PROWL-060).** The Android/iOS native selector
+  dialect — the grammar for `id=`/`label=`/`text=`/`role=` (and `:focus`), the
+  per-platform attribute mapping tables, the ranking order, and the host-side
+  matching semantics — now lives in one module, `src/selector/native.ts`, instead
+  of being duplicated across each mobile driver's locator translation and each
+  mobile analyzer's selector ranking. Both mobile drivers parse through the shared
+  `parseNativeSelector` (then map the neutral `{ kind, value, roleName? }` onto
+  their own on-device query), and both mobile analyzers rank through the shared
+  `rankNativeSelectors`, so Android and iOS can never drift from each other. The
+  module documents the full **web / macOS / Android / iOS selector compatibility
+  matrix** and the `label=`-in-assertions trap (native `label=` is an exact match,
+  not a substring like `text=`) in a single place. It also adds a dependency-free,
+  host-side **snapshot-then-match** engine (`nodeMatchesSelector` /
+  `matchNativeTree`, exposed on the analyzers as `matchAndroidSelector` /
+  `matchIosSelector`): parse an agent's `/source` dump and resolve a selector to
+  matching nodes with no device — read-only and exposed for a later
+  runner/macdriver migration. No observable behavior change: the runners still
+  match on-device and the analyzers' ranked output is byte-for-byte identical.
+  macOS remains on its existing driver/analyzer matching for now, with
+  `MACOS_MATCH_DIALECT` in place as the extension point for the deferred
+  migration.
 - **`prowl analyze` now works on the Android and iOS targets (PROWL-061).** The
   native analog of the web/macOS analyzers: it attaches to a running app on a
   booted emulator/simulator, reads the on-device UI hierarchy (Android via the

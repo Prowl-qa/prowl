@@ -19,6 +19,14 @@
  * Read-only: this never taps, types, or otherwise mutates the app — it only reads
  * the page source.
  */
+import {
+  ANDROID_MATCH_DIALECT,
+  matchNativeTree,
+  parseNativeSelector,
+  rankNativeSelectors,
+  type NativeMatchOptions,
+  type NativeNode
+} from "../selector/native.js";
 import { parseXml, type XmlElement } from "./xml.js";
 
 /**
@@ -60,6 +68,8 @@ export type AndroidUiNode = {
   checked?: boolean;
   scrollable?: boolean;
   focusable?: boolean;
+  /** Whether the node currently holds input focus (`:focus`; from the dump's `focused` attr). */
+  focused?: boolean;
   enabled?: boolean;
   children: AndroidUiNode[];
 };
@@ -114,6 +124,7 @@ function toAndroidNode(element: XmlElement): AndroidUiNode {
     checked: bool(a.checked),
     scrollable: bool(a.scrollable),
     focusable: bool(a.focusable),
+    focused: bool(a.focused),
     enabled: bool(a.enabled),
     children: element.children.map(toAndroidNode)
   };
@@ -125,11 +136,6 @@ export function parseAndroidHierarchy(xml: string): AndroidUiNode | null {
   return root ? toAndroidNode(root) : null;
 }
 
-/** Quote a selector value; the dialect strips surrounding quotes on parse. */
-function quote(value: string): string {
-  return `"${value}"`;
-}
-
 /** Whether a node is worth surfacing as an interactive element. */
 export function isAndroidInteractive(node: AndroidUiNode): boolean {
   if (node.clickable || node.longClickable || node.checkable || node.scrollable) {
@@ -139,29 +145,61 @@ export function isAndroidInteractive(node: AndroidUiNode): boolean {
 }
 
 /**
- * Ranked selector candidates for a node, best first. Mirrors the Android driver's
- * selector dialect (`id=` > `label=` > `role=…[name="…"]` > `text=`). The dump's
- * `resource-id` is already package-qualified, so `id=` is emitted verbatim. Falls
- * back to a bare `role=<class>` so every node with a class stays addressable.
+ * Ranked selector candidates for a node, best first, via the shared native
+ * selector engine (PROWL-060). The Android attribute mapping is applied here —
+ * `id=`←resource-id (already package-qualified in the dump, emitted verbatim),
+ * `label=`←content-desc, `role=`←class, name←visible text — then
+ * {@link rankNativeSelectors} imposes the shared `id=` > `label=` >
+ * `role=…[name]` > `text=` order (with a bare `role=` fallback).
  */
 export function rankAndroidSelectors(node: AndroidUiNode): string[] {
-  const selectors: string[] = [];
-  if (node.resourceId) {
-    selectors.push(`id=${node.resourceId}`);
+  return rankNativeSelectors({
+    id: node.resourceId,
+    label: node.contentDesc,
+    role: node.className,
+    name: node.text
+  });
+}
+
+/**
+ * Project an {@link AndroidUiNode} into the neutral {@link NativeNode} the shared
+ * matcher compares against: `id`←resource-id, `label`←content-desc, `role`←class,
+ * `text=` substring source ← visible text.
+ */
+export function androidNodeToNative(node: AndroidUiNode): NativeNode {
+  return {
+    ...(node.resourceId !== undefined ? { id: node.resourceId } : {}),
+    ...(node.contentDesc !== undefined ? { label: node.contentDesc } : {}),
+    ...(node.className !== undefined ? { role: node.className } : {}),
+    textValues: node.text !== undefined ? [node.text] : [],
+    ...(node.focused !== undefined ? { focused: node.focused } : {})
+  };
+}
+
+/**
+ * Host-side "snapshot-then-match": parse a uiautomator2 `/source` dump and return
+ * every node the Prowl `selector` resolves to, in document order, using Android's
+ * shared dialect semantics. Read-only and device-free. Exposed for tooling and a
+ * future runner/macdriver migration; the runner still matches on-device today.
+ */
+export function matchAndroidSelector(
+  xml: string,
+  selector: string,
+  options: NativeMatchOptions = {}
+): AndroidUiNode[] {
+  const parsedSelector = parseNativeSelector(selector);
+  const root = parseAndroidHierarchy(xml);
+  if (!root) {
+    return [];
   }
-  if (node.contentDesc) {
-    selectors.push(`label=${quote(node.contentDesc)}`);
-  }
-  if (node.className && node.text) {
-    selectors.push(`role=${node.className}[name=${quote(node.text)}]`);
-  }
-  if (node.text) {
-    selectors.push(`text=${quote(node.text)}`);
-  }
-  if (selectors.length === 0 && node.className) {
-    selectors.push(`role=${node.className}`);
-  }
-  return selectors;
+  return matchNativeTree(
+    ANDROID_MATCH_DIALECT,
+    parsedSelector,
+    root,
+    androidNodeToNative,
+    (node) => node.children,
+    options
+  );
 }
 
 function toElement(node: AndroidUiNode): AndroidAnalysisElement {
