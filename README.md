@@ -935,6 +935,41 @@ Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS
 
 ---
 
+## Native Selector Dialect (compatibility matrix)
+
+The three native targets (macOS, Android, iOS) share **one** selector dialect, so
+`id=` / `label=` / `text=` / `role=` mean the same *shape* of thing everywhere. The
+dialect — its grammar, per-platform attribute mapping, ranking order, and host-side
+matching — is defined in one place in the code (`src/selector/native.ts`); this
+table is its documentation. The web target speaks Playwright's own selector engines
+and is shown for contrast.
+
+| Kind | Web (Playwright) | macOS (AX) | Android (uiautomator2) | iOS (WebDriverAgent) |
+|---|---|---|---|---|
+| `id=` | use CSS `#id` / `[data-testid]` | `AXIdentifier`, exact | `resource-id`, exact (bare names are package-qualified: `save` → `<pkg>:id/save`) | accessibility id (the `name`, when it differs from the label), exact |
+| `label=` | *(no native kind; analyzer surfaces the associated `<label>` text)* | `title`/`description`, **exact** | `content-desc`, **exact** | `accessibilityLabel`, **exact** |
+| `text=` (or bare) | text engine, substring, case-insensitive | `title`/`description`/`value`, substring | visible `text`, substring | `label` **or** `value`, substring |
+| `role=` | ARIA role engine | AX role (e.g. `AXButton`) | widget class (e.g. `android.widget.Button`) | element type (`XCUIElementType…`; shorthand `Button` accepted) |
+| `role=X[name="Y"]` | role + accessible name (substring) | role + name (substring) | class + visible-text (substring) | type + (`label` or `value`) substring |
+| `:focus` | *(n/a)* | focused element | `UiSelector().focused(true)` | `hasKeyboardFocus == 1` |
+
+**The `label=`-in-assertions trap.** On every native target `label=` is an **exact**
+match on the accessibility label — unlike `text=`, which is a substring match, and
+unlike the web, where text matching is forgiving. So `assert: selectorExists:
+label="Save"` will **not** match an element whose real label is "Save changes"; it
+silently fails rather than partially matching. Use `text=` when you want substring
+behavior in an assertion, and keep `label=` for the exact accessibility label. On
+iOS there is a second trap: WDA's page source exposes a single `name` attribute that
+is the `accessibilityIdentifier` when one is set and otherwise the label — so `id=`
+addresses the identifier only when it actually differs from the label; when they are
+equal, use `label=`.
+
+Prefer `id=` on every native target — the native analog of `data-testid`. Per-target
+specifics (escaping, `statusItem`/`menu=` on macOS, the Compose `testTagsAsResourceId`
+caveat on Android) follow in each target's own section below.
+
+---
+
 ## macOS Target (Experimental)
 
 > **Experimental (PROWL-048).** Prowl can drive **native macOS apps** — including
@@ -1003,6 +1038,8 @@ at self-hosted / MDM-managed runners for now.
 
 ### Selector dialect (macOS)
 
+See the [Native Selector Dialect matrix](#native-selector-dialect-compatibility-matrix)
+for how these compare across native targets (and the `label=` exact-match trap).
 Native selectors address accessibility identifiers, roles, and labels:
 
 | Selector | Matches |
@@ -1139,8 +1176,10 @@ validates it before installing.
 ### Selector dialect (Android)
 
 Native selectors address `resource-id`, `content-desc`, visible text, and widget
-class. Semantics match the macOS target so a selector means the same thing on both
-native targets:
+class. Semantics match the macOS and iOS targets so a selector means the same thing
+across native targets — see the
+[Native Selector Dialect matrix](#native-selector-dialect-compatibility-matrix)
+(and the `label=` exact-match trap):
 
 | Selector | Matches |
 |---|---|
@@ -1285,7 +1324,9 @@ treated as a **bundle id** unless a directory of that name exists, so bundle ids
 
 Native selectors address accessibility ids, labels, visible text, and element type.
 Semantics match the macOS/Android targets so a selector means the same thing across
-native targets:
+native targets — see the
+[Native Selector Dialect matrix](#native-selector-dialect-compatibility-matrix)
+(and the `label=` exact-match trap):
 
 | Selector | Matches |
 |---|---|
