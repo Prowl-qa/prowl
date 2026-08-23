@@ -175,20 +175,10 @@ jobs:
             exit 0
           fi
 
-          major="$(printf '%s\n' "$runtime" | sed -E 's/.*iOS-([0-9]+).*/\1/')"
-          if ! [[ "$major" =~ ^[0-9]+$ ]]; then
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Could not determine iOS runtime major version from $runtime; skipping iOS smoke."
-            exit 0
-          fi
-
+          # PROWL-069: WDA now launches via `xcodebuild test-without-building`
+          # (xctestrun), which iOS 26+ accepts, so every available runtime is
+          # supported — no version gate.
           echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
-          if [ "$major" -ge 26 ]; then
-            echo "supported=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping iOS smoke on $runtime; PROWL-069 tracks WDA launch on iOS 26+."
-            exit 0
-          fi
-
           echo "supported=true" >> "$GITHUB_OUTPUT"
 
       - name: Boot the iOS simulator
@@ -207,9 +197,10 @@ jobs:
           xcrun simctl boot "$IOS_SIM" || true
           xcrun simctl bootstatus "$IOS_SIM"
 
-      # NOTE (PROWL-069): on iOS 26+ simulators WDA is terminated when launched via
-      # `simctl launch` ("had no entitlements"), so this smoke is gated until the
-      # driver adopts an xctestrun-based launch. The Android job above is unaffected.
+      # PROWL-069: WDA is launched via `xcodebuild test-without-building` driven by
+      # the generated `.xctestrun` (the XCTest host launch), which iOS 26+ accepts —
+      # the older `simctl launch` of the xctrunner was terminated ("had no
+      # entitlements"). This smoke now runs on iOS 18 and 26+ alike.
       - name: Run the iOS smoke hunt
         if: steps.ios-runtime.outputs.supported == 'true'
         working-directory: ${{ runner.temp }}/ios
