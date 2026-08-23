@@ -3,7 +3,36 @@
 All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes.
+
+### Added
+- **`prowl analyze` now works on the Android and iOS targets (PROWL-061).** The
+  native analog of the web/macOS analyzers: it attaches to a running app on a
+  booted emulator/simulator, reads the on-device UI hierarchy (Android via the
+  uiautomator2 agent's `GET /source`, iOS via WebDriverAgent's `GET /source`), and
+  prints every interactive element with **ranked selector candidates** in each
+  platform's dialect — Android `id=` (package-qualified `resource-id`) > `label=`
+  (content-desc) > `role=<class>[name]` > `text=`; iOS `id=` (accessibility id) >
+  `label=` > `role=<Type>[name]` > `text=`, plus a windows list. The `analyze`
+  command gained native routing: `--app` forces a native target, `--platform
+  <macos|android|ios>` disambiguates (an `.apk` implies Android; a bare bundle-id
+  still defaults to macOS for back-compat), and `--device`/`--udid` pick a
+  device/simulator. Config `target.type: android|ios` is honored when no URL or
+  `--app` is given. The `guardrails.allowedApps` scope is enforced before launch
+  (mirroring the run path) and analysis is strictly read-only. New library exports:
+  `analyzeAndroidApp`/`analyzeIosApp` (+ ranking/parse helpers and result types)
+  and a small dependency-free XML parser (`parseXml`) shared by both dialects. The
+  agent clients gained a read-only `source()` reader. iOS caveat: WDA's page source
+  exposes one `name` attribute (the accessibility identifier when set, else the
+  label), so `id=` is offered only when `name` differs from the label.
+- **CI recipes for the mobile targets (PROWL-061).** The README documents
+  copy-paste GitHub Actions recipes for both platforms — Android on `ubuntu-latest`
+  via `reactivecircus/android-emulator-runner` (KVM-accelerated), and iOS
+  simulators on `macos-*` with a cached WebDriverAgent build — plus a new
+  self-hosted `.github/workflows/mobile-e2e.yml` that boots a headless emulator and
+  a simulator and runs real Settings smoke hunts through the CLI on the Prowl Tools
+  Mac. That workflow triggers on `workflow_dispatch` and same-repo PRs, skips
+  cleanly (green) for forks/outside PRs that can't reach the runner, and uses its
+  own `concurrency` group so it never collides with other jobs on the shared box.
 
 ## [0.1.5] - 2026-08-20
 
