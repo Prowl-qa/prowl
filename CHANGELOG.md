@@ -5,13 +5,27 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **iOS driver launches WebDriverAgent via `xcodebuild test-without-building`
+  (iOS 26+ support).** On iOS 26+ simulators the previous approach — `simctl
+  launch` of the preinstalled `com.facebook.WebDriverAgentRunner.xctrunner` — was
+  terminated by RunningBoard (*"had no entitlements"*): the xctrunner has to be
+  hosted by the test runner to get its entitlements, so WDA got a PID but its HTTP
+  server never bound and readiness timed out at 60s, breaking iOS `run`/`analyze`
+  and the iOS half of the mobile CI gate on every current Mac (iOS 26.5 is the
+  only runtime `xcodebuild -downloadPlatform iOS` currently offers). Prowl now
+  hosts WDA through the standard XCTest host launch: `xcodebuild
+  test-without-building` driven by the generated `.xctestrun`, with the dynamic
+  WDA port injected into the runner's environment. This is the single launch path
+  and works on iOS 18 and 26+ alike; the WDA build cache (`~/.prowl/wda/…`) and the
+  `PROWL_WDA_RUNNER` override are preserved (the override may now point at the
+  `.xctestrun`, its `Build/Products` directory, or the runner `.app`). The
+  self-hosted mobile CI gate's iOS smoke no longer skips iOS 26+ runtimes.
 - **Mobile analysis review hardening.** Invalid XML numeric references now remain
   literal instead of crashing analysis, Android/iOS `/source` protocol mismatches
   fail with explicit errors instead of reporting an empty hierarchy, Android
   `am start` launch failures preserve the failing adb phase and original cause,
-  config-based `prowl analyze` now lets `--device`/`--udid` override configured
-  identifiers, and the self-hosted mobile workflow skips the known PROWL-069 iOS
-  smoke on iOS 26+ runtimes while preserving the Android gate.
+  and config-based `prowl analyze` now lets `--device`/`--udid` override configured
+  identifiers.
 - **Android app launch is now deterministic (`am start`, not `monkey`).** The
   Android target launched apps with `monkey`, which is unreliable when adb runs
   without a PTY (e.g. `execFile` in CI): on some emulator images — notably API 35
