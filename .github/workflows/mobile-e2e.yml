@@ -1,0 +1,202 @@
+name: Mobile E2E (self-hosted)
+
+# Real end-to-end device-verification for the Android + iOS drivers (PROWL-061).
+# This turns the manual smoke tests that caught the uiautomator2 wire-shape bug
+# (PROWL-058) and the WebDriverAgent readiness hang (PROWL-059) into a machine-run
+# gate on the provisioned self-hosted Mac (Apple Silicon, Xcode + Android SDK, a
+# persistent `prowl-ci` AVD and a `prowl-ci-ios` simulator).
+#
+# Trigger choice:
+#   * workflow_dispatch — always available for on-demand verification and is the
+#     way the owner runs this gate after merge (its live run cannot happen in the
+#     hosted `npm test` job).
+#   * pull_request — so same-repo PRs get the gate automatically, BUT the job is
+#     guarded to SKIP CLEANLY (not fail, not hang) for anything that cannot reach
+#     the box: it only runs in `prowl-tools/prowl` and only for a workflow_dispatch
+#     or a PR whose head is this same repo (never a fork). Forks / outside PRs
+#     evaluate the `if` to false and the job is reported as skipped (green), so
+#     they never queue against an offline/absent self-hosted runner.
+on:
+  workflow_dispatch:
+  pull_request:
+
+# Own concurrency group: the box also serves Sentwise's `prowl-qa`, so never
+# collide. Cancel a superseded in-flight run rather than stacking device work.
+concurrency:
+  group: prowl-mobile-e2e
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-e2e:
+    name: Android + iOS device verification
+    # Skip-cleanly guard (see header): this repo only, and only a dispatch or a
+    # same-repo PR (fork PRs have a different head repo and are skipped green).
+    if: >-
+      github.repository == 'prowl-tools/prowl' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, prowl-mobile]
+    timeout-minutes: 45
+    env:
+      ANDROID_AVD: prowl-ci
+      IOS_SIM: prowl-ci-ios
+      # aapt lives under the pinned build-tools; keep it discoverable for .apk
+      # targets (bare-package targets like the ones below do not need it).
+      ANDROID_BUILD_TOOLS: /opt/homebrew/share/android-commandlinetools/build-tools/35.0.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and build the CLI
+        run: |
+          npm ci
+          npm run build
+          echo "PROWL=node $GITHUB_WORKSPACE/dist/index.js" >> "$GITHUB_ENV"
+
+      - name: Scaffold scratch hunts
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/android/.prowl/hunts" "$RUNNER_TEMP/ios/.prowl/hunts"
+
+          # --- Android: com.android.settings ---
+          cat > "$RUNNER_TEMP/android/.prowl/config.yml" <<'YAML'
+          target:
+            type: android
+            app: "com.android.settings"
+          browser:
+            headless: true
+            timeout: 60000
+          artifacts:
+            screenshots: "all"
+          guardrails:
+            maxSteps: 50
+            allowedApps:
+              - "com.android.settings"
+          YAML
+          cat > "$RUNNER_TEMP/android/.prowl/hunts/android-smoke.yml" <<'YAML'
+          name: android-smoke
+          description: Android Settings device-verification smoke (PROWL-061)
+          steps:
+            # Wait for the Settings home list to render.
+            - waitForSelector:
+                selector: "text=Network & internet"
+                timeout: 60000
+            # The SAME list container must resolve by a fully-qualified id= …
+            - assert:
+                visible: "id=com.android.settings:id/recycler_view"
+            # … and by a bare id= (auto-qualified with the app package to the same node).
+            # NOTE: the resource-id can differ across Android versions; if the gate
+            # fails here on the runner's AVD, dump it (`adb shell uiautomator dump`)
+            # and adjust this id — this is the intended post-merge verification step.
+            - assert:
+                visible: "id=recycler_view"
+            # Tap an entry by its visible-text shorthand.
+            - click: "Network & internet"
+            - screenshot:
+                name: android-network-internet
+          YAML
+
+          # --- iOS: com.apple.Preferences (the PROWL-059 smoke) ---
+          cat > "$RUNNER_TEMP/ios/.prowl/config.yml" <<'YAML'
+          target:
+            type: ios
+            app: "com.apple.Preferences"
+          browser:
+            headless: true
+            timeout: 60000
+          artifacts:
+            screenshots: "all"
+          guardrails:
+            maxSteps: 50
+            allowedApps:
+              - "com.apple.Preferences"
+          YAML
+          cat > "$RUNNER_TEMP/ios/.prowl/hunts/ios-smoke.yml" <<'YAML'
+          name: ios-smoke
+          description: iOS Settings device-verification smoke (PROWL-059 / PROWL-061)
+          steps:
+            - waitForSelector:
+                selector: "text=General"
+                timeout: 60000
+            - assert:
+                visible: "text=General"
+            - click: "General"
+            - waitForSelector:
+                selector: "text=About"
+                timeout: 60000
+            - assert:
+                visible: "text=About"
+            - screenshot:
+                name: ios-general-about
+          YAML
+
+      - name: Boot the Android emulator
+        run: |
+          set -euo pipefail
+          adb start-server
+          # Headless boot, no snapshot — matches the runner-verified invocation.
+          nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb wait-for-device
+          booted=0
+          for _ in $(seq 1 150); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              booted=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$booted" != "1" ]; then
+            echo "::error::Android emulator did not reach sys.boot_completed"
+            cat "$RUNNER_TEMP/emulator.log" || true
+            exit 1
+          fi
+          adb shell input keyevent 82 || true   # dismiss the keyguard
+          adb devices
+
+      - name: Run the Android smoke hunt
+        working-directory: ${{ runner.temp }}/android
+        run: $PROWL run android-smoke
+
+      - name: Boot the iOS simulator
+        run: |
+          set -euo pipefail
+          # Create the simulator if it does not already exist (safer than assuming).
+          if ! xcrun simctl list devices | grep -q "$IOS_SIM"; then
+            runtime="$(xcrun simctl list runtimes | awk '/iOS/ {print $NF}' | tail -1)"
+            devtype="com.apple.CoreSimulator.SimDeviceType.iPhone-16"
+            echo "Creating simulator $IOS_SIM ($devtype, $runtime)"
+            xcrun simctl create "$IOS_SIM" "$devtype" "$runtime"
+          fi
+          xcrun simctl boot "$IOS_SIM" || true
+          xcrun simctl bootstatus "$IOS_SIM"
+
+      - name: Run the iOS smoke hunt
+        working-directory: ${{ runner.temp }}/ios
+        # WDA builds+caches under ~/.prowl/wda/ on first run (~110s); cached after.
+        run: $PROWL run ios-smoke
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/android/.prowl/runs/**
+            ${{ runner.temp }}/ios/.prowl/runs/**
+            ${{ runner.temp }}/emulator.log
+
+      - name: Tear down devices
+        if: always()
+        run: |
+          adb -s emulator-5554 emu kill || true
+          adb kill-server || true
+          xcrun simctl shutdown "$IOS_SIM" || true

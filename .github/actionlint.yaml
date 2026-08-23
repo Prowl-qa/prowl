@@ -1,0 +1,7 @@
+# Custom self-hosted runner labels used in this repo's workflows.
+# The Prowl Tools mobile runner (lucius-prowl-mobile) is registered with the
+# labels: self-hosted, macOS, ARM64, prowl-mobile. Declaring the custom label
+# here lets actionlint validate `runs-on` without flagging it as unknown.
+self-hosted-runner:
+  labels:
+    - prowl-mobile
