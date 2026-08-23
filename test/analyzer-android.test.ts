@@ -4,6 +4,7 @@ import {
   rankAndroidSelectors,
   parseAndroidHierarchy,
   isAndroidInteractive,
+  matchAndroidSelector,
   type AndroidUiSource
 } from "../src/analyzer/android.js";
 
@@ -145,5 +146,39 @@ describe("analyzeAndroidApp", () => {
     const client = new FakeAndroidSource("");
     const result = await analyzeAndroidApp(client, { app: "com.example" });
     expect(result.elements).toEqual([]);
+  });
+});
+
+describe("matchAndroidSelector (host-side snapshot-then-match, PROWL-060)", () => {
+  it("matches a fully-qualified id= to exactly the resource-id node", () => {
+    const matches = matchAndroidSelector(SETTINGS_SOURCE, "id=com.android.settings:id/switch_widget");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].className).toBe("android.widget.Switch");
+  });
+
+  it("package-qualifies a bare id= using appPackage before matching", () => {
+    const matches = matchAndroidSelector(SETTINGS_SOURCE, "id=switch_widget", {
+      appPackage: "com.android.settings"
+    });
+    expect(matches).toHaveLength(1);
+    expect(matches[0].resourceId).toBe("com.android.settings:id/switch_widget");
+    // Without the package, a bare id cannot match the qualified resource-id.
+    expect(matchAndroidSelector(SETTINGS_SOURCE, "id=switch_widget")).toEqual([]);
+  });
+
+  it("matches label= exactly against content-desc", () => {
+    const matches = matchAndroidSelector(SETTINGS_SOURCE, "label=Search settings");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].contentDesc).toBe("Search settings");
+  });
+
+  it("matches text= as a substring over visible text (entities decoded)", () => {
+    const matches = matchAndroidSelector(SETTINGS_SOURCE, "text=Network");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].text).toBe("Network & internet");
+  });
+
+  it("returns an empty array for an empty snapshot", () => {
+    expect(matchAndroidSelector("", "id=anything")).toEqual([]);
   });
 });
