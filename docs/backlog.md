@@ -399,32 +399,6 @@ one shared TS engine so `id=`/`label=`/`text=`/`role=` mean the same thing on An
 - Selector semantics documented in one compatibility matrix (web / macOS / Android / iOS)
 - Evaluate migrating macdriver matching onto it later; no behavior change required now
 
-{PROWL-061} **CICD-006: Mobile targets in CI + `prowl analyze` support**
-   Make the mobile targets usable beyond a laptop: `prowl analyze --app` branches for
-Android/iOS (reusing the PROWL-055 analyzer shape), plus copy-paste CI recipes — Android on
-standard `ubuntu-latest` (KVM-accelerated emulator via `reactivecircus/android-emulator-runner`)
-and iOS sims on `macos-*` runners with cached WDA.
-
-**Found during**: BrowserStack/mobile competitive research (2026-08-18)
-**Acceptance Criteria**:
-- `prowl analyze` works against a booted emulator/simulator app: windows/screens, interactive
-  elements, ranked selectors — same output contract as the macOS analyzer
-- GitHub Actions recipes for both platforms in docs; junit + artifacts wiring shown
-- **Self-hosted variant + Prowl's own device-verification gate** (added 2026-08-21): the
-  recipes also cover a self-hosted macOS runner (the Prowl Tools Mac mini: Apple Silicon,
-  Xcode present, Android SDK via `android-commandlinetools` with a persistent `prowl-ci` AVD),
-  and this repo's CI gains a real end-to-end job on that runner that boots the emulator
-  (`-no-window -no-audio -no-boot-anim`, wait for `sys.boot_completed`) and a simulator, then
-  runs a scratch hunt against a built-in app on each (Android: Settings `com.android.settings`
-  — wait → assert by qualified and bare `id=` → tap → screenshot; iOS: `com.apple.Preferences`
-  per the PROWL-059 smoke) through the real CLI. This turns the manual smoke tests that caught
-  the uiautomator2 wire-shape bug and the WDA readiness hang into a machine-run gate. Use its
-  own `concurrency` group (the box also serves Sentwise's `prowl-qa`), a PATH that includes
-  `platform-tools`/`emulator`/`build-tools` for the runner service user, and make the job
-  skip cleanly (not fail) when no self-hosted runner is online so forks/PRs from outside stay
-  green.
-- prowl-docs gains a mobile-target page (cross-repo duty)
-
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
 make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and
