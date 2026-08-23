@@ -201,25 +201,59 @@ export async function installApk(runner: AdbRunner, serial: string, apkPath: str
 }
 
 /** Launch the default LAUNCHER activity of `pkg` via monkey. */
+/**
+ * Parse the launcher component (`pkg/.Activity`) out of
+ * `cmd package resolve-activity --brief` output — the last non-empty line.
+ * Returns null when nothing resolves (package absent or has no launcher).
+ */
+export function parseResolvedComponent(stdout: string, pkg: string): string | null {
+  const lines = stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    // A component line looks like `com.pkg/.Activity` or `com.pkg/com.pkg.Activity`.
+    if (/^[\w.]+\/[\w.$]+$/.test(lines[i]) && lines[i].startsWith(`${pkg}/`)) {
+      return lines[i];
+    }
+  }
+  return null;
+}
+
+/**
+ * Launch a package's default LAUNCHER activity. Resolves the launcher component
+ * with `cmd package resolve-activity` and starts it with `am start -n` — a
+ * deterministic, TTY-independent path. (The previous `monkey`-based launch was
+ * unreliable when adb runs it without a PTY — e.g. execFile in CI — where some
+ * emulator images, notably API 35 `google_apis`, emit debug noise and exit
+ * non-zero even on success. `am start` has none of that ambiguity.)
+ */
 export async function launchPackage(runner: AdbRunner, serial: string, pkg: string): Promise<void> {
-  const result = await runner(
+  const resolved = await runner(
     withSerial(serial, [
       "shell",
-      "monkey",
-      "-p",
-      pkg,
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
       "-c",
       "android.intent.category.LAUNCHER",
-      "1"
+      pkg
     ]),
     { timeoutMs: 30000 }
   );
-  // monkey exits 0 but prints "No activities found" when the package is missing.
-  if (result.code !== 0 || /no activities found|aborted|cannot launch/i.test(result.stdout + result.stderr)) {
+  const component = parseResolvedComponent(resolved.stdout, pkg);
+  if (resolved.code !== 0 || !component) {
     throw new Error(
-      `Failed to launch Android package "${pkg}" (exit ${result.code}): ${
-        (result.stdout + result.stderr).trim().slice(0, 400)
-      }. Is it installed?`
+      `Could not resolve a launcher activity for Android package "${pkg}" (exit ${resolved.code})` +
+        `${(resolved.stdout + resolved.stderr).trim() ? `: ${(resolved.stdout + resolved.stderr).trim().slice(0, 300)}` : ""}. Is it installed?`
+    );
+  }
+  const start = await runner(withSerial(serial, ["shell", "am", "start", "-n", component]), {
+    timeoutMs: 30000
+  });
+  if (start.code !== 0 || /error|does not exist|cannot start/i.test(start.stdout + start.stderr)) {
+    throw new Error(
+      `Failed to launch Android package "${pkg}" (${component}, exit ${start.code}): ${
+        (start.stdout + start.stderr).trim().slice(0, 400)
+      }.`
     );
   }
 }

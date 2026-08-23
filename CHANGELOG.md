@@ -4,6 +4,17 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Android app launch is now deterministic (`am start`, not `monkey`).** The
+  Android target launched apps with `monkey`, which is unreliable when adb runs
+  without a PTY (e.g. `execFile` in CI): on some emulator images — notably API 35
+  `google_apis` — non-interactive `monkey` emits debug noise and exits non-zero
+  even on success, so launches spuriously failed. `launchPackage` now resolves the
+  launcher activity via `cmd package resolve-activity` and starts it with
+  `am start -n <component>`. Verified live on an API 35 emulator (found while
+  device-verifying `prowl analyze`). This is what unblocks the self-hosted mobile
+  CI gate below on a standard API 35 AVD.
+
 ### Added
 - **`prowl analyze` now works on the Android and iOS targets (PROWL-061).** The
   native analog of the web/macOS analyzers: it attaches to a running app on a

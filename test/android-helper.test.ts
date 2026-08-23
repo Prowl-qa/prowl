@@ -43,8 +43,13 @@ function fakeRunner(devicesStdout: string): AdbRunner & { calls: string[][] } {
     if (args.includes("install")) {
       return { ...result, stdout: "Success" };
     }
-    if (args.includes("monkey")) {
-      return { ...result, stdout: "Events injected: 1" };
+    if (args.includes("resolve-activity")) {
+      // `cmd package resolve-activity --brief` → the launcher component.
+      const pkg = args[args.length - 1];
+      return { ...result, stdout: `priority=0 isDefault=true\n${pkg}/.Main\n` };
+    }
+    if (args.includes("am") && args.includes("start")) {
+      return { ...result, stdout: "Starting: Intent" };
     }
     if (args.includes("forward") && args.includes("tcp:0")) {
       return { ...result, stdout: "40000\n" };

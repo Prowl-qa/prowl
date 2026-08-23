@@ -7,6 +7,7 @@ import {
   forwardDynamicPort,
   installApk,
   launchPackage,
+  parseResolvedComponent,
   listDevices,
   parseAaptPackage,
   parseAdbDevices,
@@ -141,24 +142,53 @@ describe("adb lifecycle wrappers", () => {
     await expect(installApk(failing, "s", "/tmp/app.apk")).rejects.toThrow("Failed to install APK");
   });
 
-  it("launches via monkey and flags a missing package", async () => {
-    const runner = fakeRunner(() => ({ stdout: "Events injected: 1" }));
+  it("parses the launcher component from resolve-activity output (last matching line)", () => {
+    const out = "priority=0 match=0x108000 isDefault=true\ncom.example.app/.Main\n";
+    expect(parseResolvedComponent(out, "com.example.app")).toBe("com.example.app/.Main");
+    // No component for this package → null (guards against a fallback/no-match line).
+    expect(parseResolvedComponent("No activity found", "com.example.app")).toBeNull();
+    // A different package's component must not match.
+    expect(parseResolvedComponent("com.other/.Main", "com.example.app")).toBeNull();
+  });
+
+  it("resolves the launcher activity and starts it with am start", async () => {
+    const runner = fakeRunner((args) => {
+      if (args.includes("resolve-activity")) {
+        return { stdout: "priority=0 match=0x108000 isDefault=true\ncom.example.app/.Main\n" };
+      }
+      return { stdout: "Starting: Intent { cmp=com.example.app/.Main }" };
+    });
     await launchPackage(runner, "s", "com.example.app");
-    expect(runner.calls.at(-1)).toEqual([
+    expect(runner.calls[0]).toEqual([
       "-s",
       "s",
       "shell",
-      "monkey",
-      "-p",
-      "com.example.app",
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
       "-c",
       "android.intent.category.LAUNCHER",
-      "1"
+      "com.example.app"
     ]);
+    expect(runner.calls.at(-1)).toEqual(["-s", "s", "shell", "am", "start", "-n", "com.example.app/.Main"]);
+  });
 
-    const missing = fakeRunner(() => ({ stdout: "** No activities found to run, monkey aborted." }));
+  it("flags a package whose launcher activity does not resolve", async () => {
+    // `resolve-activity` prints a fallback line (no component) when nothing matches.
+    const missing = fakeRunner(() => ({ stdout: "No activity found" }));
     await expect(launchPackage(missing, "s", "com.absent")).rejects.toThrow(
-      'Failed to launch Android package "com.absent"'
+      'Could not resolve a launcher activity for Android package "com.absent"'
+    );
+  });
+
+  it("flags a resolved package that fails to start", async () => {
+    const failing = fakeRunner((args) => {
+      if (args.includes("resolve-activity")) return { stdout: "com.example.app/.Main" };
+      return { stdout: "Error: Activity class does not exist." };
+    });
+    await expect(launchPackage(failing, "s", "com.example.app")).rejects.toThrow(
+      'Failed to launch Android package "com.example.app"'
     );
   });
 
