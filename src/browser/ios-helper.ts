@@ -4,14 +4,24 @@
  * Ties together the three layers: `simctl` lifecycle ({@link ./ios-simctl.js}), the
  * WebDriverAgent HTTP agent ({@link ./ios-agent.js}), and the driver
  * ({@link ./ios-driver.js}). The WDA Xcode project ships inside the
- * `appium-webdriveragent` npm package (Apache-2.0); its runner app is built once
- * with `xcodebuild build-for-testing` and cached under `~/.prowl/wda/` keyed on
- * the WDA + Xcode versions, then installed and launched via `simctl` (no code
- * signing on simulators). Every external dependency (simctl runner, port
- * allocator, agent connector) is injectable so the whole flow is unit-testable
- * without a simulator or Xcode.
+ * `appium-webdriveragent` npm package (Apache-2.0); it is built once with
+ * `xcodebuild build-for-testing` and cached under `~/.prowl/wda/` keyed on the
+ * WDA + Xcode versions.
+ *
+ * PROWL-069 / ARCH-013 — WDA is launched via the standard XCTest host launch
+ * (`xcodebuild test-without-building` driven by the generated `.xctestrun`), not
+ * by `simctl launch` of the runner `.app`. On iOS 26+ a bare `simctl launch` of
+ * `com.facebook.WebDriverAgentRunner.xctrunner` is terminated by RunningBoard
+ * ("had no entitlements"): the xctrunner must be hosted by the test runner, which
+ * supplies the entitlements the bare launch lacks. This is now the single launch
+ * path (the older preinstalled-runner fast path is retired) — it is how
+ * Appium/WebDriverAgent launch on modern runtimes and it works on iOS 18 and 26+
+ * alike. Every external dependency (simctl runner, xcodebuild spawner, xctestrun
+ * preparer, port allocator, agent connector) is injectable so the whole flow is
+ * unit-testable without a simulator or Xcode.
  */
 import { createRequire } from "node:module";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,10 +35,13 @@ import {
   listSimulators,
   reserveSimulatorUdid,
   selectSimulatorUdid,
+  spawnXcrunProcess,
   terminateApp,
   uninstallApp,
   xcodeVersion,
-  type SimctlRunner
+  type SimctlRunner,
+  type XcrunProcessHandle,
+  type XcrunSpawner
 } from "./ios-simctl.js";
 import {
   createWdaAgentClient,
@@ -42,10 +55,10 @@ import type { SessionDriver } from "./driver.js";
 
 /** Bundle id of the prebuilt WebDriverAgent runner (its xctest host app). */
 export const WDA_RUNNER_BUNDLE_ID = "com.facebook.WebDriverAgentRunner.xctrunner";
-/** The runner `.app` produced by `xcodebuild build-for-testing`. */
-export const WDA_RUNNER_APP_NAME = "WebDriverAgentRunner-Runner.app";
-/** Env var WDA reads to pick its HTTP port (forwarded via `SIMCTL_CHILD_USE_PORT`). */
+/** Env var WDA reads to pick its HTTP port (injected into the runner's xctestrun env). */
 export const WDA_USE_PORT_ENV = "USE_PORT";
+/** Prefix of the temp directory each launch writes its port-injected xctestrun into. */
+const PREPARED_XCTESTRUN_PREFIX = "prowl-wda-xctestrun-";
 /** One retry covers the race where a released dynamic port is claimed before WDA binds. */
 const WDA_STARTUP_ATTEMPTS = 2;
 
@@ -103,12 +116,59 @@ export function wdaCacheDir(wdaVersion: string, xcode: string, homeDir: string =
   return path.join(homeDir, ".prowl", "wda", `${wdaVersion}-xcode${xcode}`);
 }
 
-/** Path to the built runner app inside a derived-data directory. */
-function runnerAppPath(derivedDataPath: string): string {
-  return path.join(derivedDataPath, "Build", "Products", "Debug-iphonesimulator", WDA_RUNNER_APP_NAME);
+/** The `Build/Products` directory a `-derivedDataPath` build writes the xctestrun into. */
+function productsDir(derivedDataPath: string): string {
+  return path.join(derivedDataPath, "Build", "Products");
 }
 
-export type ResolveWdaRunnerOptions = {
+/** First `*.xctestrun` file in `dir`, or null when the directory is missing/empty. */
+function findXctestrunIn(dir: string): string | null {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const match = entries.filter((name) => name.endsWith(".xctestrun")).sort()[0];
+  return match ? path.join(dir, match) : null;
+}
+
+/**
+ * Resolve the `.xctestrun` that a `PROWL_WDA_RUNNER` override points at. The
+ * override may name the xctestrun directly, a derived-data / Products directory
+ * that contains one, or (for backward compatibility) the runner `.app` whose
+ * sibling `Build/Products/*.xctestrun` we can locate.
+ */
+function resolveOverrideXctestrun(override: string): string {
+  if (!fs.existsSync(override)) {
+    throw new Error(`PROWL_WDA_RUNNER points at a missing path: ${override}`);
+  }
+  if (override.endsWith(".xctestrun")) {
+    return override;
+  }
+  const candidates: string[] = [];
+  const stat = fs.statSync(override);
+  if (stat.isDirectory()) {
+    // A derived-data dir, a Products dir, or any dir that directly holds one.
+    candidates.push(override, productsDir(override));
+  } else if (override.endsWith(".app")) {
+    // Build/Products/<Config>-iphonesimulator/Runner.app → Build/Products/*.xctestrun
+    candidates.push(path.dirname(path.dirname(override)));
+  }
+  for (const dir of candidates) {
+    const found = findXctestrunIn(dir);
+    if (found) {
+      return found;
+    }
+  }
+  throw new Error(
+    `PROWL_WDA_RUNNER (${override}) does not resolve to a WebDriverAgent .xctestrun. ` +
+      "Point it at the generated `*.xctestrun`, at the `-derivedDataPath` directory from " +
+      "`xcodebuild build-for-testing`, or at that build's runner `.app`."
+  );
+}
+
+export type ResolveWdaTestRunOptions = {
   runner?: SimctlRunner;
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
@@ -118,13 +178,13 @@ export type ResolveWdaRunnerOptions = {
 };
 
 /**
- * Resolve a WebDriverAgent runner `.app`. Order: (a) the `PROWL_WDA_RUNNER` env
- * override; (b) a previously built runner in the version-keyed cache; (c) a
- * one-time `xcodebuild build-for-testing` that populates the cache. Simulators
- * need no code signing. Throws actionable errors when Xcode is missing or the
- * build fails.
+ * Resolve a WebDriverAgent `.xctestrun` file (the input to the XCTest host
+ * launch). Order: (a) the `PROWL_WDA_RUNNER` env override; (b) a previously built
+ * xctestrun in the version-keyed cache; (c) a one-time
+ * `xcodebuild build-for-testing` that populates the cache. Simulators need no
+ * code signing. Throws actionable errors when Xcode is missing or the build fails.
  */
-export async function resolveWdaRunner(options: ResolveWdaRunnerOptions = {}): Promise<string> {
+export async function resolveWdaTestRun(options: ResolveWdaTestRunOptions = {}): Promise<string> {
   const runner = options.runner ?? execFileXcrunRunner;
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? os.homedir();
@@ -132,10 +192,7 @@ export async function resolveWdaRunner(options: ResolveWdaRunnerOptions = {}): P
 
   const override = env.PROWL_WDA_RUNNER;
   if (override) {
-    if (!fs.existsSync(override)) {
-      throw new Error(`PROWL_WDA_RUNNER points at a missing path: ${override}`);
-    }
-    return override;
+    return resolveOverrideXctestrun(override);
   }
 
   const { projectPath, version } = resolveWdaProject(options.requireFn);
@@ -148,9 +205,9 @@ export async function resolveWdaRunner(options: ResolveWdaRunnerOptions = {}): P
   }
 
   const cacheDir = wdaCacheDir(version, xcode, homeDir);
-  const cachedRunner = runnerAppPath(cacheDir);
-  if (fs.existsSync(cachedRunner)) {
-    return cachedRunner;
+  const cached = findXctestrunIn(productsDir(cacheDir));
+  if (cached) {
+    return cached;
   }
 
   log(
@@ -180,13 +237,146 @@ export async function resolveWdaRunner(options: ResolveWdaRunnerOptions = {}): P
         `Details: ${(result.stderr.trim() || result.stdout.trim()).slice(-800)}`
     );
   }
-  if (!fs.existsSync(cachedRunner)) {
+  const built = findXctestrunIn(productsDir(cacheDir));
+  if (!built) {
     throw new Error(
-      `WebDriverAgent build succeeded but the runner app was not found at ${cachedRunner}. ` +
-        "This may indicate an Xcode layout change; set PROWL_WDA_RUNNER to a prebuilt runner."
+      `WebDriverAgent build succeeded but no .xctestrun was found under ${productsDir(cacheDir)}. ` +
+        "This may indicate an Xcode layout change; set PROWL_WDA_RUNNER to a prebuilt runner/xctestrun."
     );
   }
-  return cachedRunner;
+  return built;
+}
+
+/**
+ * Return a deep copy of a parsed `.xctestrun` plist with the WDA HTTP port
+ * (`USE_PORT`) injected into every test target's `EnvironmentVariables`. WDA
+ * reads `USE_PORT` from its process environment; under `xcodebuild test` that
+ * environment comes from the xctestrun, so the dynamic port must be written here.
+ *
+ * Handles both xctestrun layouts: format 1 (top-level dict keyed by test-target
+ * name) and format 2 (a `TestConfigurations[].TestTargets[]` tree). A test target
+ * is recognized by a `TestBundlePath`/`TestHostPath` string; any object that
+ * already carries an `EnvironmentVariables` dict is updated too. Throws when no
+ * target is found, so a future format change fails loudly rather than launching
+ * WDA on the wrong port.
+ */
+export function injectUsePortIntoXctestrun(plist: unknown, port: number): unknown {
+  const clone = structuredClone(plist);
+  let injected = 0;
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const entry of node) {
+        visit(entry);
+      }
+      return;
+    }
+    if (!node || typeof node !== "object") {
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const isTarget =
+      typeof obj.TestBundlePath === "string" || typeof obj.TestHostPath === "string";
+    const existingEnv =
+      obj.EnvironmentVariables && typeof obj.EnvironmentVariables === "object" &&
+      !Array.isArray(obj.EnvironmentVariables)
+        ? (obj.EnvironmentVariables as Record<string, unknown>)
+        : undefined;
+    if (isTarget || existingEnv) {
+      const env = existingEnv ?? {};
+      env[WDA_USE_PORT_ENV] = String(port);
+      obj.EnvironmentVariables = env;
+      injected += 1;
+    }
+    for (const value of Object.values(obj)) {
+      visit(value);
+    }
+  };
+  visit(clone);
+  if (injected === 0) {
+    throw new Error(
+      "Could not find a test target in the WebDriverAgent .xctestrun to set USE_PORT. " +
+        "The xctestrun format may have changed; set PROWL_WDA_RUNNER to a compatible runner."
+    );
+  }
+  return clone;
+}
+
+/**
+ * Produce a launch-specific `.xctestrun` with `USE_PORT` set to `port`, returning
+ * its path. The base xctestrun (built/cached) is never mutated in place.
+ */
+export type WdaTestRunPreparer = (options: {
+  xctestrunPath: string;
+  port: number;
+}) => Promise<string>;
+
+/** Run `plutil`, resolving its stdout; throws an actionable error on failure. */
+function runPlutil(args: string[]): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      "plutil",
+      args,
+      { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(
+            new Error(
+              `\`plutil ${args.join(" ")}\` failed: ${(stderr || error.message).slice(0, 400)}`
+            )
+          );
+          return;
+        }
+        resolve(stdout ?? "");
+      }
+    );
+  });
+}
+
+/**
+ * Default preparer: reads the base xctestrun with `plutil` (JSON), injects
+ * `USE_PORT`, and writes a fresh xctestrun into a temp dir. `plutil` ships with
+ * macOS, so no extra dependency is added.
+ */
+export const defaultWdaTestRunPreparer: WdaTestRunPreparer = async ({ xctestrunPath, port }) => {
+  const json = await runPlutil(["-convert", "json1", "-o", "-", xctestrunPath]);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error(`Could not parse the WebDriverAgent .xctestrun as JSON: ${xctestrunPath}`);
+  }
+  const injected = injectUsePortIntoXctestrun(parsed, port);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), PREPARED_XCTESTRUN_PREFIX));
+  const jsonPath = path.join(dir, "wda.json");
+  const outPath = path.join(dir, "wda.xctestrun");
+  fs.writeFileSync(jsonPath, JSON.stringify(injected));
+  await runPlutil(["-convert", "xml1", jsonPath, "-o", outPath]);
+  fs.rmSync(jsonPath, { force: true });
+  return outPath;
+};
+
+/** Remove a prepared xctestrun's temp dir (best effort; only our own temp dirs). */
+function cleanupPreparedTestRun(preparedPath: string | undefined): void {
+  if (!preparedPath) {
+    return;
+  }
+  const dir = path.dirname(preparedPath);
+  if (!path.basename(dir).startsWith(PREPARED_XCTESTRUN_PREFIX)) {
+    return;
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/** The `xcodebuild test-without-building` args that host WDA against `udid`. */
+export function wdaTestRunArgs(xctestrunPath: string, udid: string): string[] {
+  return [
+    "xcodebuild",
+    "test-without-building",
+    "-xctestrun",
+    xctestrunPath,
+    "-destination",
+    `id=${udid}`
+  ];
 }
 
 export type IosSession = {
@@ -210,10 +400,14 @@ export type LaunchIosOptions = {
   timeoutMs?: number;
   // --- injectables (tests / advanced use) ---
   runner?: SimctlRunner;
+  /** Spawner for the long-running `xcodebuild test-without-building` WDA host. */
+  spawner?: XcrunSpawner;
+  /** Builds the per-launch port-injected xctestrun. */
+  testRunPreparer?: WdaTestRunPreparer;
   portAllocator?: () => Promise<number>;
   agentConnector?: IosAgentConnector;
-  /** Skip WDA build/resolution by supplying the runner app path directly. */
-  wdaRunnerApp?: string;
+  /** Skip WDA build/resolution by supplying the base `.xctestrun` path directly. */
+  wdaTestRun?: string;
   /** Optional app scope guardrail from config.guardrails.allowedApps. */
   allowedApps?: string[];
   /** Override the simulator lock root; intended for tests. */
@@ -264,12 +458,15 @@ async function resolveBundleId(
 }
 
 /**
- * Preflight, install, launch, and attach WDA, returning a live {@link IosSession}.
- * Actionable errors cover each failure mode: Xcode/simctl missing, no booted
- * simulator (device selection), WDA build failures, agent unreachable (readiness).
+ * Preflight, host WDA via `xcodebuild test-without-building`, launch the target
+ * app, and attach, returning a live {@link IosSession}. Actionable errors cover
+ * each failure mode: Xcode/simctl missing, no booted simulator (device
+ * selection), WDA build failures, agent unreachable (readiness).
  */
 export async function launchIosSession(options: LaunchIosOptions): Promise<IosSession> {
   const runner = options.runner ?? execFileXcrunRunner;
+  const spawner: XcrunSpawner = options.spawner ?? spawnXcrunProcess;
+  const preparer: WdaTestRunPreparer = options.testRunPreparer ?? defaultWdaTestRunPreparer;
   const portAllocator = options.portAllocator ?? findFreePort;
   const connector = options.agentConnector ?? defaultIosAgentConnector;
 
@@ -300,17 +497,16 @@ export async function launchIosSession(options: LaunchIosOptions): Promise<IosSe
       options.allowedApps ?? []
     );
 
-    const wdaRunnerApp =
-      options.wdaRunnerApp ?? (await resolveWdaRunner({ runner, logger: options.logger }));
-
-    await installApp(runner, udid, wdaRunnerApp);
+    const baseTestRun =
+      options.wdaTestRun ?? (await resolveWdaTestRun({ runner, logger: options.logger }));
 
     for (let attempt = 1; attempt <= WDA_STARTUP_ATTEMPTS; attempt += 1) {
       let client: IosAgentClient | undefined;
+      let wdaProcess: XcrunProcessHandle | undefined;
+      let preparedTestRun: string | undefined;
       let tornDown = false;
-      let terminateWda = false;
       let terminateTarget = false;
-      let stage: "port" | "wda-launch" | "target-launch" | "connect" = "port";
+      let stage: "prepare" | "wda-launch" | "target-launch" | "connect" = "prepare";
       const teardownAttempt = async (): Promise<void> => {
         if (tornDown) {
           return;
@@ -319,19 +515,22 @@ export async function launchIosSession(options: LaunchIosOptions): Promise<IosSe
         if (client) {
           await client.close().catch(() => undefined);
         }
-        if (terminateWda) {
-          await terminateApp(runner, udid, WDA_RUNNER_BUNDLE_ID);
-        }
+        // Killing the xcodebuild test process ends the hosted WDA runner; the
+        // best-effort terminate is a belt-and-braces cleanup on the simulator.
+        wdaProcess?.kill();
+        await terminateApp(runner, udid, WDA_RUNNER_BUNDLE_ID);
         if (terminateTarget) {
           await terminateApp(runner, udid, bundleId);
         }
+        cleanupPreparedTestRun(preparedTestRun);
       };
 
       try {
         const port = await portAllocator();
+        preparedTestRun = await preparer({ xctestrunPath: baseTestRun, port });
+
         stage = "wda-launch";
-        terminateWda = true;
-        await launchApp(runner, udid, WDA_RUNNER_BUNDLE_ID, { [WDA_USE_PORT_ENV]: String(port) });
+        wdaProcess = spawner(wdaTestRunArgs(preparedTestRun, udid));
 
         stage = "target-launch";
         terminateTarget = true;

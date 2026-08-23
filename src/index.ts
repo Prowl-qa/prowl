@@ -49,10 +49,13 @@ export {
 } from "./browser/ios-driver.js";
 export type { IosAgentClient, IosQuery, IosLocator, IosDriverOptions } from "./browser/ios-driver.js";
 export {
-  launchIosSession, closeIosSession, resolveWdaRunner, resolveWdaProject,
-  defaultIosAgentConnector, wdaCacheDir, WDA_RUNNER_BUNDLE_ID, WDA_RUNNER_APP_NAME
+  launchIosSession, closeIosSession, resolveWdaTestRun, resolveWdaProject,
+  injectUsePortIntoXctestrun, defaultWdaTestRunPreparer, wdaTestRunArgs,
+  defaultIosAgentConnector, wdaCacheDir, WDA_RUNNER_BUNDLE_ID, WDA_USE_PORT_ENV
 } from "./browser/ios-helper.js";
-export type { IosSession, LaunchIosOptions, IosAgentConnector, ResolveWdaRunnerOptions } from "./browser/ios-helper.js";
+export type {
+  IosSession, LaunchIosOptions, IosAgentConnector, ResolveWdaTestRunOptions, WdaTestRunPreparer
+} from "./browser/ios-helper.js";
 export {
   WdaTransport, createWdaAgentClient, createWdaSession,
   waitForWdaReady, WdaHttpError, DEFAULT_WDA_REQUEST_TIMEOUT_MS
