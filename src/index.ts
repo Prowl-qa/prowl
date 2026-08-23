@@ -125,6 +125,30 @@ export type {
   MacAxNode, AnalyzeMacOptions
 } from "./analyzer/mac.js";
 
+// Re-export the shared native UI-hierarchy XML parser (PROWL-061)
+export { parseXml, decodeXmlEntities } from "./analyzer/xml.js";
+export type { XmlElement } from "./analyzer/xml.js";
+
+// Re-export the Android analyzer (PROWL-061)
+export {
+  analyzeAndroidApp, rankAndroidSelectors, parseAndroidHierarchy,
+  isAndroidInteractive, ANDROID_INTERACTIVE_CLASSES
+} from "./analyzer/android.js";
+export type {
+  AndroidAnalysisResult, AndroidAnalysisElement, AndroidUiNode,
+  AndroidUiSource, AnalyzeAndroidOptions
+} from "./analyzer/android.js";
+
+// Re-export the iOS analyzer (PROWL-061)
+export {
+  analyzeIosApp, rankIosSelectors, parseIosHierarchy,
+  isIosInteractive, shortIosType, IOS_INTERACTIVE_TYPES, IOS_WINDOW_TYPE
+} from "./analyzer/ios.js";
+export type {
+  IosAnalysisResult, IosAnalysisElement, IosAnalysisWindow,
+  IosUiNode, IosUiSource, AnalyzeIosOptions
+} from "./analyzer/ios.js";
+
 // Re-export generator
 export { generateHunt } from "./generator/index.js";
 export type { GenerateOptions } from "./generator/index.js";
