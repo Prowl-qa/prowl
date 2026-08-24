@@ -4,6 +4,8 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-24
+
 ### Fixed
 - **iOS driver launches WebDriverAgent via `xcodebuild test-without-building`
   (iOS 26+ support).** On iOS 26+ simulators the previous approach — `simctl
