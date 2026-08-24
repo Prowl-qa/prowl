@@ -618,6 +618,31 @@ describe("huntSchema assertScreenshot step", () => {
   });
 });
 
+describe("huntSchema assertWithAI step (PROWL-020)", () => {
+  it("accepts assertWithAI with a natural-language assertion", () => {
+    const parsed = huntSchema.parse({
+      steps: [{ assertWithAI: "The login form shows email and password fields" }]
+    });
+    expect(parsed.steps).toHaveLength(1);
+  });
+
+  it("rejects assertWithAI with an empty string", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ assertWithAI: "" }]
+      })
+    ).toThrow();
+  });
+
+  it("rejects assertWithAI with a non-string value", () => {
+    expect(() =>
+      huntSchema.parse({
+        steps: [{ assertWithAI: { text: "nope" } }]
+      })
+    ).toThrow();
+  });
+});
+
 describe("huntSchema copyText step", () => {
   it("accepts copyText with selector and as", () => {
     const parsed = huntSchema.parse({

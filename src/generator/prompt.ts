@@ -42,6 +42,7 @@ const STEP_REFERENCE = `
 
 ### Visual Regression
 - assertScreenshot: { name: "baseline-name", threshold: 0.1 }
+- assertWithAI: "The login form should show email and password fields" — AI checks the screenshot against the claim
 
 ### Control Flow
 - if: { visible: ".banner", then: [steps...] }

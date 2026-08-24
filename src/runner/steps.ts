@@ -11,6 +11,13 @@ import { loadHunt } from "../config/loader.js";
 import { interpolateHunt } from "../config/interpolate.js";
 import { assertHuntAssertionsSupportedByTarget, assertStepsSupportedByTarget } from "../config/target.js";
 import { createRunPolicy, type RunPolicy } from "./policy.js";
+import {
+  assertWithAiVision,
+  tryResolveAiConfig,
+  type AiConfig,
+  type AiVisionInput,
+  type AiVisionVerdict
+} from "../generator/ai.js";
 
 export type StepCallback = (result: StepResult, step: Step, index: number) => void;
 
@@ -46,6 +53,18 @@ export type StepExecutionContext = {
   pendingDownload?: Promise<DriverDownload>;
   runStartedAtMs?: number;
   stepPathPrefix?: string;
+  /**
+   * Test seam: resolve the AI config for `assertWithAI` (returns `null` when no
+   * provider/key is configured, which makes the step skip with a warning).
+   * Defaults to env-based {@link tryResolveAiConfig}.
+   */
+  resolveAiConfig?: () => AiConfig | null;
+  /**
+   * Test seam: perform the vision assertion. Defaults to the real fetch-based
+   * {@link assertWithAiVision}. Injected in tests so the runner never hits the
+   * network.
+   */
+  assertVision?: (input: AiVisionInput, config: AiConfig) => Promise<AiVisionVerdict>;
 };
 
 export type StepExecutionResult = {
@@ -87,6 +106,7 @@ function getStepType(step: Step): string {
   if ("evalScript" in step) return "evalScript";
   if ("runScript" in step) return "runScript";
   if ("assertScreenshot" in step) return "assertScreenshot";
+  if ("assertWithAI" in step) return "assertWithAI";
   if ("copyText" in step) return "copyText";
   if ("waitForDownload" in step) return "waitForDownload";
   return "step";
@@ -149,6 +169,9 @@ function applyRuntimeVars(step: Step, vars: Map<string, string>): Step {
         ...(step.assertScreenshot.threshold !== undefined ? { threshold: step.assertScreenshot.threshold } : {})
       }
     };
+  }
+  if ("assertWithAI" in step) {
+    return { assertWithAI: sub(step.assertWithAI) };
   }
   if ("copyText" in step) {
     return { copyText: { selector: sub(step.copyText.selector), as: step.copyText.as } };
@@ -1271,6 +1294,58 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       throw new Error(
         `Visual regression: ${(comparison.diffPercentage * 100).toFixed(2)}% diff exceeds threshold ${(threshold * 100).toFixed(0)}%`
       );
+    }
+  },
+
+  assertWithAI: {
+    capabilities: ["screenshot"],
+    run: async (h) => {
+      if (!("assertWithAI" in h.step)) unknownStep();
+      const assertion = h.step.assertWithAI;
+
+      // Resolve BYOK config. A future managed-credit path (BIZ-002) can slot in
+      // behind this same seam without touching the handler.
+      const resolve = h.context.resolveAiConfig ?? tryResolveAiConfig;
+      const aiConfig = resolve();
+      if (!aiConfig) {
+        // Graceful degradation: no AI provider configured. Skip with a warning
+        // — never a hard failure, never a silent pass.
+        return {
+          kind: "result",
+          result: {
+            type: "assertWithAI",
+            status: "warn",
+            durationMs: Date.now() - h.stepStart,
+            value: `skipped: no AI provider configured (set PROWL_AI_KEY to enable) — "${assertion}"`
+          }
+        };
+      }
+
+      const fileName = `assertWithAI_step_${h.index + 1}.png`;
+      const relative = await h.addScreenshot(fileName);
+      const screenshotFullPath = path.join(h.context.runDir, relative);
+
+      const imageBase64 = fs.readFileSync(screenshotFullPath).toString("base64");
+      const assertVision = h.context.assertVision ?? assertWithAiVision;
+      const verdict = await assertVision(
+        { imageBase64, mediaType: "image/png", assertion },
+        aiConfig
+      );
+
+      if (verdict.pass) {
+        return {
+          kind: "result",
+          result: {
+            type: "assertWithAI",
+            status: "pass",
+            durationMs: Date.now() - h.stepStart,
+            value: verdict.reason,
+            screenshot: relative
+          }
+        };
+      }
+      // Fail with the model's explanation as the developer-facing message.
+      throw new Error(`AI assertion failed: ${verdict.reason}`);
     }
   },
 

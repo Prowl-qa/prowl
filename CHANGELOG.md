@@ -39,6 +39,22 @@ All notable changes to Prowl will be documented in this file.
   CI gate below on a standard API 35 AVD.
 
 ### Added
+- **`assertWithAI` step type — AI-powered visual assertions (PROWL-020).** A new
+  step, `assertWithAI: "<natural-language claim>"`, screenshots the current
+  page/screen, sends the screenshot plus the claim to a vision-capable LLM, and
+  passes or fails the step on the model's verdict — with the model's explanation
+  surfaced in the step result (and, on failure, as the failure message) for
+  auditability. Prowl's answer to Maestro's `assertWithAI`. Works via BYOK
+  (`PROWL_AI_KEY`) against Anthropic (Messages API, base64 `image` block) or
+  OpenAI (Chat Completions, `image_url` data URI); temperature is pinned to 0 and
+  the model is instructed to return a strict JSON `{"pass", "reason"}` verdict,
+  parsed robustly (unparseable output is an error, never a silent pass). The
+  endpoint is configurable via `PROWL_AI_BASE_URL` (forward-compatible with a
+  future managed-credit proxy). **Degrades gracefully:** with no AI provider
+  configured the step skips with a warning rather than failing the run. This is a
+  documented, deliberate exception to Prowl's determinism principle — AI verdicts
+  are non-deterministic, so the explanation is always recorded. Available on the
+  web target and any driver exposing the `screenshot` capability.
 - **Unified native selector engine (PROWL-060).** The Android/iOS native selector
   dialect — the grammar for `id=`/`label=`/`text=`/`role=` (and `:focus`), the
   per-platform attribute mapping tables, the ranking order, and the host-side

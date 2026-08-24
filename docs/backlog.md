@@ -71,24 +71,6 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - Playwright: `page.waitForResponse()`
 - Schema validation, unit tests
 
-{PROWL-020} **P5-004: AI-Powered Assertions**
-   Use an LLM to verify complex visual or behavioral conditions that can't be expressed as simple selectors.
-
-**Maestro equivalent**: `assertWithAI`, `assertNoDefectsWithAi`
-
-```yaml
-- assertWithAI: "The login form should have email and password fields visible"
-- assertWithAI: "The navigation bar should show the user's name"
-```
-
-**Acceptance Criteria**:
-- `assertWithAI: string` step type
-- Screenshots the page, sends screenshot + assertion text to LLM
-- Returns pass/fail with explanation
-- Configurable model endpoint (config option)
-- Graceful degradation if no AI endpoint configured (skip with warning)
-- Schema validation, unit tests
-
 {PROWL-021} **P5-006: `prowl hub` Subcommand**
    Add a `prowl hub` CLI subcommand for discovering, previewing, and pulling hunt templates from the prowl-hub repository. Designed for both agents and humans to bootstrap test suites from community templates.
 

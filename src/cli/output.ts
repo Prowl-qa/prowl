@@ -73,6 +73,7 @@ export function describeStep(step: Step): string {
     const th = step.assertScreenshot.threshold !== undefined ? ` (threshold: ${step.assertScreenshot.threshold})` : "";
     return `assertScreenshot "${step.assertScreenshot.name}"${th}`;
   }
+  if ("assertWithAI" in step) return `assertWithAI "${truncate(step.assertWithAI, 60)}"`;
   return "unknown step";
 }
 
@@ -91,6 +92,9 @@ export function printStepResult(result: StepResult, step: Step | undefined, _ind
 
   if (result.status === "pass") {
     console.log(`    ${chalk.green("\u2713")} ${label} ${duration}`);
+  } else if (result.status === "warn") {
+    const note = result.value ? chalk.gray(` \u2014 ${result.value}`) : "";
+    console.log(`    ${chalk.yellow("\u25cb")} ${label} ${duration}${note}`);
   } else {
     const error = result.error ? chalk.gray(` \u2014 ${result.error}`) : "";
     console.log(`    ${chalk.red("\u2717")} ${label} ${duration}${error}`);
