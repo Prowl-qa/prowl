@@ -2751,6 +2751,38 @@ describe("assertWithAI step (PROWL-020)", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("fails the step when the vision call rejects (never a silent pass)", async () => {
+    const page = createScreenshotWritingPage();
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-aiassert-"));
+    const assertVision = vi.fn(async () => {
+      throw new Error("Anthropic API error (429): rate limited");
+    });
+
+    try {
+      const result = await executeSteps({
+        page: page as unknown as Page,
+        steps: [{ assertWithAI: "The form shows email and password fields" }],
+        targetUrl: "http://localhost",
+        runDir,
+        screenshotsMode: "on-failure",
+        forbiddenSelectors: [],
+        allowedDomains: ["localhost"],
+        maxTotalTimeMs: 30000,
+        maxSteps: 50,
+        redactedFillSteps: new Set(),
+        configDir: runDir,
+        resolveAiConfig: () => aiConfig,
+        assertVision
+      });
+
+      expect(result.failed).toBe(true);
+      expect(result.results[0].status).toBe("fail");
+      expect(result.results[0].error).toContain("Anthropic API error (429): rate limited");
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
   it("skips with a warning (never fails, never a silent pass) when no AI is configured", async () => {
     const page = createScreenshotWritingPage();
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-aiassert-"));

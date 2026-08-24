@@ -18,6 +18,18 @@ const DEFAULT_BASE_URL: Record<AiProvider, string> = {
   openai: "https://api.openai.com"
 };
 
+const AI_REQUEST_TIMEOUT_MS = 30000;
+
+type ProviderLabel = "Anthropic" | "OpenAI";
+
+type AnthropicTextResponse = {
+  content?: Array<{ type: string; text?: string }>;
+};
+
+type OpenAiTextResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
 /** The API root for a config, defaulting to the provider's public endpoint. */
 function apiRoot(config: AiConfig): string {
   return config.baseUrl ?? DEFAULT_BASE_URL[config.provider];
@@ -86,69 +98,37 @@ export async function generateWithAi(prompt: string, config: AiConfig): Promise<
 }
 
 async function generateWithAnthropic(prompt: string, config: AiConfig): Promise<string> {
-  const response = await fetch(`${apiRoot(config)}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01"
-    },
-    body: JSON.stringify({
+  const data = await postJson<AnthropicTextResponse>(
+    "Anthropic",
+    `${apiRoot(config)}/v1/messages`,
+    anthropicHeaders(config),
+    {
       model: config.model,
       max_tokens: 4096,
       messages: [
         { role: "user", content: prompt }
       ]
-    })
-  });
+    }
+  );
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Anthropic API error (${response.status}): ${body}`);
-  }
-
-  const data = await response.json() as {
-    content: Array<{ type: string; text?: string }>;
-  };
-
-  const textBlock = data.content.find((c) => c.type === "text");
-  if (!textBlock?.text) {
-    throw new Error("Anthropic API returned no text content");
-  }
-
-  return textBlock.text;
+  return extractAnthropicText(data);
 }
 
 async function generateWithOpenAi(prompt: string, config: AiConfig): Promise<string> {
-  const response = await fetch(`${apiRoot(config)}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
+  const data = await postJson<OpenAiTextResponse>(
+    "OpenAI",
+    `${apiRoot(config)}/v1/chat/completions`,
+    openAiHeaders(config),
+    {
       model: config.model,
       messages: [
         { role: "user", content: prompt }
       ],
       max_tokens: 4096
-    })
-  });
+    }
+  );
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${body}`);
-  }
-
-  const data = await response.json() as {
-    choices: Array<{ message: { content: string } }>;
-  };
-
-  if (!data.choices?.[0]?.message?.content) {
-    throw new Error("OpenAI API returned no content");
-  }
-
-  return data.choices[0].message.content;
+  return extractOpenAiText(data);
 }
 
 // --- Vision assertions (assertWithAI) -------------------------------------
@@ -275,14 +255,11 @@ export async function assertWithAiVision(
 }
 
 async function visionWithAnthropic(input: AiVisionInput, config: AiConfig): Promise<string> {
-  const response = await fetch(`${apiRoot(config)}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01"
-    },
-    body: JSON.stringify({
+  const data = await postJson<AnthropicTextResponse>(
+    "Anthropic",
+    `${apiRoot(config)}/v1/messages`,
+    anthropicHeaders(config),
+    {
       model: config.model,
       max_tokens: 1024,
       temperature: 0,
@@ -302,34 +279,18 @@ async function visionWithAnthropic(input: AiVisionInput, config: AiConfig): Prom
           ]
         }
       ]
-    })
-  });
+    }
+  );
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Anthropic API error (${response.status}): ${body}`);
-  }
-
-  const data = await response.json() as {
-    content: Array<{ type: string; text?: string }>;
-  };
-
-  const textBlock = data.content.find((c) => c.type === "text");
-  if (!textBlock?.text) {
-    throw new Error("Anthropic API returned no text content");
-  }
-
-  return textBlock.text;
+  return extractAnthropicText(data);
 }
 
 async function visionWithOpenAi(input: AiVisionInput, config: AiConfig): Promise<string> {
-  const response = await fetch(`${apiRoot(config)}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
+  const data = await postJson<OpenAiTextResponse>(
+    "OpenAI",
+    `${apiRoot(config)}/v1/chat/completions`,
+    openAiHeaders(config),
+    {
       model: config.model,
       max_tokens: 1024,
       temperature: 0,
@@ -345,18 +306,58 @@ async function visionWithOpenAi(input: AiVisionInput, config: AiConfig): Promise
           ]
         }
       ]
-    })
+    }
+  );
+
+  return extractOpenAiText(data);
+}
+
+async function postJson<T>(
+  provider: ProviderLabel,
+  url: string,
+  headers: Record<string, string>,
+  body: unknown
+): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS)
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${body}`);
+    const responseBody = await response.text();
+    throw new Error(`${provider} API error (${response.status}): ${responseBody}`);
   }
 
-  const data = await response.json() as {
-    choices: Array<{ message: { content: string } }>;
-  };
+  return await response.json() as T;
+}
 
+function anthropicHeaders(config: AiConfig): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": config.apiKey,
+    "anthropic-version": "2023-06-01"
+  };
+}
+
+function openAiHeaders(config: AiConfig): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${config.apiKey}`
+  };
+}
+
+function extractAnthropicText(data: AnthropicTextResponse): string {
+  const textBlock = data.content?.find((c) => c.type === "text");
+  if (!textBlock?.text) {
+    throw new Error("Anthropic API returned no text content");
+  }
+
+  return textBlock.text;
+}
+
+function extractOpenAiText(data: OpenAiTextResponse): string {
   if (!data.choices?.[0]?.message?.content) {
     throw new Error("OpenAI API returned no content");
   }

@@ -1322,11 +1322,8 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       }
 
       const fileName = `assertWithAI_step_${h.index + 1}.png`;
-      const screenshotFullPath = path.join(h.context.runDir, "screenshots", fileName);
-      fs.mkdirSync(path.dirname(screenshotFullPath), { recursive: true });
-      await h.driver.screenshot({ path: screenshotFullPath, fullPage: true });
-      const relative = path.join("screenshots", fileName);
-      h.screenshots.push(relative);
+      const relative = await h.addScreenshot(fileName);
+      const screenshotFullPath = path.join(h.context.runDir, relative);
 
       const imageBase64 = fs.readFileSync(screenshotFullPath).toString("base64");
       const assertVision = h.context.assertVision ?? assertWithAiVision;

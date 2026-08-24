@@ -30,9 +30,13 @@ function mockFetchJson(json: unknown): typeof fetch {
 }
 
 /** Pull the JSON-parsed request body out of the last fetch mock call. */
-function lastRequestBody(): RequestBody {
+function lastFetchOptions(): RequestInit & { body: string } {
   const call = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1);
-  return JSON.parse((call?.[1] as { body: string }).body) as RequestBody;
+  return call?.[1] as RequestInit & { body: string };
+}
+
+function lastRequestBody(): RequestBody {
+  return JSON.parse(lastFetchOptions().body) as RequestBody;
 }
 
 describe("buildVisionPrompt", () => {
@@ -111,6 +115,7 @@ describe("assertWithAiVision", () => {
     );
 
     const body = lastRequestBody();
+    expect(lastFetchOptions().signal).toBeInstanceOf(AbortSignal);
     expect(body.temperature).toBe(0);
     const content = body.messages[0].content;
     const imageBlock = content.find((c: ContentBlock) => c.type === "image");
@@ -142,6 +147,7 @@ describe("assertWithAiVision", () => {
     );
 
     const body = lastRequestBody();
+    expect(lastFetchOptions().signal).toBeInstanceOf(AbortSignal);
     expect(body.temperature).toBe(0);
     const content = body.messages[0].content;
     const imageBlock = content.find((c: ContentBlock) => c.type === "image_url");
