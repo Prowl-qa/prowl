@@ -184,7 +184,7 @@ from Appium/Espresso/Maestro users; use these verbatim-ish, they beat feature ch
 (homepage.yml, login-flow.yml, ...) and walks users through editing `homepage.yml` into a
 `name: smoke-test` hunt then running `prowl run smoke-test`. Reality since the examples were
 consolidated: `examples/hunts/` ships only `hello.yml` (init banner says "Run prowl run hello"),
-and the loader resolves hunts by FILE name (`loader.ts` `\.yml`), so the documented
+and the loader resolves hunts by FILE name (`loader.ts` resolves `<huntName>.yml`), so the documented
 flow fails twice over. The docs site fixed the same drift in prowl-docs PDOC-QA-011
 (doc-sweep-1, 2026-08-24) — port that corrected flow back here: real init tree, `prowl run
 hello` first, create `smoke-test.yml` (file name = hunt identity) before `prowl run smoke-test`.
@@ -197,8 +197,7 @@ first-run path; grep README for other references to the removed starter hunts.
 {PROWL-071} **DOCS-002: `run`/`watch`/`history` help says "Hunt name or path" but path-style args are rejected**
    The Commander argument help in `run.ts`/`watch.ts`/`history.ts` reads `"Hunt name or path
 (e.g. homepage or admin/users-crud)"`, but `hunt-name.ts` validation
-(`/^[A-Za-z0-9_-]+(?:\\/[A-Za-z0-9_-]+)*\
-`) rejects dots, so a literal file path like
+(`/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/`) rejects dots, so a literal file path like
 `.prowl/hunts/homepage.yml` fails with "Invalid hunt name" before anything runs — agents
 following the help text literally report every hunt as failed. "Path" actually means a
 slash-separated extensionless name under `hunts/`. Either accept real file paths (strip a
