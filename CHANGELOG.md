@@ -4,6 +4,21 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Self-hosted Codex prowl-review workflows (#64).** This repo now runs
+  subscription-backed (keyless Codex) prowl-review on the always-on Mac mini
+  runner (labels `self-hosted, macOS, prowl-review`), so per-review marginal cost
+  is $0.00 and no provider key is stored in GitHub — the ChatGPT login lives only
+  on the runner. `.github/workflows/prowl-review.yml` auto-reviews PRs and
+  `prowl-review-command.yml` handles `@prowl-review` chat/commands, both with
+  `ai-provider: codex`, per-PR non-cancelling concurrency, a 30-minute timeout,
+  and the mandatory same-repo fork gate required on a public repo. Review config
+  lives in a root `.prowl-review.yml` (`provider: codex`, `model: gpt-5.5`,
+  `codex.effort: low`) loaded from the trusted base branch, never PR code. The
+  action is pinned to `prowl-tools/prowl-code-review@main` until a release
+  (>0.3.0) containing the codex provider ships. Existing `claude-code-review.yml`,
+  `claude.yml`, and `mobile-e2e.yml` are untouched.
+
 ## [0.1.6] - 2026-08-24
 
 ### Fixed
