@@ -1,0 +1,71 @@
+# Automatic prowl-review on the self-hosted Mac mini runner using the keyless
+# Codex (ChatGPT subscription) provider (#45/#64). Per-review marginal cost is
+# $0.00 and NO provider key is stored in GitHub: the subscription login lives
+# only on the runner (via `codex login` into a dedicated CODEX_HOME on the host),
+# never in GitHub Actions secrets, and this workflow sets no PROWL_AI_KEY*.
+#
+# PUBLIC-REPO NOTE — this repo (prowl-tools/prowl) is PUBLIC:
+#   - OpenAI's CI/CD auth guidance says, verbatim: "Do not use this workflow for
+#     public or open-source repositories." GitHub also warns against self-hosted
+#     runners on public repos: any PR can execute code on the runner.
+#   - The job-level same-repo `if:` gate below is therefore MANDATORY here — it
+#     keeps fork PRs from ever being scheduled onto the runner, so only this
+#     repo's own code runs there. Codex itself also runs `--sandbox read-only`.
+#     Do NOT drop the gate. (Only a PRIVATE repo could.)
+#
+# No PROWL_APP_ID/PROWL_APP_PRIVATE_KEY are provisioned on this repo, so the
+# review posts with the default auto-provisioned GITHUB_TOKEN. To brand the
+# review as prowl-review[bot], provision those App secrets and mint a token as
+# the dogfood workflow in prowl-tools/prowl-code-review does, then pass it as
+# `github-token`.
+name: prowl-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+# Per-PR serialization shared with the command workflow. Keep this
+# non-cancelling so a new auto-review cannot interrupt an in-flight maintainer
+# command; stale auto reviews skip publishing when the reviewed head has
+# advanced. Machine-wide serialization ACROSS repos/runner instances is the
+# provider's Codex lock ($CODEX_HOME/.prowl-review.lock, on by default for
+# `provider: codex`), NOT GitHub concurrency.
+concurrency:
+  group: prowl-review-codex-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  pull-requests: write   # post the review + inline comments
+  issues: write          # create/update the summary comment
+  checks: write          # optional merge-gate check run
+  contents: read
+
+jobs:
+  review:
+    # Same-repo gate: keeps fork PRs off the self-hosted runner. MANDATORY on
+    # this public repo (see header). Do not remove.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, prowl-review]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Load .prowl-review.yml from the TRUSTED base branch, not PR code, so a PR
+      # can never point the review at a config it authored.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: prowl-review-config
+          persist-credentials: false
+
+      # TODO: pin to @v1 once a release containing the codex provider (>0.3.0)
+      # ships — the current v1 tag predates `provider: codex`.
+      - uses: prowl-tools/prowl-code-review@main
+        with:
+          # Keyless: no PROWL_AI_KEY* — auth is the runner's own `codex login`.
+          ai-provider: codex
+          # Model + effort are pinned in the trusted base-branch config.
+          config-path: prowl-review-config/.prowl-review.yml
+          # No App secrets on this repo: use the default Actions token.
+          github-token: ${{ github.token }}
+          # min-severity: major      # optional: only surface major+ findings
