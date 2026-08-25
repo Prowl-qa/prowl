@@ -13,11 +13,12 @@
 #     repo's own code runs there. Codex itself also runs `--sandbox read-only`.
 #     Do NOT drop the gate. (Only a PRIVATE repo could.)
 #
-# No PROWL_APP_ID/PROWL_APP_PRIVATE_KEY are provisioned on this repo, so the
-# review posts with the default auto-provisioned GITHUB_TOKEN. To brand the
-# review as prowl-review[bot], provision those App secrets and mint a token as
-# the dogfood workflow in prowl-tools/prowl-code-review does, then pass it as
-# `github-token`.
+# Branded identity (#59): the org shares PROWL_APP_ID/PROWL_APP_PRIVATE_KEY with
+# this repo, so the review job mints an App installation token and posts as
+# prowl-review[bot] with the App avatar (mirrors the dogfood workflow in
+# prowl-tools/prowl-code-review). The env flag is only a boolean; the private key
+# is only handed to the token action. Falls back to the default auto-provisioned
+# GITHUB_TOKEN when the secrets are unset or token minting fails.
 name: prowl-review
 
 on:
@@ -47,7 +48,27 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, prowl-review]
     timeout-minutes: 30
+    env:
+      PROWL_APP_CONFIGURED: ${{ secrets.PROWL_APP_ID != '' && secrets.PROWL_APP_PRIVATE_KEY != '' }}
     steps:
+      # Branded identity (#59): mint an App installation token when PROWL_APP_ID
+      # is set so the review posts as prowl-review[bot] with the App avatar.
+      # The env flag is only a boolean; the private key is only handed to the
+      # token action. Falls back to github-actions[bot] when unset or when token
+      # minting fails.
+      - name: Mint prowl-review app token
+        id: app-token
+        if: env.PROWL_APP_CONFIGURED == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.PROWL_APP_ID }}
+          private-key: ${{ secrets.PROWL_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+          permission-checks: write
+
       - uses: actions/checkout@v4
 
       # Load .prowl-review.yml from the TRUSTED base branch, not PR code, so a PR
@@ -66,6 +87,6 @@ jobs:
           ai-provider: codex
           # Model + effort are pinned in the trusted base-branch config.
           config-path: prowl-review-config/.prowl-review.yml
-          # No App secrets on this repo: use the default Actions token.
-          github-token: ${{ github.token }}
+          # Branded App token when configured; otherwise the default Actions token.
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
           # min-severity: major      # optional: only surface major+ findings
