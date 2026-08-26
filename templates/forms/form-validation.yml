@@ -1,0 +1,51 @@
+# Form Validation
+# ---
+# Pattern: Submit empty form, verify errors, fix and resubmit
+# What it tests: Client-side validation messages appear correctly,
+#                then the form submits successfully after filling required fields.
+# Customize:
+#   - Update error messages and field labels for your form
+
+name: form-validation
+description: Verify form validation errors and successful resubmission
+
+tags:
+  - forms
+  - validation
+  - error-handling
+
+steps:
+  - navigate: "/contact"
+
+  # Submit the form without filling anything — trigger validation
+  - click: "Send Message"
+
+  # Verify validation error messages appear
+  - assert:
+      visible: "Name is required"
+
+  - assert:
+      visible: "Email is required"
+
+  # Now fill the required fields
+  - fill:
+      "Name": "Jane Doe"
+
+  - fill:
+      "Email": "jane@example.com"
+
+  # Resubmit
+  - click: "Send Message"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify errors are gone and success message appears
+  - assert:
+      notVisible: "Name is required"
+
+  - assert:
+      visible: "Message sent"
+
+assertions:
+  - noConsoleErrors: true

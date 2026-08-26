@@ -1,0 +1,44 @@
+# Sidebar Navigation
+# ---
+# Pattern: Verify sidebar links navigate to correct pages
+# What it tests: Sidebar doc links render and route to expected URLs.
+#                Works with any Docusaurus site using default sidebar structure.
+# Customize:
+#   - Update SIDEBAR_LINK_TEXT and EXPECTED_URL for your sidebar items
+#   - Add or remove sidebar link steps to match your navigation
+
+name: sidebar-navigation
+description: Verify sidebar links navigate to correct pages on a Docusaurus site
+
+tags:
+  - docs
+  - navigation
+  - sidebar
+  - smoke
+
+vars:
+  SIDEBAR_LINK_TEXT: "Getting Started"
+  EXPECTED_URL: "/getting-started"
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the sidebar menu is present
+  - waitForSelector:
+      selector: "nav[aria-label*='sidebar' i]"
+      timeout: 5000
+
+  # Click a sidebar link and verify navigation
+  - click: "{{SIDEBAR_LINK_TEXT}}"
+
+  - waitForUrl:
+      value: "{{EXPECTED_URL}}"
+      timeout: 5000
+
+  # Verify the page loaded with content
+  - waitForSelector:
+      selector: "article"
+      timeout: 5000

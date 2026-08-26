@@ -1,0 +1,40 @@
+# Theme Toggle
+# ---
+# Pattern: Toggle between dark and light themes on a Docusaurus site
+# What it tests: The color mode toggle button works and the data-theme attribute changes.
+#                Works with Docusaurus sites that have color mode switching enabled.
+# Customize:
+#   - If your site uses a 2-state toggle (no system mode), remove the first click step
+
+name: theme-toggle
+description: Toggle between dark and light themes on a Docusaurus site
+
+tags:
+  - docs
+  - theme
+  - accessibility
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Wait for the toggle button to render (client-side hydration)
+  - waitForSelector:
+      selector: "button[aria-label*='theme' i], button[aria-label*='mode' i]"
+      timeout: 5000
+
+  # Docusaurus v4 uses a 3-state toggle: system → light → dark
+  # First click: system → light (may not change visible theme)
+  - click:
+      selector: "button[aria-label*='theme' i], button[aria-label*='mode' i]"
+
+  # Second click: light → dark
+  - click:
+      selector: "button[aria-label*='theme' i], button[aria-label*='mode' i]"
+
+  # Verify dark mode is active
+  - waitForSelector:
+      selector: "html[data-theme='dark']"
+      timeout: 3000

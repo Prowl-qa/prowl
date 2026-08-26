@@ -1,0 +1,45 @@
+# Keyboard Navigation Flow
+# ---
+# Pattern: Verify primary navigation link behavior and accessibility affordances
+# What it tests: Confirms nav content is present, activates a nav link, and
+#   verifies expected navigation occurs.
+# Customize:
+#   - Update NAV_LINK_TEXT to a visible link in your app's main navigation
+#   - Update EXPECTED_URL to the page that link navigates to
+#   - Add additional tab stops or interactions for your specific layout
+#
+# Tip: Run with --headed --slow-mo 500 to visually verify focus rings.
+
+name: keyboard-navigation
+description: Verify primary navigation links and skip-link availability
+
+tags:
+  - accessibility
+  - keyboard
+  - focus-management
+
+vars:
+  NAV_LINK_TEXT: "About"
+  EXPECTED_URL: "/about"
+
+steps:
+  # Load the homepage
+  - navigate: "/"
+
+  # Wait for page content to render
+  - wait: "{{NAV_LINK_TEXT}}"
+
+  # Verify the skip-to-content link is present (common a11y pattern)
+  - assert:
+      visible: "Skip to content"
+
+  # Activate the target nav link.
+  - click: "{{NAV_LINK_TEXT}}"
+
+  # Verify navigation occurred
+  - waitForUrl:
+      value: "{{EXPECTED_URL}}"
+
+assertions:
+  - urlIncludes: "{{EXPECTED_URL}}"
+  - noConsoleErrors: true

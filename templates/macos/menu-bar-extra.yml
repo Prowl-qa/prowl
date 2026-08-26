@@ -1,0 +1,39 @@
+# Menu Bar Extra (macOS)
+# ---
+# Pattern: Open a menu bar extra's status-item menu and activate an item
+# What it tests: The app's NSStatusItem menu opens, the expected item is
+#                listed, clicking it opens the corresponding window.
+# Customize:
+#   - In .prowl/config.yml set target.type: macos and target.app to the
+#     menu-bar app's bundle id
+#   - Replace "Preferences…" with the exact menu-item title (mind the ellipsis —
+#     `prowl analyze` prints titles and ids; an `id=` selector is more durable)
+#   - Replace `id=preferencesWindow` with a control that exists in the window
+#     that the menu item opens
+#   - `statusItem` and `menu=` are macOS-only selectors (see the README selector
+#     dialect table)
+
+name: menu-bar-extra
+description: Open a menu bar extra's status-item menu and activate a menu item
+
+tags:
+  - macos
+  - menu-bar
+  - status-item
+
+steps:
+  # Opens the app's status-item menu in the menu bar
+  - click: "statusItem"
+
+  - assert:
+      visible: "Preferences…"
+
+  # Opens the status-item menu (if closed) and clicks the named item
+  - click: "menu=Preferences…"
+
+  - waitForSelector:
+      selector: "id=preferencesWindow"
+      timeout: 5000
+
+  - screenshot:
+      name: "preferences"

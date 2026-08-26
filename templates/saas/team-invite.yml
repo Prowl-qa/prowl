@@ -1,0 +1,57 @@
+# Team Member Invite Flow
+# ---
+# Pattern: SaaS team management — invite members via email
+# What it tests: Navigate to team settings, invite a new member,
+#                verify the invitation appears in the pending list.
+# Customize:
+#   - Update navigation paths and form selectors
+#   - Update the invite email and role selection
+#   - Adjust success/pending messages for your app
+
+name: team-invite
+description: Invite a team member and verify pending invitation
+
+tags:
+  - saas
+  - team
+  - invite
+  - form
+
+vars:
+  INVITE_EMAIL: "newmember@example.com"
+
+steps:
+  # Assumes authenticated — use runHunt for login
+  # - runHunt: "login-flow"
+
+  - navigate: "/settings/team"
+
+  - wait: "Team Members"
+
+  # Open the invite dialog/form
+  - click: "Invite Member"
+
+  - wait: "Invite a team member"
+
+  # Fill the invite form
+  - fill:
+      "Email": "{{INVITE_EMAIL}}"
+
+  - select:
+      "Role": "Member"
+
+  - click: "Send Invite"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the invitation was sent
+  - assert:
+      visible: "Invitation sent"
+
+  # Verify the pending invitation appears in the list
+  - assert:
+      visible: "{{INVITE_EMAIL}}"
+
+assertions:
+  - noConsoleErrors: true

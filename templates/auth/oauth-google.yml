@@ -1,0 +1,61 @@
+# Google OAuth Login Flow
+# ---
+# Pattern: Third-party OAuth authentication via Google
+# What it tests: Initiates Google OAuth, completes sign-in, verifies redirect back.
+# Customize:
+#   - Update the "Sign in with Google" button selector for your app
+#   - Set TEST_GOOGLE_EMAIL and TEST_GOOGLE_PASSWORD in your .prowl/.env
+#   - Update the post-login redirect URL assertion
+#
+# Note: OAuth flows navigate to external domains (accounts.google.com).
+# You must add "accounts.google.com" to your .prowl/config.yml allowedDomains:
+#   guardrails:
+#     allowedDomains:
+#       - "localhost"
+#       - "accounts.google.com"
+# Hunt files are stored at .prowl/hunts/*.yml
+# Run artifacts are stored under .prowl/runs/<timestamp>/
+#
+# Warning: Google may show CAPTCHAs or 2FA prompts for automated logins.
+# Consider using `prowl login` to capture auth state interactively first.
+
+name: oauth-google
+description: Google OAuth login and redirect verification
+
+tags:
+  - auth
+  - oauth
+  - login
+
+vars:
+  GOOGLE_EMAIL: "{{TEST_GOOGLE_EMAIL}}"
+  GOOGLE_PASSWORD: "{{TEST_GOOGLE_PASSWORD}}"
+
+steps:
+  - navigate: "/login"
+
+  # Click the OAuth button — adapt the selector to your app
+  - click: "Sign in with Google"
+
+  # Google's login page — fill email
+  - wait: "Email or phone"
+  - fill:
+      "Email or phone": "{{GOOGLE_EMAIL}}"
+  - click: "Next"
+
+  # Google's password page
+  - wait: "Enter your password"
+  - fill:
+      "Enter your password": "{{GOOGLE_PASSWORD}}"
+  - click: "Next"
+
+  # Wait for redirect back to your app
+  - waitForUrl:
+      value: "/dashboard"
+      timeout: 15000
+
+  - assert:
+      visible: "Welcome"
+
+assertions:
+  - urlIncludes: "/dashboard"

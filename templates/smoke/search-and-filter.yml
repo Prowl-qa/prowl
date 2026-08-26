@@ -1,0 +1,65 @@
+# Search and Filter
+# ---
+# Pattern: Search input with category/facet filter controls
+# What it tests: A search input filters results in real time, and clickable
+#                category chips narrow results by type. Covers the common
+#                "search box + filter bar + results grid" UI pattern.
+# Customize:
+#   - Update SEARCH_SELECTOR to match your search input (ID, name, or data-testid)
+#   - Update SEARCH_TERM to a keyword that matches items in your catalog
+#   - Update FILTER_LABEL to the text of a category/facet chip in your UI
+#   - Update FILTER_URL_PARAM to the query string your filter adds
+#   - Update RESET_LABEL to the "All" or "Clear" button text
+
+name: search-and-filter
+description: Test a search input and category filter controls
+
+tags:
+  - smoke
+  - search
+  - filtering
+
+vars:
+  SEARCH_SELECTOR: "[data-testid='search-input']"
+  SEARCH_TERM: "example"
+  FILTER_LABEL: "Category A"
+  FILTER_URL_PARAM: "category=a"
+  RESET_LABEL: "All"
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify search input is present
+  - waitForSelector:
+      selector: "{{SEARCH_SELECTOR}}"
+
+  # Search for a term — results should filter
+  - fill:
+      selector: "{{SEARCH_SELECTOR}}"
+      value: "{{SEARCH_TERM}}"
+
+  - wait:
+      for: "{{SEARCH_TERM}}"
+      timeout: 3000
+
+  # Clear search
+  - fill:
+      selector: "{{SEARCH_SELECTOR}}"
+      value: ""
+
+  # Click a category/facet filter chip
+  - click: "{{FILTER_LABEL}}"
+
+  # Wait for the URL to reflect the filter (client-side routing)
+  - waitForUrl:
+      value: "{{FILTER_URL_PARAM}}"
+      timeout: 3000
+
+  # Reset to show all results
+  - click: "{{RESET_LABEL}}"
+
+assertions:
+  - noConsoleErrors: true

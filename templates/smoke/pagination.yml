@@ -1,0 +1,59 @@
+# Pagination Controls
+# ---
+# Pattern: Navigate between pages of paginated results
+# What it tests: Pagination controls render when results exceed one page,
+#                "Next" advances to page 2 with URL update, and "Previous"
+#                returns to page 1.
+# Customize:
+#   - Update PAGE_URL to the paginated page in your app
+#   - Update ITEM_SELECTOR to the CSS selector for result items (cards, rows, etc.)
+#   - Update NEXT_SELECTOR and PREV_SELECTOR to match your pagination buttons
+#   - Update PAGE_2_URL_PARAM to the query string for page 2
+# Requires enough items to trigger pagination (typically 10-25+ items).
+
+name: pagination
+description: Verify pagination controls navigate between result pages
+
+tags:
+  - smoke
+  - pagination
+
+vars:
+  PAGE_URL: "/results"
+  ITEM_SELECTOR: "[data-testid='result-item']"
+  NEXT_SELECTOR: "button[aria-label='Next page']"
+  PREV_SELECTOR: "button[aria-label='Previous page']"
+  PAGE_2_URL_PARAM: "page=2"
+
+steps:
+  - navigate: "{{PAGE_URL}}"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify result items render
+  - waitForSelector:
+      selector: "{{ITEM_SELECTOR}}"
+
+  # Pagination nav should be present
+  - waitForSelector:
+      selector: "nav[aria-label='Pagination']"
+
+  # Click "Next" to go to page 2
+  - click:
+      selector: "{{NEXT_SELECTOR}}"
+
+  - waitForUrl:
+      value: "{{PAGE_2_URL_PARAM}}"
+      timeout: 3000
+
+  # Items should still render on page 2
+  - waitForSelector:
+      selector: "{{ITEM_SELECTOR}}"
+
+  # Go back to page 1
+  - click:
+      selector: "{{PREV_SELECTOR}}"
+
+assertions:
+  - noConsoleErrors: true

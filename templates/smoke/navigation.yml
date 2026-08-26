@@ -1,0 +1,60 @@
+# Site Navigation
+# ---
+# Pattern: Verify primary navigation links route to the correct pages
+# What it tests: Header nav links render and navigate to expected URLs.
+#                Tests brand/logo link, primary nav links, and a CTA button.
+# Customize:
+#   - Update NAV_LINK_TEXT and NAV_LINK_URL for your app's main nav items
+#   - Update BRAND_SELECTOR to match your logo/brand link
+#   - Update CTA_TEXT and CTA_URL for your primary call-to-action
+#   - Add or remove nav link steps to match your navigation structure
+
+name: navigation
+description: Verify primary navigation links route to the correct pages
+
+tags:
+  - smoke
+  - navigation
+  - routing
+
+vars:
+  NAV_LINK_TEXT: "Features"
+  NAV_LINK_URL: "/features"
+  BRAND_SELECTOR: "[aria-label='Home']"
+  CTA_TEXT: "Get Started"
+  CTA_URL: "/signup"
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the header navigation is present
+  - waitForSelector:
+      selector: "header nav"
+
+  # Click a primary nav link and verify routing
+  - click: "{{NAV_LINK_TEXT}}"
+
+  - waitForUrl:
+      value: "{{NAV_LINK_URL}}"
+      timeout: 5000
+
+  # Navigate back home via brand/logo link
+  - click:
+      selector: "{{BRAND_SELECTOR}}"
+
+  - waitForUrl:
+      value: "/"
+      timeout: 5000
+
+  # Click a CTA button and verify routing
+  - click: "{{CTA_TEXT}}"
+
+  - waitForUrl:
+      value: "{{CTA_URL}}"
+      timeout: 5000
+
+assertions:
+  - noConsoleErrors: true

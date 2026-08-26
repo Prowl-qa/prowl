@@ -1,0 +1,35 @@
+# API Health Check
+# ---
+# Pattern: Verify an API endpoint responds without errors
+# What it tests: Navigates directly to an API route and verifies it returns
+#                a successful HTTP response (no 4xx/5xx). A lightweight way
+#                to confirm your backend is alive without testing through the UI.
+# Customize:
+#   - Update API_PATH to your API endpoint (relative to target.url)
+# Note: Chromium renders JSON via a built-in viewer — raw text locators
+# are unreliable for reading JSON keys. This hunt verifies the endpoint
+# responds successfully rather than asserting on response content.
+
+name: api-health
+description: Verify an API endpoint responds without network errors
+
+tags:
+  - smoke
+  - api
+  - health-check
+
+vars:
+  API_PATH: "/api/status"
+
+steps:
+  - navigate: "{{API_PATH}}"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the page rendered (Chromium wraps responses in <body>)
+  - waitForSelector:
+      selector: "body"
+
+assertions:
+  - noNetworkErrors: true

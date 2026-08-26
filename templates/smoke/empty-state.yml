@@ -1,0 +1,57 @@
+# Empty State / Zero Results
+# ---
+# Pattern: Verify the UI handles zero results gracefully
+# What it tests: When a search or filter yields no matches, the app should
+#                show a helpful empty state message instead of a blank page
+#                or broken layout. Results should return when the filter is cleared.
+# Customize:
+#   - Update SEARCH_SELECTOR to your search input
+#   - Update NONSENSE_QUERY to a term that won't match anything
+#   - Update EMPTY_MESSAGE to the empty state text your app displays
+#   - Update ITEM_SELECTOR to the CSS selector for result items
+
+name: empty-state
+description: Verify the empty state message appears when no results match a search
+
+tags:
+  - smoke
+  - search
+  - edge-case
+  - empty-state
+
+vars:
+  SEARCH_SELECTOR: "[data-testid='search-input']"
+  NONSENSE_QUERY: "xyznonexistent"
+  EMPTY_MESSAGE: "No results found"
+  ITEM_SELECTOR: "[data-testid='result-item']"
+
+steps:
+  - navigate: "/"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify items render initially
+  - waitForSelector:
+      selector: "{{ITEM_SELECTOR}}"
+
+  # Search for something that won't match
+  - fill:
+      selector: "{{SEARCH_SELECTOR}}"
+      value: "{{NONSENSE_QUERY}}"
+
+  # Empty state message should appear
+  - wait:
+      for: "{{EMPTY_MESSAGE}}"
+      timeout: 3000
+
+  # Clear search and verify results return
+  - fill:
+      selector: "{{SEARCH_SELECTOR}}"
+      value: ""
+
+  - waitForSelector:
+      selector: "{{ITEM_SELECTOR}}"
+
+assertions:
+  - noConsoleErrors: true

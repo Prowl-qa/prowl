@@ -1,0 +1,78 @@
+# Stripe Checkout Flow
+# ---
+# Pattern: Payment via Stripe Checkout (the Stripe-hosted payment page)
+# What it tests: Add an item to the cart, start checkout, get redirected to
+#                checkout.stripe.com, pay with a Stripe test card, and land on
+#                your success page.
+# Customize:
+#   - Update the product and button selectors for your store
+#   - Stripe test card: 4242 4242 4242 4242, any future expiry, any CVC
+#   - Add "checkout.stripe.com" to guardrails.allowedDomains in .prowl/config.yml
+#   - SUCCESS_PATH is the path Stripe redirects to after payment (your success_url)
+#   - Hunt files live at .prowl/hunts/*.yml; run artifacts at .prowl/runs/<timestamp>/
+#
+# Note: Stripe *Elements* (embedded card fields) render inside a cross-origin
+# iframe, and Prowl does not step into iframes. This template therefore targets
+# Stripe's hosted Checkout page, whose fields are plain inputs on
+# checkout.stripe.com. The field ids below are Stripe's current ones — verify
+# them with `prowl analyze` if Stripe changes its page.
+
+name: stripe-checkout
+description: Complete a purchase through Stripe-hosted Checkout with a test card
+
+tags:
+  - e-commerce
+  - payment
+  - stripe
+  - checkout
+
+vars:
+  CARD_NUMBER: "4242 4242 4242 4242"
+  CARD_EXPIRY: "12 / 30"
+  CARD_CVC: "123"
+  CARDHOLDER_NAME: "QA Tester"
+  SUCCESS_PATH: "/checkout/success"
+
+steps:
+  - navigate: "/products"
+
+  - click: "Add to Cart"
+  - click: "Checkout"
+
+  # Your store redirects to Stripe's hosted page
+  - waitForUrl:
+      value: "checkout.stripe.com"
+      timeout: 15000
+
+  - waitForSelector:
+      selector: "#cardNumber"
+      timeout: 15000
+
+  - fill:
+      selector: "#cardNumber"
+      value: "{{CARD_NUMBER}}"
+
+  - fill:
+      selector: "#cardExpiry"
+      value: "{{CARD_EXPIRY}}"
+
+  - fill:
+      selector: "#cardCvc"
+      value: "{{CARD_CVC}}"
+
+  - fill:
+      selector: "#billingName"
+      value: "{{CARDHOLDER_NAME}}"
+
+  - click: "[data-testid='hosted-payment-submit-button']"
+
+  # Stripe redirects back to your success_url
+  - waitForUrl:
+      value: "{{SUCCESS_PATH}}"
+      timeout: 30000
+
+  - assert:
+      visible: "Payment successful"
+
+assertions:
+  - noConsoleErrors: true

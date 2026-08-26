@@ -1,0 +1,40 @@
+# Settings Form (macOS)
+# ---
+# Pattern: Fill and save a settings form in a native macOS window
+# What it tests: A settings window opens, a text field accepts input, the Save
+#                control activates, and a confirmation appears.
+# Customize:
+#   - In .prowl/config.yml set target.type: macos and target.app
+#   - Replace the `id=` / `label=` selectors with the ones `prowl analyze` prints
+#     for your app (selectors are ranked id= > label= > role= > text=)
+#   - `press` on macOS supports Enter/Return/Space (mapped to the control's
+#     activate action); other keys are unsupported
+
+name: settings-form
+description: Fill a settings text field, save, and verify the confirmation
+
+tags:
+  - macos
+  - settings
+  - form
+
+vars:
+  EMAIL: "qa@example.com"
+
+steps:
+  - click: "id=openSettings"
+
+  - waitForSelector:
+      selector: 'label="Email"'
+      timeout: 5000
+
+  - fill:
+      selector: 'label="Email"'
+      value: "{{EMAIL}}"
+
+  - press:
+      selector: 'role=button[name="Save"]'
+      key: "Enter"
+
+  - assert:
+      visible: "Saved"

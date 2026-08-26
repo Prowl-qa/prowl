@@ -1,0 +1,32 @@
+# Homepage Smoke Test
+# ---
+# Pattern: Basic page load verification
+# What it tests: Ensures your homepage renders correctly and key elements are present.
+# Customize:
+#   - Change PAGE_TITLE to your app's heading text
+#   - Update the assertions to match the elements you expect on your homepage
+#
+# This is the simplest hunt pattern — great for verifying a target is alive
+# before running more complex flows.
+
+name: homepage
+description: Verify the homepage loads and displays expected content
+
+tags:
+  - smoke
+  - health-check
+  - page-load
+
+vars:
+  PAGE_TITLE: "Welcome"
+
+steps:
+  # Navigate to the root URL (relative to target.url in config.yml)
+  - navigate: "/"
+
+  # Wait for the page title to appear — ensures content has rendered
+  - wait: "{{PAGE_TITLE}}"
+
+assertions:
+  - selectorExists: "h1"
+  - noConsoleErrors: true

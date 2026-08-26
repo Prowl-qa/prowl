@@ -1,0 +1,46 @@
+# Form Submit
+# ---
+# Pattern: Fill form fields, submit, verify success
+# What it tests: Interacts with a multi-field form and verifies the result.
+# Customize:
+#   - Update the field labels, URL, and success message to match your form
+#
+# Tip: For forms with dropdowns, use `select: { "Label": "value" }`.
+#      For file uploads, use `setInputFiles: { selector: "...", files: "path" }`.
+
+name: form-submit
+description: Fill and submit a contact form, verify success message
+
+tags:
+  - forms
+  - contact
+  - submission
+
+steps:
+  - navigate: "/contact"
+
+  - fill:
+      "Name": "Jane Doe"
+
+  - fill:
+      "Email": "jane@example.com"
+
+  # Fill the message textarea by label.
+  - fill:
+      "Message": "Hello, I have a question about your product."
+
+  # Select a dropdown value by its label
+  - select:
+      "Subject": "General Inquiry"
+
+  - click: "Send Message"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the success toast or confirmation
+  - assert:
+      visible: "Message sent"
+
+assertions:
+  - noConsoleErrors: true

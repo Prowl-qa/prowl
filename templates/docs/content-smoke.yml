@@ -1,0 +1,39 @@
+# Content Smoke Test
+# ---
+# Pattern: Verify doc pages load with expected content structure
+# What it tests: Key pages are reachable and contain expected heading text.
+#                Works with any Docusaurus site.
+# Customize:
+#   - Update PAGE_PATH and EXPECTED_HEADING for your doc pages
+#   - Add additional navigate/wait step pairs for more pages
+
+name: content-smoke
+description: Verify doc pages load with expected content structure
+
+tags:
+  - docs
+  - smoke
+  - content
+
+vars:
+  PAGE_PATH: "/"
+  EXPECTED_HEADING: "Getting Started"
+
+steps:
+  - navigate: "{{PAGE_PATH}}"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Verify the expected heading text is present
+  - wait: "{{EXPECTED_HEADING}}"
+
+  # Verify core Docusaurus page structure is present
+  - waitForSelector:
+      selector: "article"
+      timeout: 5000
+
+  # Verify pagination nav is present (standard Docusaurus layout)
+  - waitForSelector:
+      selector: "nav[aria-label*='pagination' i]"
+      timeout: 5000

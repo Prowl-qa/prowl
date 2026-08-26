@@ -1,0 +1,36 @@
+# App Launch Smoke (macOS)
+# ---
+# Pattern: Launch a native macOS app and verify its main window is ready
+# What it tests: The target app launches, a known control in the main window
+#                becomes visible, and a screenshot is captured for the run.
+# Customize:
+#   - In .prowl/config.yml set:
+#       target:
+#         type: macos
+#         app: "com.example.App"     # bundle id or /path/to/App.app
+#   - Replace `id=mainWindowReady` with a real accessibility identifier from
+#     `prowl analyze --app com.example.App` (prefer id=, the native data-testid)
+#   - Requires the macOS helper binary and Accessibility permission for your
+#     terminal (see the README "macOS Target" section); the screenshot step also
+#     needs Screen Recording permission.
+#   - Only portable steps are used here — navigate/waitForNetworkIdle are web-only.
+
+name: app-launch-smoke
+description: Launch a macOS app and verify its main window is ready
+
+tags:
+  - macos
+  - smoke
+  - launch
+
+steps:
+  # Wait for a control that only exists once the main window has rendered
+  - waitForSelector:
+      selector: "id=mainWindowReady"
+      timeout: 10000
+
+  - assert:
+      visible: "id=mainWindowReady"
+
+  - screenshot:
+      name: "main-window"

@@ -1,0 +1,68 @@
+# Data Table Filter & Sort
+# ---
+# Pattern: Admin panel data table interactions
+# What it tests: Filter a data table, verify filtered results, sort columns,
+#                paginate through results.
+# Customize:
+#   - Update the table selectors and filter field labels
+#   - Adjust expected result text to match your data
+#   - Update pagination button selectors
+
+name: data-table-filter
+description: Filter, sort, and paginate a data table
+
+tags:
+  - admin
+  - crud
+  - table
+  - filter
+
+steps:
+  # Assumes you're already logged in — use runHunt to reuse login
+  # - runHunt: "login-flow"
+
+  - navigate: "/admin/users"
+
+  # Wait for the table to load
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Filter by search term
+  - fill:
+      "Search": "john"
+
+  # Wait for filtered results
+  - waitForNetworkIdle:
+      timeout: 3000
+
+  # Verify filtered results appear
+  - assert:
+      visible: "john"
+
+  # Clear filter
+  - fill:
+      selector: "[data-testid='search-input']"
+      value: ""
+
+  - waitForNetworkIdle:
+      timeout: 3000
+
+  # Sort by a column — click the column header
+  - click:
+      selector: "[data-testid='sort-name']"
+
+  - waitForNetworkIdle:
+      timeout: 3000
+
+  # Paginate — go to next page
+  - click: "Next"
+
+  - waitForNetworkIdle:
+      timeout: 3000
+
+  # Verify we're on page 2
+  - assert:
+      visible: "Page 2"
+
+assertions:
+  - noConsoleErrors: true

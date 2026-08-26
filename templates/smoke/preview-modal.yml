@@ -1,0 +1,60 @@
+# Preview / Detail Modal
+# ---
+# Pattern: Open a content preview modal and verify it renders correctly
+# What it tests: A trigger button opens a modal dialog with content,
+#                action buttons are present, and the modal can be closed.
+#                Covers the common "click to preview, copy, or download" pattern.
+# Customize:
+#   - Update PAGE_URL to the page containing the trigger
+#   - Update TRIGGER_TEXT to the button text that opens the modal
+#   - Update EXPECTED_CONTENT to text you expect inside the modal
+#   - Update ACTION_TEXT to a button label inside the modal (e.g., "Copy", "Save")
+#   - Update CLOSE_TEXT to the close button label
+
+name: preview-modal
+description: Open a preview modal and verify content, actions, and close behavior
+
+tags:
+  - smoke
+  - modal
+  - dialog
+
+vars:
+  PAGE_URL: "/browse"
+  TRIGGER_TEXT: "Preview"
+  EXPECTED_CONTENT: "Loading"
+  ACTION_TEXT: "Copy"
+  CLOSE_TEXT: "Close"
+
+steps:
+  - navigate: "{{PAGE_URL}}"
+
+  - waitForNetworkIdle:
+      timeout: 5000
+
+  # Click the trigger button to open the modal
+  - click: "{{TRIGGER_TEXT}}"
+
+  # Modal dialog should open
+  - waitForSelector:
+      selector: "[role='dialog']"
+      timeout: 3000
+
+  # Verify content loads inside the modal
+  - waitForSelector:
+      selector: "[role='dialog'] pre"
+      timeout: 5000
+
+  # Action button should be present
+  - assert:
+      visible: "{{ACTION_TEXT}}"
+
+  # Close the modal
+  - click: "{{CLOSE_TEXT}}"
+
+  # Modal should be gone
+  - assert:
+      notVisible: "[role='dialog']"
+
+assertions:
+  - noConsoleErrors: true
