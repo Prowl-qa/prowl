@@ -119,15 +119,34 @@ jobs:
           path: prowl-base
           persist-credentials: false
 
+      # Bootstrap only matters for the PR that introduces .prowl-review.yml: before
+      # it merges, main has no trusted config yet. Copy a known-good config from the
+      # pinned prowl-review action repo, never from the PR checkout.
+      - name: Checkout bootstrap review config
+        if: ${{ hashFiles('prowl-base/.prowl-review.yml') == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: prowl-tools/prowl-code-review
+          ref: 8a56424bce07b32d2374b647145a2dd0b4efc295
+          path: prowl-review-config-bootstrap
+          persist-credentials: false
+
+      - name: Install bootstrap review config
+        if: ${{ hashFiles('prowl-base/.prowl-review.yml') == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp prowl-review-config-bootstrap/.prowl-review.yml prowl-base/.prowl-review.yml
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.head_sha }}
           path: pr-head
           persist-credentials: false
 
-      # TODO: pin to @v1 once a release containing the codex provider (>0.3.0)
-      # ships — the current v1 tag predates `provider: codex`.
-      - uses: prowl-tools/prowl-code-review@main
+      # Pinned to the current codex-provider commit; repin to @v1 once a release
+      # containing the codex provider (>0.3.0) ships.
+      - uses: prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295
         with:
           mode: command
           # Keyless: no PROWL_AI_KEY* — auth is the runner's own `codex login`.

@@ -70,18 +70,41 @@ jobs:
           permission-checks: write
 
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Load .prowl-review.yml from the TRUSTED base branch, not PR code, so a PR
-      # can never point the review at a config it authored.
+      # can never point the review at a config it authored. Use the moving branch
+      # ref instead of the event base SHA so the workflow self-bootstraps after the
+      # config lands on main.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.ref }}
           path: prowl-review-config
           persist-credentials: false
 
-      # TODO: pin to @v1 once a release containing the codex provider (>0.3.0)
-      # ships — the current v1 tag predates `provider: codex`.
-      - uses: prowl-tools/prowl-code-review@main
+      # Bootstrap only matters for the PR that introduces .prowl-review.yml: before
+      # it merges, main has no trusted config yet. Copy a known-good config from the
+      # pinned prowl-review action repo, never from the PR checkout.
+      - name: Checkout bootstrap review config
+        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: prowl-tools/prowl-code-review
+          ref: 8a56424bce07b32d2374b647145a2dd0b4efc295
+          path: prowl-review-config-bootstrap
+          persist-credentials: false
+
+      - name: Install bootstrap review config
+        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp prowl-review-config-bootstrap/.prowl-review.yml prowl-review-config/.prowl-review.yml
+
+      # Pinned to the current codex-provider commit; repin to @v1 once a release
+      # containing the codex provider (>0.3.0) ships.
+      - uses: prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295
         with:
           # Keyless: no PROWL_AI_KEY* — auth is the runner's own `codex login`.
           ai-provider: codex

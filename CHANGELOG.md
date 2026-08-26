@@ -15,8 +15,11 @@ All notable changes to Prowl will be documented in this file.
   and the mandatory same-repo fork gate required on a public repo. Review config
   lives in a root `.prowl-review.yml` (`provider: codex`, `model: gpt-5.5`,
   `codex.effort: low`) loaded from the trusted base branch, never PR code. The
-  action is pinned to `prowl-tools/prowl-code-review@main` until a release
-  (>0.3.0) containing the codex provider ships. Existing `claude-code-review.yml`,
+  action is pinned to immutable commit
+  `prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295`
+  until a release (>0.3.0) containing the codex provider ships; bootstrap runs
+  copy the trusted config from that pinned action repo only until this repo's
+  config exists on the base branch. Existing `claude-code-review.yml`,
   `claude.yml`, and `mobile-e2e.yml` are untouched.
 
 ## [0.1.6] - 2026-08-24
