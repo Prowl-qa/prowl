@@ -602,6 +602,94 @@ distribution surface — per-hunt PR annotations now, links into the hosted resu
 - Hosted report ingestion
 - Explicitly blocked on CICD-001 through CICD-004
 
+## Sunset Work Items
+
+Context (2026-08-26): Prowl Hub and Prowl Infra Hub are being retired and prowl-review moves to
+maintenance mode as a personal tool. **The CLI is now the single product**, and the intended
+beachhead is **desktop-first (macOS native apps, incl. menu-bar extras) with web as the second
+target** — the one position no incumbent holds (Maestro: mobile/web; Playwright: web; XCUITest:
+Swift/Xcode). These items capture what lands on this repo from that decision; they are meant
+to be re-evaluated against the epics above (in particular, the Commercialization / Prowl Cloud
+and CI/CD & OpenShift epics should be re-prioritised against the beachhead) before being
+scheduled.
+
+{PROWL-072} **SUNSET-001: Absorb the Prowl Hub templates as first-class starter templates**
+   Import the 32 category-organised hunt YAMLs from `prowl-hub` (counterpart: `prowl-hub`
+   HUB-016) into a `templates/<category>/<name>.yml` tree in this repo, validated by the CLI's
+   own schema in CI (port `validate-submission.yml`'s check). Surface them via `prowl init
+   --template <category/name>` and `prowl templates list` (or `prowl init --list-templates`).
+   Add a few macOS-target templates alongside the web ones so the desktop story has starters
+   too.
+   **Acceptance Criteria**:
+   - All hub hunts present, schema-valid, covered by a test that loads every template
+   - `prowl init --template auth/login` scaffolds the file into `.prowl/hunts/`
+   - Docs duty: `prowl-docs` PQD-008 (templates page replaces the Hub API page)
+   - CHANGELOG entry
+
+{PROWL-073} **SUNSET-002: Remove Prowl Hub references from the CLI**
+   `src/cli/commands/init.ts:87` prints "Browse hunt templates at https://hub.prowl.tools" —
+   replace with the `--template` hint. Audit `src/mcp/projects.ts`, `src/mcp/server.ts`, and
+   `src/cli/commands/mcp.ts` (flagged by a keyword grep) for any hub/registry fetch and remove
+   it; the MCP server must not depend on a retired endpoint.
+   **Acceptance Criteria**: `grep -ri "hub.prowl" src` is empty; tests pass.
+
+{PROWL-074} **SUNSET-003: Make the macOS target a two-minute install (gate for distribution)**
+   A stranger cannot use the macOS target today: the Swift helper is not in the npm tarball,
+   requires a source checkout + Xcode toolchain + `swift build`, then Accessibility and Screen
+   Recording permissions. This is the single biggest blocker to the desktop-first positioning.
+   **This item does not duplicate PROWL-052 (ARCH-006, distribute `prowl-macdriver`)** — it
+   promotes ARCH-006 to the top of the queue and adds the end-to-end onboarding on top of it:
+   `npm i -g prowl-tools && prowl init --target macos` fetches/locates the signed helper, and
+   `prowl doctor` (or `init`) walks the user through granting TCC permissions with a clear
+   pass/fail.
+   **Acceptance Criteria**:
+   - ARCH-006 shipped (prebuilt, signed/notarized universal binary, checksum-verified)
+   - Fresh machine → first green macOS hunt in under five minutes with no source checkout
+   - Docs: `prowl-docs` PQD-009
+
+{PROWL-075} **SUNSET-004: Reposition README + package metadata desktop-first**
+   The README headline is "CLI-first QA testing tool for deterministic web testing with
+   Playwright" and macOS first appears at line ~450 as a commented-out, "experimental" config
+   option. Rewrite the top of the README (headline, first example, feature list) to lead with
+   native macOS apps + web from one YAML; move the macOS section up; update `package.json`
+   description/keywords (`macos`, `desktop testing`, `accessibility`, `e2e`). Drop
+   "experimental" for macOS once PROWL-074 ships (use "beta" if a caveat is needed); keep
+   Android/iOS labelled experimental. Coordinate wording with `prowl-web` PQW-027 and the
+   GTM-002 positioning matrix.
+   **Acceptance Criteria**: README first screen shows a macOS example; npm listing reflects the
+   new keywords; no contradiction with prowl.tools copy.
+
+{PROWL-076} **SUNSET-005: Publish the "macOS app E2E in CI" recipe (dogfood write-up)**
+   The owner already runs macOS-app hunts in CI on real projects. Getting Accessibility
+   permission on a runner is exactly where everyone gets stuck; however it was solved
+   (self-hosted runner, pre-granted TCC, etc.) is the first piece of distribution content and
+   the most credible proof the target is production-ready. Write it as a docs guide (`prowl-docs`
+   PQD-009) and a blog post on prowl.tools, with a ≤20-line hunt and the workflow file.
+   **Acceptance Criteria**: guide + post published; a reader can reproduce the CI setup from
+   the text alone (no private-runbook dependency).
+
+{PROWL-077} **SUNSET-006: Backlog re-evaluation against the desktop-first beachhead**
+   Walk every open item and epic in this file with one question: *does this help a Mac (or
+   web) developer try Prowl in the next 60 days?* Expected outcomes to confirm or reject:
+   park the Commercialization — Prowl Cloud epic and the CI/CD & OpenShift epic behind a
+   "first ten human users" gate; keep the macOS Phase 2 epic and pull ARCH-006 to the front;
+   leave the Mobile epic experimental with no new scope until someone asks; drop or park
+   P6-001 (VS Code extension) and similar breadth items. Record the decisions inline (item
+   status lines), keep numbers stable.
+   **Acceptance Criteria**: each epic header carries a one-line status (active / parked +
+   gate); High Priority contains only items that serve the beachhead.
+
+{PROWL-078} **SUNSET-007: 60-day macOS-beachhead distribution sprint (success metric: humans)**
+   Zero organic users after seven months means the constraint is reach, not features.
+   Time-box a distribution window after PROWL-074/075/076 ship: the CI recipe post
+   (PROWL-076), a ≤60-second demo of a menu-bar app being tested (repurpose the local
+   `prowl-review-video` Remotion prototype for the CLI), a comparison page vs. Maestro /
+   Playwright / XCUITest, and direct outreach to indie Mac developers (Sparkle/Homebrew
+   ecosystem, Mac dev communities). Track **humans who ran a hunt**, not npm downloads
+   (release-week spikes are mirrors). Feeds GTM-002/GTM-003.
+   **Acceptance Criteria**: window dated and closed with a count of real users and a written
+   keep/pivot decision; ten conversations with people who write E2E tests for Mac or web apps.
+
 ## Completed
 
 Completed and resolved work lives in [`resolved.md`](./resolved.md).
