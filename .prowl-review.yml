@@ -1,0 +1,10 @@
+# prowl-review config for prowl-tools/prowl (#45/#64).
+# Subscription-backed, keyless Codex provider running on the self-hosted Mac mini
+# runner: reviews go through the ChatGPT login that lives only on that host, so
+# per-review marginal cost is $0.00 and no provider secret ever enters GitHub.
+# Loaded by the workflows via a trusted base-branch `config-path` (never the PR
+# checkout).
+provider: codex                # keyless — auth is the runner's own `codex login`
+model: gpt-5.5                 # ChatGPT-plan model
+codex:
+  effort: low                  # low | medium | high | xhigh — cheap/fast setting

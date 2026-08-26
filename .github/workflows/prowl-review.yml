@@ -1,0 +1,116 @@
+# Automatic prowl-review on the self-hosted Mac mini runner using the keyless
+# Codex (ChatGPT subscription) provider (#45/#64). Per-review marginal cost is
+# $0.00 and NO provider key is stored in GitHub: the subscription login lives
+# only on the runner (via `codex login` into a dedicated CODEX_HOME on the host),
+# never in GitHub Actions secrets, and this workflow sets no PROWL_AI_KEY*.
+#
+# PUBLIC-REPO NOTE — this repo (prowl-tools/prowl) is PUBLIC:
+#   - OpenAI's CI/CD auth guidance says, verbatim: "Do not use this workflow for
+#     public or open-source repositories." GitHub also warns against self-hosted
+#     runners on public repos: any PR can execute code on the runner.
+#   - The job-level same-repo `if:` gate below is therefore MANDATORY here — it
+#     keeps fork PRs from ever being scheduled onto the runner, so only this
+#     repo's own code runs there. Codex itself also runs `--sandbox read-only`.
+#     Do NOT drop the gate. (Only a PRIVATE repo could.)
+#
+# Branded identity (#59): the org shares PROWL_APP_ID/PROWL_APP_PRIVATE_KEY with
+# this repo, so the review job mints an App installation token and posts as
+# prowl-review[bot] with the App avatar (mirrors the dogfood workflow in
+# prowl-tools/prowl-code-review). The env flag is only a boolean; the private key
+# is only handed to the token action. Falls back to the default auto-provisioned
+# GITHUB_TOKEN when the secrets are unset or token minting fails.
+name: prowl-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+# Per-PR automatic reviews cancel stale runs when a PR is updated. Command-mode
+# maintainer requests use a separate non-cancelling group in
+# `prowl-review-command.yml`, so auto-review churn cannot interrupt them.
+# Machine-wide serialization ACROSS repos/runner instances is the provider's
+# Codex lock ($CODEX_HOME/.prowl-review.lock, on by default for `provider:
+# codex`), NOT GitHub concurrency.
+concurrency:
+  group: prowl-review-auto-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write   # post the review + inline comments
+  issues: write          # create/update the summary comment
+  checks: write          # optional merge-gate check run
+  contents: read
+
+jobs:
+  review:
+    # Same-repo gate: keeps fork PRs off the self-hosted runner. MANDATORY on
+    # this public repo (see header). Do not remove.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, prowl-review]
+    timeout-minutes: 30
+    env:
+      PROWL_APP_CONFIGURED: ${{ secrets.PROWL_APP_ID != '' && secrets.PROWL_APP_PRIVATE_KEY != '' }}
+    steps:
+      # Branded identity (#59): mint an App installation token when PROWL_APP_ID
+      # is set so the review posts as prowl-review[bot] with the App avatar.
+      # The env flag is only a boolean; the private key is only handed to the
+      # token action. Falls back to github-actions[bot] when unset or when token
+      # minting fails.
+      - name: Mint prowl-review app token
+        id: app-token
+        if: env.PROWL_APP_CONFIGURED == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.PROWL_APP_ID }}
+          private-key: ${{ secrets.PROWL_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+          permission-checks: write
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Load .prowl-review.yml from the TRUSTED base branch, not PR code, so a PR
+      # can never point the review at a config it authored. Use the moving branch
+      # ref instead of the event base SHA so the workflow self-bootstraps after the
+      # config lands on main.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: prowl-review-config
+          persist-credentials: false
+
+      # Bootstrap only matters for the PR that introduces .prowl-review.yml: before
+      # it merges, main has no trusted config yet. Copy a known-good config from the
+      # pinned prowl-review action repo, never from the PR checkout.
+      - name: Checkout bootstrap review config
+        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: prowl-tools/prowl-code-review
+          ref: 8a56424bce07b32d2374b647145a2dd0b4efc295
+          path: prowl-review-config-bootstrap
+          persist-credentials: false
+
+      - name: Install bootstrap review config
+        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp prowl-review-config-bootstrap/.prowl-review.yml prowl-review-config/.prowl-review.yml
+
+      # Pinned to the current codex-provider commit; repin to @v1 once a release
+      # containing the codex provider (>0.3.0) ships.
+      - uses: prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295
+        with:
+          # Keyless: no PROWL_AI_KEY* — auth is the runner's own `codex login`.
+          ai-provider: codex
+          # Model + effort are pinned in the trusted base-branch config.
+          config-path: prowl-review-config/.prowl-review.yml
+          # Branded App token when configured; otherwise the default Actions token.
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
+          bot-login: ${{ steps.app-token.outputs.app-slug != '' && format('{0}[bot]', steps.app-token.outputs.app-slug) || '' }}
+          # min-severity: major      # optional: only surface major+ findings
