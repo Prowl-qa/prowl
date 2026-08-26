@@ -613,27 +613,6 @@ to be re-evaluated against the epics above (in particular, the Commercialization
 and CI/CD & OpenShift epics should be re-prioritised against the beachhead) before being
 scheduled.
 
-{PROWL-072} **SUNSET-001: Absorb the Prowl Hub templates as first-class starter templates**
-   Import the 23 category-organised hunt YAMLs from `prowl-hub` (counterpart: `prowl-hub`
-   HUB-016; audited 2026-08-26 — 8 categories: accessibility, admin, auth, docs, e-commerce,
-   forms, saas, smoke) into a `templates/<category>/<name>.yml` tree in this repo, validated by the CLI's
-   own schema in CI (port `validate-submission.yml`'s check). Surface them via `prowl init
-   --template <category/name>` and `prowl templates list` (or `prowl init --list-templates`).
-   Add a few macOS-target templates alongside the web ones so the desktop story has starters
-   too.
-   **Acceptance Criteria**:
-   - All hub hunts present, schema-valid, covered by a test that loads every template
-   - `prowl init --template auth/login` scaffolds the file into `.prowl/hunts/`
-   - Docs duty: `prowl-docs` PQD-008 (templates page replaces the Hub API page)
-   - CHANGELOG entry
-
-{PROWL-073} **SUNSET-002: Remove Prowl Hub references from the CLI**
-   `src/cli/commands/init.ts:87` prints "Browse hunt templates at https://hub.prowl.tools" —
-   replace with the `--template` hint. Audit `src/mcp/projects.ts`, `src/mcp/server.ts`, and
-   `src/cli/commands/mcp.ts` (flagged by a keyword grep) for any hub/registry fetch and remove
-   it; the MCP server must not depend on a retired endpoint.
-   **Acceptance Criteria**: `grep -ri "hub.prowl" src` is empty; tests pass.
-
 {PROWL-074} **SUNSET-003: Make the macOS target a two-minute install (gate for distribution)**
    A stranger cannot use the macOS target today: the Swift helper is not in the npm tarball,
    requires a source checkout + Xcode toolchain + `swift build`, then Accessibility and Screen
