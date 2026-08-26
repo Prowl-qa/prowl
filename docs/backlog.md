@@ -614,8 +614,9 @@ and CI/CD & OpenShift epics should be re-prioritised against the beachhead) befo
 scheduled.
 
 {PROWL-072} **SUNSET-001: Absorb the Prowl Hub templates as first-class starter templates**
-   Import the 32 category-organised hunt YAMLs from `prowl-hub` (counterpart: `prowl-hub`
-   HUB-016) into a `templates/<category>/<name>.yml` tree in this repo, validated by the CLI's
+   Import the 23 category-organised hunt YAMLs from `prowl-hub` (counterpart: `prowl-hub`
+   HUB-016; audited 2026-08-26 — 8 categories: accessibility, admin, auth, docs, e-commerce,
+   forms, saas, smoke) into a `templates/<category>/<name>.yml` tree in this repo, validated by the CLI's
    own schema in CI (port `validate-submission.yml`'s check). Surface them via `prowl init
    --template <category/name>` and `prowl templates list` (or `prowl init --list-templates`).
    Add a few macOS-target templates alongside the web ones so the desktop story has starters
