@@ -5,6 +5,29 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Bundled starter templates (PROWL-072).** The 23 community hunt templates from
+  the retired Prowl Hub now ship inside the npm package as
+  `templates/<category>/<name>.yml` (auth, e-commerce, forms, admin, saas, smoke,
+  docs, accessibility), plus three new `macos/` starters for the native desktop
+  target (`app-launch-smoke`, `menu-bar-extra`, `settings-form`). New commands:
+  `prowl templates list [--category <c>] [--json]` and `prowl templates show <id>`;
+  `prowl init --template <category/name...>` copies templates into
+  `.prowl/hunts/` (works on an already-initialized project, `--force` only needed
+  to overwrite a same-named hunt) and `prowl init --list-templates` prints the
+  catalog. The library exports `listTemplates`, `resolveTemplate`, `readTemplate`,
+  `listTemplateCategories`, `isValidTemplateId`, and `getTemplatesDir`. Every
+  template is schema-validated by `test/templates.test.ts` in CI (replacing the
+  hub's `validate-submission.yml`). `e-commerce/stripe-checkout` was rewritten to
+  target Stripe's hosted Checkout page — the hub version used an `iframe_action`
+  step the CLI never had.
+
+### Changed
+- **Prowl Hub references removed (PROWL-073).** `prowl init` no longer points at
+  `hub.prowl.tools`; it and `examples/hunts/hello.yml` now point at
+  `prowl templates list` / `prowl init --template`. The README "Community Hub"
+  section is replaced by "Starter Templates", and the stale claim that `prowl init`
+  creates eight example hunts is corrected (it creates `hello.yml`). The MCP server
+  never fetched from the hub, so no runtime behavior changed there.
 - **Self-hosted Codex prowl-review workflows (#64).** This repo now runs
   subscription-backed (keyless Codex) prowl-review on the always-on Mac mini
   runner (labels `self-hosted, macOS, prowl-review`), so per-review marginal cost

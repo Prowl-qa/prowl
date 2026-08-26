@@ -87,21 +87,31 @@ prowl init
 
 <!-- ILLUSTRATION: Terminal screenshot showing `prowl init` output with raccoon mascot and file listing -->
 
-This creates a `.prowl/` directory with a config file and 8 example hunts:
+This creates a `.prowl/` directory with a config file and a minimal starter hunt:
 
 ```text
 .prowl/
 ├── config.yml              # Target URL, browser settings, guardrails
+├── .gitignore              # Keeps runs/, auth state, and .env out of git
 └── hunts/
-    ├── homepage.yml         # Basic page load smoke test
-    ├── login-flow.yml       # Email/password authentication
-    ├── signup-flow.yml      # Registration with validation
-    ├── form-submit.yml      # Form fill and submit
-    ├── form-validation.yml  # Validation errors and resubmit
-    ├── crud-cycle.yml       # Create, read, update, delete lifecycle
-    ├── checkout-flow.yml    # E-commerce checkout
-    └── onboarding-wizard.yml # Multi-step SaaS onboarding
+    └── hello.yml           # Verifies the target app loads
 ```
+
+Prowl also bundles **starter templates** — ready-to-customize hunts for common
+flows (login, signup, password reset, checkout, Stripe, CRUD, onboarding,
+keyboard navigation, smoke tests, macOS apps, …). Browse them and add the ones
+you need:
+
+```bash
+prowl templates list                          # catalog, grouped by category
+prowl templates show auth/login-flow          # print a template's YAML
+prowl init --template auth/login-flow         # add it as .prowl/hunts/login-flow.yml
+prowl init --template auth/login-flow smoke/homepage   # several at once
+```
+
+`--template` works on an already-initialized project too (it only adds hunts;
+`--force` is needed only to overwrite a hunt with the same name). See
+[Starter Templates](#starter-templates) for the full list.
 
 ### 3. Configure
 
@@ -714,9 +724,17 @@ prowl watch <hunt-name>
 # Auth — capture login state interactively
 prowl login
 
-# Initialize — create .prowl directory with examples
+# Initialize — create .prowl directory with a starter hunt
 prowl init
 prowl init --force                      # Overwrite existing
+prowl init --template auth/login-flow   # Also add starter template(s) to .prowl/hunts/
+prowl init --list-templates             # Show the bundled templates and exit
+
+# Starter templates — bundled, ready-to-customize hunts
+prowl templates list                    # Catalog grouped by category
+prowl templates list --category auth    # One category
+prowl templates list --json             # Machine-readable catalog
+prowl templates show auth/login-flow    # Print a template's YAML
 
 # List available hunts
 prowl list
@@ -927,11 +945,36 @@ CLI Commands
 
 ---
 
-## Community Hub
+## Starter Templates
 
-Browse and contribute hunt templates through the internal community registry (contact ops for access).
+Prowl ships a library of starter hunts in the npm package (`templates/<category>/<name>.yml`).
+They are heavily commented, use only generic selectors (`data-testid`, placeholders, visible
+button labels), and are meant to be copied into your project and customized.
 
-Templates cover auth flows (OAuth, 2FA), e-commerce (Stripe), admin panels, SaaS patterns, and more. Each template is heavily commented and ready to customize.
+```bash
+prowl templates list                     # browse
+prowl init --template auth/login-flow    # copy into .prowl/hunts/login-flow.yml
+```
+
+| Category | Templates |
+|---|---|
+| `auth` | `login-flow`, `signup-flow`, `password-reset`, `oauth-google` |
+| `e-commerce` | `checkout-flow`, `stripe-checkout` (Stripe-hosted Checkout) |
+| `forms` | `form-submit`, `form-validation` |
+| `admin` | `crud-cycle`, `data-table-filter` |
+| `saas` | `onboarding-wizard`, `team-invite` |
+| `smoke` | `homepage`, `navigation`, `pagination`, `search-and-filter`, `preview-modal`, `empty-state`, `api-health` |
+| `docs` | `content-smoke`, `sidebar-navigation`, `theme-toggle` (docs-site checks) |
+| `accessibility` | `keyboard-navigation` |
+| `macos` | `app-launch-smoke`, `menu-bar-extra`, `settings-form` (native macOS target) |
+
+Every template is validated against the hunt schema in CI (`test/templates.test.ts`), so a
+template that lists here is guaranteed to parse. To contribute one, add a commented
+`templates/<category>/<name>.yml` (the `name:` field must match the filename) and open a PR —
+the same test gates it.
+
+> The templates were migrated from the retired Prowl Hub site (2026-08); the old
+> `hub.prowl.tools` catalog paths map 1:1 onto `templates/<category>/<name>.yml`.
 
 ---
 
