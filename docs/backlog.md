@@ -71,27 +71,6 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - Playwright: `page.waitForResponse()`
 - Schema validation, unit tests
 
-{PROWL-021} **P5-006: `prowl hub` Subcommand**
-   Add a `prowl hub` CLI subcommand for discovering, previewing, and pulling hunt templates from the prowl-hub repository. Designed for both agents and humans to bootstrap test suites from community templates.
-
-**Acceptance Criteria**:
-- `prowl hub list` — list available templates with tags and descriptions
-- `prowl hub list --json` — machine-readable output for agents
-- `prowl hub pull <template>` — download a template into `.prowl/hunts/`
-- `prowl hub search <query>` — search templates by tag or keyword
-- Templates fetched from GitHub (prowl-tools/prowl-hub)
-- Works offline with cached templates
-
-{PROWL-022} **P5-007: `prowl hub discover` — URL-Based Hunt Discovery**
-   Add a `prowl hub discover --url <target>` CLI command that matches hunt templates to a target URL. Enables agents to find relevant community hunts without browsing the hub manually.
-
-**Acceptance Criteria**:
-- Hunt templates include optional `targetUrl` pattern metadata
-- `prowl hub discover --url <target>` returns matching templates
-- `prowl hub discover --url <target> --json` for agent consumption
-- Library equivalent: `discoverHunts(url)` returns matching hunt metadata
-- Works with prowl-hub repository as template source
-
 {PROWL-026} **P6-003: `prowl doctor` — Environment Health Check**
    Verify that the user's environment is correctly set up for Prowl.
 
@@ -115,7 +94,7 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
    `prowl init` currently gives everyone the same 8 example hunts. Different users need different starting points. A solo developer testing a side project, a QA team adding regression tests, and an AI agent builder integrating Prowl all have different first-run needs.
 
 **Found during**: Gap analysis (2026-02-16)
-**Partial progress (2026-02-17)**: `prowl init` simplified from 8 example hunts to a single `hello.yml` starter hunt. Example templates moved to the community hub (hub.prowl.tools) as verified hunt templates across 6 categories. Init output now points users to the hub. Remaining: preset-based onboarding paths (`--preset solo|team|ci|agent`).
+**Partial progress (2026-02-17; updated 2026-08-26)**: `prowl init` simplified from 8 example hunts to a lean starter set (`hello.yml` + `login-flow.yml`). The community hub has been retired, so starters ship in the CLI and curated worked examples live in the docs site — there is no hub and no CLI template registry. Remaining: preset-based onboarding paths (`--preset solo|team|ci|agent`).
 **Acceptance Criteria**:
 - `prowl init` prompts for use case (or accepts `--preset`): `solo`, `team`, `ci`, `agent`
 - Each preset generates tailored example hunts, config, and README hints
@@ -613,25 +592,27 @@ to be re-evaluated against the epics above (in particular, the Commercialization
 and CI/CD & OpenShift epics should be re-prioritised against the beachhead) before being
 scheduled.
 
-{PROWL-072} **SUNSET-001: Absorb the Prowl Hub templates as first-class starter templates**
-   Import the 23 category-organised hunt YAMLs from `prowl-hub` (counterpart: `prowl-hub`
-   HUB-016; audited 2026-08-26 — 8 categories: accessibility, admin, auth, docs, e-commerce,
-   forms, saas, smoke) into a `templates/<category>/<name>.yml` tree in this repo, validated by the CLI's
-   own schema in CI (port `validate-submission.yml`'s check). Surface them via `prowl init
-   --template <category/name>` and `prowl templates list` (or `prowl init --list-templates`).
-   Add a few macOS-target templates alongside the web ones so the desktop story has starters
-   too.
+{PROWL-072} **SUNSET-001: Lean starter hunts in `prowl init` + curated docs examples (Hub replacement)**
+   With the community hub retired, do NOT rebuild a template registry inside the CLI — no
+   `prowl init --template`, no `prowl templates list`, no importing the full hub set (that would
+   just re-bloat the tool). Instead keep `prowl init` seeded with a small, high-value starter set
+   (currently `hello.yml` + `login-flow.yml`; optionally add one form example and a macOS one so
+   the desktop story has a starter), and publish a curated handful of worked examples on the docs
+   site for readers to copy. The rest of the old hub hunts are archived with the hub, not carried
+   into the CLI or the tarball.
    **Acceptance Criteria**:
-   - All hub hunts present, schema-valid, covered by a test that loads every template
-   - `prowl init --template auth/login` scaffolds the file into `.prowl/hunts/`
-   - Docs duty: `prowl-docs` PQD-008 (templates page replaces the Hub API page)
-   - CHANGELOG entry
+   - `prowl init` scaffolds a lean starter set (smoke + auth at minimum); no `--template`/registry surface
+   - A curated examples set lives in the docs (prowl-docs), not a hub or the tarball
+   - No dependency on `prowl-hub`; CHANGELOG entry for any init-starter change
+   - In progress: `login-flow.yml` starter added on branch `init-login-starter`
 
 {PROWL-073} **SUNSET-002: Remove Prowl Hub references from the CLI**
    `src/cli/commands/init.ts:87` prints "Browse hunt templates at https://hub.prowl.tools" —
-   replace with the `--template` hint. Audit `src/mcp/projects.ts`, `src/mcp/server.ts`, and
-   `src/cli/commands/mcp.ts` (flagged by a keyword grep) for any hub/registry fetch and remove
-   it; the MCP server must not depend on a retired endpoint.
+   remove it (drop the line, or point at the bundled `login-flow.yml` example). Audit
+   `src/mcp/projects.ts`, `src/mcp/server.ts`, and `src/cli/commands/mcp.ts` (flagged by a
+   keyword grep) for any hub/registry fetch and remove it; the MCP server must not depend on a
+   retired endpoint. (The `hello.yml` comment link was already removed on branch
+   `init-login-starter`; init.ts:87 and the MCP fetches still remain.)
    **Acceptance Criteria**: `grep -ri "hub.prowl" src` is empty; tests pass.
 
 {PROWL-074} **SUNSET-003: Make the macOS target a two-minute install (gate for distribution)**
