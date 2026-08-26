@@ -5,6 +5,14 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`prowl init` now scaffolds a login starter hunt.** Alongside `hello.yml`,
+  `prowl init` writes `login-flow.yml` — a commented, real-world auth example
+  (email/password fill via label shorthand, `waitForUrl`, mid-flow + hunt-level
+  assertions) that teaches secret handling (`.prowl/.env` + `{{VAR}}`
+  interpolation with automatic redaction) and points at `prowl login` for
+  capturing reusable auth state. It's a fill-in template (customize the URL and
+  selectors for your app), giving new users a concrete pattern beyond the minimal
+  smoke check. `hello.yml`'s stale community-hub link was removed.
 - **Self-hosted Codex prowl-review workflows (#64).** This repo now runs
   subscription-backed (keyless Codex) prowl-review on the always-on Mac mini
   runner (labels `self-hosted, macOS, prowl-review`), so per-review marginal cost

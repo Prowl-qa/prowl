@@ -30,6 +30,7 @@ describe("prowl init", () => {
     const prowlDir = path.join(tempDir, ".prowl");
     expect(fs.existsSync(path.join(prowlDir, "config.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, "hunts", "hello.yml"))).toBe(true);
+    expect(fs.existsSync(path.join(prowlDir, "hunts", "login-flow.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, ".gitignore"))).toBe(true);
   });
 
