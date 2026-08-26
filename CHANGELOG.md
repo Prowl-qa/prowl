@@ -11,8 +11,9 @@ All notable changes to Prowl will be documented in this file.
   is $0.00 and no provider key is stored in GitHub — the ChatGPT login lives only
   on the runner. `.github/workflows/prowl-review.yml` auto-reviews PRs and
   `prowl-review-command.yml` handles `@prowl-review` chat/commands, both with
-  `ai-provider: codex`, per-PR non-cancelling concurrency, a 30-minute timeout,
-  and the mandatory same-repo fork gate required on a public repo. Review config
+  `ai-provider: codex`, a 30-minute timeout, and the mandatory same-repo fork
+  gate required on a public repo. Automatic reviews cancel stale per-PR runs,
+  while maintainer command runs keep non-cancelling per-PR concurrency. Review config
   lives in a root `.prowl-review.yml` (`provider: codex`, `model: gpt-5.5`,
   `codex.effort: low`) loaded from the trusted base branch, never PR code. The
   action is pinned to immutable commit
