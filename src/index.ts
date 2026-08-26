@@ -109,6 +109,13 @@ export {
   loadHuntMeta, loadHuntTags
 } from "./config/loader.js";
 
+// Re-export starter templates (PROWL-072)
+export {
+  listTemplates, listTemplateCategories, resolveTemplate, readTemplate,
+  isValidTemplateId, getTemplatesDir
+} from "./templates/index.js";
+export type { TemplateInfo } from "./templates/index.js";
+
 // Re-export schema for validation
 export { huntSchema, configSchema, stepSchema } from "./config/schema.js";
 

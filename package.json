@@ -45,6 +45,7 @@
   "files": [
     "dist",
     "examples",
+    "templates",
     "LICENSE",
     "README.md",
     "NOTICE"

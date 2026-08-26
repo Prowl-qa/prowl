@@ -12,6 +12,7 @@ import { buildGenerateCommand } from "./commands/generate.js";
 import { buildHistoryCommand } from "./commands/history.js";
 import { buildFlakyCommand } from "./commands/flaky.js";
 import { buildMcpCommand } from "./commands/mcp.js";
+import { buildTemplatesCommand } from "./commands/templates.js";
 
 export const CLI_VERSION = pkg.version;
 
@@ -27,6 +28,7 @@ export function buildProgram(): Command {
   program.addCommand(buildCiCommand());
   program.addCommand(buildWatchCommand());
   program.addCommand(buildInitCommand());
+  program.addCommand(buildTemplatesCommand());
   program.addCommand(buildLoginCommand());
   program.addCommand(buildListCommand());
   program.addCommand(buildUpdateBaselinesCommand());

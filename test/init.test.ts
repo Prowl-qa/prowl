@@ -109,4 +109,87 @@ describe("prowl init", () => {
     expect(fs.existsSync(path.join(tempDir, ".prowl", "config.yml"))).toBe(true);
     expect(fs.existsSync(path.join(tempDir, ".prowl", ".gitignore"))).toBe(true);
   });
+  describe("--template", () => {
+    it("scaffolds a fresh project and adds the requested template", () => {
+      runInit(["--template", "auth/login-flow"]);
+
+      const hunts = path.join(tempDir, ".prowl", "hunts");
+      expect(fs.existsSync(path.join(tempDir, ".prowl", "config.yml"))).toBe(true);
+      expect(fs.existsSync(path.join(hunts, "hello.yml"))).toBe(true);
+      expect(fs.readFileSync(path.join(hunts, "login-flow.yml"), "utf-8")).toContain(
+        "name: login-flow"
+      );
+    });
+
+    it("accepts several ids at once", () => {
+      runInit(["--template", "auth/login-flow", "smoke/homepage"]);
+
+      const hunts = path.join(tempDir, ".prowl", "hunts");
+      expect(fs.existsSync(path.join(hunts, "login-flow.yml"))).toBe(true);
+      expect(fs.existsSync(path.join(hunts, "homepage.yml"))).toBe(true);
+    });
+
+    it("adds a template to an already-initialized project without --force", () => {
+      runInit();
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        runInit(["--template", "e-commerce/checkout-flow"]);
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(process.exitCode ?? 0).toBe(0);
+      } finally {
+        errorSpy.mockRestore();
+      }
+      expect(
+        fs.existsSync(path.join(tempDir, ".prowl", "hunts", "checkout-flow.yml"))
+      ).toBe(true);
+    });
+
+    it("refuses to overwrite an existing hunt of the same name without --force", () => {
+      runInit();
+      const target = path.join(tempDir, ".prowl", "hunts", "login-flow.yml");
+      fs.writeFileSync(target, "steps:\n  - navigate: /mine");
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const originalExitCode = process.exitCode;
+      try {
+        process.exitCode = undefined;
+        runInit(["--template", "auth/login-flow"]);
+        expect(process.exitCode).toBe(1);
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("--force"));
+        expect(fs.readFileSync(target, "utf-8")).toBe("steps:\n  - navigate: /mine");
+
+        process.exitCode = undefined;
+        runInit(["--template", "auth/login-flow", "--force"]);
+        expect(fs.readFileSync(target, "utf-8")).toContain("name: login-flow");
+      } finally {
+        process.exitCode = originalExitCode;
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("writes nothing when any requested id is unknown", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const originalExitCode = process.exitCode;
+      try {
+        process.exitCode = undefined;
+        runInit(["--template", "auth/login-flow", "auth/not-a-template"]);
+        expect(process.exitCode).toBe(1);
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("prowl templates list"));
+        expect(fs.existsSync(path.join(tempDir, ".prowl"))).toBe(false);
+      } finally {
+        process.exitCode = originalExitCode;
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("--list-templates prints the catalog and does not initialize", () => {
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        runInit(["--list-templates"]);
+        expect(logSpy.mock.calls.map((c) => String(c[0])).join("\n")).toContain("auth/login-flow");
+      } finally {
+        logSpy.mockRestore();
+      }
+      expect(fs.existsSync(path.join(tempDir, ".prowl"))).toBe(false);
+    });
+  });
 });

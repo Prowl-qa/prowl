@@ -5,7 +5,8 @@
 #
 # Run it:  prowl run hello
 #
-# Browse more hunt templates at https://hub.prowl.tools
+# Browse starter templates:  prowl templates list
+# Add one to this project:   prowl init --template auth/login-flow
 
 name: hello
 description: Verify the target app loads successfully
