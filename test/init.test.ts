@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildInitCommand } from "../src/cli/commands/init.js";
+import { loadHunt } from "../src/config/loader.js";
 
 describe("prowl init", () => {
   let tempDir: string;
@@ -32,6 +33,32 @@ describe("prowl init", () => {
     expect(fs.existsSync(path.join(prowlDir, "hunts", "hello.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, "hunts", "login-flow.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, ".gitignore"))).toBe(true);
+  });
+
+  it("creates a valid login-flow starter hunt", () => {
+    runInit();
+
+    const hunt = loadHunt("login-flow", path.join(tempDir, ".prowl"));
+
+    expect(hunt).toMatchObject({
+      name: "login-flow",
+      vars: {
+        EMAIL: "{{TEST_EMAIL}}",
+        PASSWORD: "{{TEST_PASSWORD}}",
+      },
+      assertions: [
+        { urlIncludes: "/dashboard" },
+        { noConsoleErrors: true },
+      ],
+    });
+    expect(hunt.steps).toEqual([
+      { navigate: "/login" },
+      { fill: { Email: "{{EMAIL}}" } },
+      { fill: { Password: "{{PASSWORD}}" } },
+      { click: "Sign In" },
+      { waitForUrl: { value: "/dashboard", timeout: 10000 } },
+      { assert: { visible: "Dashboard" } },
+    ]);
   });
 
   it(".gitignore ignores runs, auth-state.json, and .env", () => {
