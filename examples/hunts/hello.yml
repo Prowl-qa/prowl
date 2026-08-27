@@ -5,7 +5,7 @@
 #
 # Run it:  prowl run hello
 #
-# Browse more hunt templates at https://hub.prowl.tools
+# See .prowl/hunts/login-flow.yml for a fuller example (auth, secrets, assertions).
 
 name: hello
 description: Verify the target app loads successfully
