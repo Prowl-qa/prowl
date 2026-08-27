@@ -4,14 +4,27 @@
 # only on the runner (via `codex login` into a dedicated CODEX_HOME on the host),
 # never in GitHub Actions secrets, and this workflow sets no PROWL_AI_KEY*.
 #
+# Single branded checks row (#64 branding follow-up): trigger off the CI workflow
+# COMPLETING rather than `pull_request`. A `workflow_run`-triggered workflow
+# attaches no row to the PR checks list (same reason the @prowl-review command
+# workflow is invisible), so the only prowl-review presence on the PR is the
+# branded "Prowl Review" check run the action posts — matching hosted reviewers
+# and the prowl-code-review / prowl-web repos. Tradeoffs: the review starts ~1 min
+# after CI finishes, the review only spends tokens once CI is green, and
+# `workflow_run` workflows always run from the DEFAULT branch, so changes to this
+# file only take effect after they merge to main.
+#
 # PUBLIC-REPO NOTE — this repo (prowl-tools/prowl) is PUBLIC:
 #   - OpenAI's CI/CD auth guidance says, verbatim: "Do not use this workflow for
 #     public or open-source repositories." GitHub also warns against self-hosted
 #     runners on public repos: any PR can execute code on the runner.
-#   - The job-level same-repo `if:` gate below is therefore MANDATORY here — it
-#     keeps fork PRs from ever being scheduled onto the runner, so only this
-#     repo's own code runs there. Codex itself also runs `--sandbox read-only`.
-#     Do NOT drop the gate. (Only a PRIVATE repo could.)
+#   - The job-level same-repo `if:` gate on the `review` job below is therefore
+#     MANDATORY here — it keeps fork PRs from ever being scheduled onto the
+#     runner, so only this repo's own code runs there. `head_repo` is re-derived
+#     server-side from PR metadata in `resolve`, never from the PR-controlled
+#     event payload. The hosted ubuntu resolve/report jobs still give fork PRs a
+#     status row without touching the runner. Codex itself runs
+#     `--sandbox read-only`. Do NOT drop the gate. (Only a PRIVATE repo could.)
 #
 # Branded identity (#59): the org shares PROWL_APP_ID/PROWL_APP_PRIVATE_KEY with
 # this repo, so the review job mints an App installation token and posts as
@@ -22,32 +35,241 @@
 name: prowl-review
 
 on:
-  pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-
-# Per-PR automatic reviews cancel stale runs when a PR is updated. Command-mode
-# maintainer requests use a separate non-cancelling group in
-# `prowl-review-command.yml`, so auto-review churn cannot interrupt them.
-# Machine-wide serialization ACROSS repos/runner instances is the provider's
-# Codex lock ($CODEX_HOME/.prowl-review.lock, on by default for `provider:
-# codex`), NOT GitHub concurrency.
-concurrency:
-  group: prowl-review-auto-${{ github.repository }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 permissions:
-  pull-requests: write   # post the review + inline comments
-  issues: write          # create/update the summary comment
-  checks: write          # optional merge-gate check run
   contents: read
+  actions: read # read the completed CI run for the PR-resolution fallback
 
 jobs:
+  resolve:
+    # Only same-repo pull_request CI runs that SUCCEEDED start a review.
+    # `workflow_run` does not preserve the original PR action, so gate on the
+    # triggering event type first (skip push CI), then require a green CI run.
+    # Failure/cancelled/timed_out/skipped/etc. conclusions never start a review.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      resolved: ${{ steps.pr.outputs.resolved }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      head_repo: ${{ steps.pr.outputs.head_repo }}
+      is_draft: ${{ steps.pr.outputs.is_draft }}
+      check_head_sha: ${{ steps.pr.outputs.check_head_sha }}
+      check_conclusion: ${{ steps.pr.outputs.check_conclusion }}
+      check_title: ${{ steps.pr.outputs.check_title }}
+      check_summary: ${{ steps.pr.outputs.check_summary }}
+    steps:
+      - name: Resolve PR from the CI run
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Payload PR list first; API fallback needs the run id + head SHA. Passed
+          # via env (never inlined) so nothing from the event reaches the shell.
+          PR_PAYLOAD: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CHECK_RUN: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          report_check() {
+            local conclusion="$1"
+            local title="$2"
+            local summary="$3"
+            {
+              echo "resolved=false"
+              echo "head_sha=${HEAD_SHA}"
+              echo "check_head_sha=${HEAD_SHA}"
+              if [ -n "${pr_number:-}" ]; then
+                echo "pr_number=${pr_number}"
+              fi
+              if [ "${CHECK_RUN}" = "true" ]; then
+                echo "check_conclusion=${conclusion}"
+                echo "check_title=${title}"
+                echo "check_summary=${summary}"
+              fi
+            } >> "$GITHUB_OUTPUT"
+          }
+
+          # PR resolution (#64): merge workflow_run payload candidates with the
+          # completed-run API lookup. Payloads can be present but incomplete, so the
+          # API is not only an empty-payload fallback. Then keep only OPEN PRs whose
+          # head SHA matches this CI run, and require EXACTLY ONE — never start a
+          # review on a missing or ambiguous match.
+          payload_candidates="$(printf '%s' "${PR_PAYLOAD}" | jq -r '.[]?.number // empty')"
+          if ! api_candidates="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.pull_requests[]?.number')"; then
+            report_check "failure" "Review setup failed" "prowl-review could not inspect the completed CI run while resolving a pull request. Inspect this workflow run for API, rate-limit, or permissions errors."
+            echo "Skipping: failed to inspect completed CI run ${RUN_ID}."
+            exit 0
+          fi
+          candidates="${payload_candidates}${payload_candidates:+ }${api_candidates}"
+
+          matches=""
+          for pr in ${candidates}; do
+            if ! info="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq '[.state, .head.sha] | @tsv' 2>/dev/null)"; then
+              pr_number="${pr}"
+              report_check "failure" "Review setup failed" "prowl-review could not load pull request #${pr} while resolving the completed CI run. Inspect this workflow run for API, rate-limit, or permissions errors."
+              echo "Skipping: failed to load PR #${pr} metadata during resolution."
+              exit 0
+            fi
+            state="$(printf '%s' "${info}" | cut -f1)"
+            pr_head="$(printf '%s' "${info}" | cut -f2)"
+            if [ "${state}" = "open" ] && [ "${pr_head}" = "${HEAD_SHA}" ]; then
+              case " ${matches} " in
+                *" ${pr} "*) ;;
+                *) matches="${matches}${matches:+ }${pr}" ;;
+              esac
+            fi
+          done
+
+          IFS=" " read -r -a match_array <<< "${matches}"
+          count=${#match_array[@]}
+          if [ "${count}" -ne 1 ]; then
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: expected exactly one open PR at CI head ${HEAD_SHA}, found ${count} (${matches:-none})."
+            exit 0
+          fi
+          pr_number="${match_array[0]}"
+
+          # Re-derive trusted base/head from the resolved PR (never from the CI
+          # payload) so the config/guidelines checkout stays anchored to base code.
+          if ! meta="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" --jq '[.base.sha, .head.sha, .head.repo.full_name, .draft] | @tsv' 2>/dev/null)"; then
+            report_check "failure" "Review setup failed" "prowl-review could not load pull request #${pr_number} metadata after resolving the completed CI run. Inspect this workflow run for API, rate-limit, or permissions errors."
+            echo "Skipping: failed to load complete PR metadata for #${pr_number}."
+            exit 0
+          fi
+          base_sha="$(printf '%s' "${meta}" | cut -f1)"
+          head_sha="$(printf '%s' "${meta}" | cut -f2)"
+          head_repo="$(printf '%s' "${meta}" | cut -f3)"
+          is_draft="$(printf '%s' "${meta}" | cut -f4)"
+          if [ -z "${base_sha}" ] || [ "${base_sha}" = "null" ] ||
+            [ -z "${head_sha}" ] || [ "${head_sha}" = "null" ] ||
+            [ -z "${head_repo}" ] || [ "${head_repo}" = "null" ]; then
+            report_check "failure" "Review setup failed" "prowl-review could not resolve complete metadata for pull request #${pr_number}. Inspect this workflow run for API, rate-limit, or permissions errors."
+            echo "Skipping: incomplete PR metadata for #${pr_number}."
+            exit 0
+          fi
+          if [ "${head_sha}" != "${HEAD_SHA}" ]; then
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping: PR #${pr_number} head moved from CI head ${HEAD_SHA} to ${head_sha}."
+            exit 0
+          fi
+
+          # Fork gate: forks never receive provider secrets and must never reach the
+          # self-hosted runner. Draft handling is deferred to the action so trusted
+          # `review.reviewDrafts` config and the neutral skip check run still apply.
+          if [ "${head_repo}" != "${GITHUB_REPOSITORY}" ]; then
+            report_check "neutral" "Fork pull request - review skipped" "prowl-review skipped this fork pull request because provider secrets are unavailable to fork pull_request runs. No review was run for this commit."
+            echo "Skipping fork PR head ${head_repo}; forks do not receive provider secrets."
+            exit 0
+          fi
+
+          {
+            echo "resolved=true"
+            echo "pr_number=${pr_number}"
+            echo "base_sha=${base_sha}"
+            echo "head_sha=${head_sha}"
+            echo "head_repo=${head_repo}"
+            echo "is_draft=${is_draft}"
+          } >> "$GITHUB_OUTPUT"
+
+  report-unreviewable:
+    needs: resolve
+    if: needs.resolve.outputs.check_conclusion != ''
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    concurrency:
+      group: prowl-review-${{ needs.resolve.outputs.pr_number || needs.resolve.outputs.check_head_sha }}
+      cancel-in-progress: false
+    env:
+      PROWL_APP_CONFIGURED: ${{ secrets.PROWL_APP_ID != '' && secrets.PROWL_APP_PRIVATE_KEY != '' }}
+    steps:
+      - name: Mint prowl-review app token
+        id: app-token
+        if: env.PROWL_APP_CONFIGURED == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.PROWL_APP_ID }}
+          private-key: ${{ secrets.PROWL_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+          permission-checks: write
+
+      - name: Publish Prowl Review setup result
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          HEAD_SHA: ${{ needs.resolve.outputs.check_head_sha }}
+          CHECK_CONCLUSION: ${{ needs.resolve.outputs.check_conclusion }}
+          CHECK_TITLE: ${{ needs.resolve.outputs.check_title }}
+          CHECK_SUMMARY: ${{ needs.resolve.outputs.check_summary }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${HEAD_SHA}" ] || [ -z "${CHECK_CONCLUSION}" ]; then
+            exit 0
+          fi
+
+          if ! gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
+            --method POST \
+            -f "name=Prowl Review" \
+            -f "head_sha=${HEAD_SHA}" \
+            -f "status=completed" \
+            -f "conclusion=${CHECK_CONCLUSION}" \
+            -f "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -f "output[title]=${CHECK_TITLE}" \
+            -f "output[summary]=${CHECK_SUMMARY}" \
+            >/dev/null; then
+            echo "::warning title=Prowl Review setup check not published::Failed to publish setup result for ${HEAD_SHA}; continuing without failing the workflow."
+          fi
+
   review:
-    # Same-repo gate: keeps fork PRs off the self-hosted runner. MANDATORY on
-    # this public repo (see header). Do not remove.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    needs: resolve
+    # Job-level same-repo gate (#64): the self-hosted Codex runner must NEVER be
+    # scheduled for a fork PR. `resolved` is already same-repo-only (the resolve
+    # job posts the neutral fork-skip check on ubuntu and never sets resolved=true
+    # for a fork), but the explicit head_repo == github.repository check is
+    # belt-and-suspenders so no future resolve change can silently route fork code
+    # onto the runner. head_repo is re-derived server-side from PR metadata in
+    # `resolve`, never from the PR-controlled event payload. MANDATORY on this
+    # public repo (see header).
+    if: >
+      needs.resolve.outputs.resolved == 'true' &&
+      needs.resolve.outputs.head_repo == github.repository
+    # Subscription-backed reviews run on the always-on Mac mini (#45/#64): keyless
+    # `provider: codex` via the ChatGPT login that lives only on that host. The
+    # ubuntu resolve/report jobs above stay hosted so fork PRs still get a status
+    # row without touching the self-hosted runner.
     runs-on: [self-hosted, macOS, prowl-review]
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: write
+    # Per-PR serialization shared with the command workflow
+    # (`prowl-review-command.yml` uses the same group keyed on the PR number).
+    # Keep this non-cancelling so a new auto-review cannot interrupt an in-flight
+    # maintainer command; stale auto reviews skip publishing when the reviewed
+    # head has advanced. Machine-wide serialization ACROSS repos/runner instances
+    # is the provider's Codex lock ($CODEX_HOME/.prowl-review.lock, on by default
+    # for `provider: codex`), NOT GitHub concurrency.
+    concurrency:
+      group: prowl-review-codex-${{ github.repository }}-${{ needs.resolve.outputs.pr_number }}
+      cancel-in-progress: false
     env:
       PROWL_APP_CONFIGURED: ${{ secrets.PROWL_APP_ID != '' && secrets.PROWL_APP_PRIVATE_KEY != '' }}
     steps:
@@ -69,25 +291,54 @@ jobs:
           permission-pull-requests: write
           permission-checks: write
 
-      - uses: actions/checkout@v4
+      # Open the branded check run immediately so the PR shows a live
+      # "Review in progress" row while the review runs.
+      - name: Open Prowl Review check
+        id: open-check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! check_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs" \
+            --method POST \
+            -f "name=Prowl Review" \
+            -f "head_sha=${HEAD_SHA}" \
+            -f "status=in_progress" \
+            -f "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -f "output[title]=Review in progress" \
+            -f "output[summary]=Prowl Review is preparing to analyze the changes in this pull request." \
+            --jq '.id')"; then
+            echo "::warning title=Prowl Review check not opened::Failed to open an in-progress check for ${HEAD_SHA}; continuing without a finalization fallback."
+            check_run_id=""
+          fi
+          if [ -n "${check_run_id}" ] && [ "${check_run_id}" != "null" ]; then
+            echo "check_run_id=${check_run_id}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Load .prowl-review.yml + guidelines from the TRUSTED base branch, not PR
+      # code, so a PR can never point the review at a config it authored. base_sha
+      # is re-derived server-side in `resolve` from the PR's base.sha.
+      - name: Checkout trusted base (config + guidelines)
+        uses: actions/checkout@v4
         with:
+          ref: ${{ needs.resolve.outputs.base_sha }}
+          path: prowl-base
           persist-credentials: false
 
-      # Load .prowl-review.yml from the TRUSTED base branch, not PR code, so a PR
-      # can never point the review at a config it authored. Use the moving branch
-      # ref instead of the event base SHA so the workflow self-bootstraps after the
-      # config lands on main.
-      - uses: actions/checkout@v4
+      - name: Checkout PR head for context
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
-          path: prowl-review-config
+          ref: ${{ needs.resolve.outputs.head_sha }}
+          path: pr-head
           persist-credentials: false
 
       # Bootstrap only matters for the PR that introduces .prowl-review.yml: before
-      # it merges, main has no trusted config yet. Copy a known-good config from the
-      # pinned prowl-review action repo, never from the PR checkout.
+      # it merges, the base branch has no trusted config yet. Copy a known-good
+      # config from the pinned prowl-review action repo, never from the PR checkout.
       - name: Checkout bootstrap review config
-        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        if: ${{ hashFiles('prowl-base/.prowl-review.yml') == '' }}
         uses: actions/checkout@v4
         with:
           repository: prowl-tools/prowl-code-review
@@ -96,21 +347,81 @@ jobs:
           persist-credentials: false
 
       - name: Install bootstrap review config
-        if: ${{ hashFiles('prowl-review-config/.prowl-review.yml') == '' }}
+        if: ${{ hashFiles('prowl-base/.prowl-review.yml') == '' }}
         shell: bash
         run: |
           set -euo pipefail
-          cp prowl-review-config-bootstrap/.prowl-review.yml prowl-review-config/.prowl-review.yml
+          cp prowl-review-config-bootstrap/.prowl-review.yml prowl-base/.prowl-review.yml
 
       # Pinned to the current codex-provider commit; repin to @v1 once a release
       # containing the codex provider (>0.3.0) ships.
-      - uses: prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295
+      - name: prowl-review
+        uses: prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295
+        env:
+          # Trusted head identity re-derived from the resolved PR; the action reads
+          # these for stale-head detection and same-repo (non-fork) confirmation.
+          PROWL_REVIEWED_HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+          PROWL_REVIEWED_HEAD_REPOSITORY: ${{ needs.resolve.outputs.head_repo }}
+          PROWL_CHECK_RUN_ID: ${{ steps.open-check.outputs.check_run_id }}
         with:
+          # workflow_run carries no pull_request context, so hand the resolved PR
+          # number and draft state to the action explicitly (#64).
+          pr-number: ${{ needs.resolve.outputs.pr_number }}
+          pr-draft: ${{ needs.resolve.outputs.is_draft }}
           # Keyless: no PROWL_AI_KEY* — auth is the runner's own `codex login`.
+          # Model + effort are pinned in the trusted base-branch config;
+          # ai-provider is passed explicitly so the run can never silently fall
+          # back to an API-key provider.
           ai-provider: codex
-          # Model + effort are pinned in the trusted base-branch config.
-          config-path: prowl-review-config/.prowl-review.yml
+          config-path: ${{ github.workspace }}/prowl-base/.prowl-review.yml
+          workspace-path: ${{ github.workspace }}/pr-head
+          guidelines-path: ${{ github.workspace }}/prowl-base
           # Branded App token when configured; otherwise the default Actions token.
           github-token: ${{ steps.app-token.outputs.token || github.token }}
           bot-login: ${{ steps.app-token.outputs.app-slug != '' && format('{0}[bot]', steps.app-token.outputs.app-slug) || '' }}
           # min-severity: major      # optional: only surface major+ findings
+
+      # Never leave the branded row spinning if the job dies mid-review.
+      - name: Complete unfinished Prowl Review check
+        if: ${{ always() && steps.open-check.outputs.check_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          CHECK_RUN_ID: ${{ steps.open-check.outputs.check_run_id }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! status="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${CHECK_RUN_ID}" --jq '.status')"; then
+            echo "::warning title=Prowl Review check status unknown::Could not read check run ${CHECK_RUN_ID}; leaving it untouched."
+            exit 0
+          fi
+          if [ "${status}" = "completed" ]; then
+            exit 0
+          fi
+          if [ -z "${status}" ]; then
+            echo "::warning title=Prowl Review check status unknown::Check run ${CHECK_RUN_ID} returned an empty status; leaving it untouched."
+            exit 0
+          fi
+
+          conclusion="failure"
+          title="Review workflow failed"
+          summary="prowl-review could not complete because the GitHub Actions workflow failed before the review finished. Inspect this workflow run for setup, checkout, configuration, or provider errors."
+          if [ "${JOB_STATUS}" = "cancelled" ]; then
+            conclusion="cancelled"
+            title="Review cancelled"
+            summary="prowl-review stopped because the GitHub Actions workflow run was cancelled."
+          elif [ "${JOB_STATUS}" = "success" ]; then
+            title="Review did not complete"
+            summary="prowl-review finished without completing the Prowl Review check run. Inspect this workflow run for details."
+          fi
+
+          if ! gh api "repos/${GITHUB_REPOSITORY}/check-runs/${CHECK_RUN_ID}" \
+            --method PATCH \
+            -f "status=completed" \
+            -f "conclusion=${conclusion}" \
+            -f "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -f "output[title]=${title}" \
+            -f "output[summary]=${summary}" \
+            >/dev/null; then
+            echo "::warning title=Prowl Review check not finalized::Failed to finalize check run ${CHECK_RUN_ID} with conclusion ${conclusion}; continuing without failing the workflow."
+          fi

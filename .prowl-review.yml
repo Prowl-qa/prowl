@@ -8,3 +8,6 @@ provider: codex                # keyless — auth is the runner's own `codex log
 model: gpt-5.5                 # ChatGPT-plan model
 codex:
   effort: low                  # low | medium | high | xhigh — cheap/fast setting
+checkRun:                      # branded "Prowl Review" check run; red only on a Critical finding
+  enabled: true
+  failOn: critical
