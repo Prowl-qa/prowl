@@ -20,10 +20,25 @@ All notable changes to Prowl will be documented in this file.
   on the runner. `.github/workflows/prowl-review.yml` auto-reviews PRs and
   `prowl-review-command.yml` handles `@prowl-review` chat/commands, both with
   `ai-provider: codex`, a 30-minute timeout, and the mandatory same-repo fork
-  gate required on a public repo. Automatic reviews cancel stale per-PR runs,
-  while maintainer command runs keep non-cancelling per-PR concurrency. Review config
-  lives in a root `.prowl-review.yml` (`provider: codex`, `model: gpt-5.5`,
-  `codex.effort: low`) loaded from the trusted base branch, never PR code. The
+  gate required on a public repo. Maintainer command runs keep non-cancelling
+  per-PR concurrency. Review config lives in a root `.prowl-review.yml`
+  (`provider: codex`, `model: gpt-5.5`, `codex.effort: low`) loaded from the
+  trusted base branch, never PR code.
+- **Single branded "Prowl Review" checks row (#64 branding follow-up).**
+  `.github/workflows/prowl-review.yml` now chains off CI via `workflow_run`
+  (`workflows: [CI], types: [completed]`, gated on a successful `pull_request`
+  CI run) instead of triggering on `pull_request` directly, so no octocat
+  `prowl-review / review` Actions row attaches to the PR — the only prowl-review
+  presence is the branded "Prowl Review" check run (App avatar), matching the
+  prowl-code-review and prowl-web repos. A hosted `resolve` job maps the CI run
+  to exactly one open PR (head-SHA match) and posts neutral/failure setup checks
+  for fork or unresolvable PRs without touching the self-hosted runner; the
+  self-hosted `review` job pre-creates the in-progress check and passes
+  `PROWL_CHECK_RUN_ID`/`pr-number`/`pr-draft` to the action. `.prowl-review.yml`
+  enables the check run (`checkRun.enabled: true`, `failOn: critical` — red only
+  on a Critical finding). `ci.yml` now lists explicit `pull_request` types
+  (`opened, synchronize, ready_for_review, reopened`) so a draft->ready or reopen
+  transition re-runs CI and thus the chained review. The
   action is pinned to immutable commit
   `prowl-tools/prowl-code-review@8a56424bce07b32d2374b647145a2dd0b4efc295`
   until a release (>0.3.0) containing the codex provider ships; bootstrap runs

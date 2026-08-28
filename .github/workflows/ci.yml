@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # ready_for_review/reopened are required so a draft->ready or reopen transition
+    # re-runs CI, which is what triggers the workflow_run-chained prowl-review (#64).
+    types: [opened, synchronize, ready_for_review, reopened]
 
 jobs:
   build:
