@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildInitCommand } from "../src/cli/commands/init.js";
-import { loadHunt } from "../src/config/loader.js";
+import { CONFIG_DIR, loadHunt } from "../src/config/loader.js";
 
 describe("prowl init", () => {
   let tempDir: string;
@@ -33,6 +33,20 @@ describe("prowl init", () => {
     expect(fs.existsSync(path.join(prowlDir, "hunts", "hello.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, "hunts", "login-flow.yml"))).toBe(true);
     expect(fs.existsSync(path.join(prowlDir, ".gitignore"))).toBe(true);
+  });
+
+  it("prints the bundled login-flow starter path on success", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      runInit();
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`${CONFIG_DIR}/hunts/login-flow.yml`)
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it("creates a valid login-flow starter hunt", () => {
