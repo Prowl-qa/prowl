@@ -606,15 +606,6 @@ scheduled.
    - No dependency on `prowl-hub`; CHANGELOG entry for any init-starter change
    - In progress: `login-flow.yml` starter added on branch `init-login-starter`
 
-{PROWL-073} **SUNSET-002: Remove Prowl Hub references from the CLI**
-   `src/cli/commands/init.ts:87` prints "Browse hunt templates at https://hub.prowl.tools" —
-   remove it (drop the line, or point at the bundled `login-flow.yml` example). Audit
-   `src/mcp/projects.ts`, `src/mcp/server.ts`, and `src/cli/commands/mcp.ts` (flagged by a
-   keyword grep) for any hub/registry fetch and remove it; the MCP server must not depend on a
-   retired endpoint. (The `hello.yml` comment link was already removed on branch
-   `init-login-starter`; init.ts:87 and the MCP fetches still remain.)
-   **Acceptance Criteria**: `grep -ri "hub.prowl" src` is empty; tests pass.
-
 {PROWL-074} **SUNSET-003: Make the macOS target a two-minute install (gate for distribution)**
    A stranger cannot use the macOS target today: the Swift helper is not in the npm tarball,
    requires a source checkout + Xcode toolchain + `swift build`, then Accessibility and Screen
