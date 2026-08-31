@@ -5,4 +5,5 @@ dist/
 .prowl/auth-state.json
 .DS_Store
 coverage/
+.claude/
 
