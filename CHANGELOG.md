@@ -5,6 +5,17 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **`prowl run`/`watch`/`history` now accept a literal hunt path, matching their
+  help text.** A hunt's identity is its file name under `.prowl/hunts/`, but the
+  argument help suggested paths the name validator then rejected (a leading
+  `.prowl/hunts/` or a `.yml` extension failed with "Invalid hunt name"). The
+  positional hunt argument is now normalized before validation — a leading
+  `.prowl/hunts/` or `hunts/` prefix and a trailing `.yml`/`.yaml` extension are
+  stripped — so `prowl run homepage`, `prowl run hunts/homepage.yml`, and
+  `prowl run .prowl/hunts/homepage.yml` all resolve to the same hunt (nested
+  hunts included: `.prowl/hunts/admin/users.yml` → `admin/users`). Input that is
+  still invalid after normalization now fails with an error that spells out the
+  accepted forms. Help text, error message, README, and behavior now agree.
 - **`prowl init` no longer points at the retired Prowl Hub.** The post-init
   message now points at the bundled `login-flow.yml` starter instead of
   `hub.prowl.tools` (the community hub was retired 2026-08-26; starters ship

@@ -2,12 +2,16 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { runHunt } from "../../runner/index.js";
 import { loadConfig, loadHuntTags } from "../../config/loader.js";
+import { normalizeHuntName } from "../../config/hunt-name.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 import { resultMascot } from "../mascot.js";
 
 export function buildRunCommand(): Command {
   const command = new Command("run")
-    .argument("<hunt-name>", "Hunt name or path (e.g. homepage or admin/users-crud)")
+    .argument(
+      "<hunt-name>",
+      "Hunt name or path (e.g. homepage, admin/users-crud, or .prowl/hunts/homepage.yml)"
+    )
     .option("--url <target>", "Override target URL")
     .option("--headed", "Show browser window")
     .option("--slow-mo <ms>", "Slow down Playwright actions", (value) => Number(value))
@@ -20,7 +24,8 @@ export function buildRunCommand(): Command {
     .option("--junit", "Generate JUnit XML report")
     .option("--config <path>", "Custom config path")
     .option("--json", "Output results as JSON")
-    .action(async (huntName, options) => {
+    .action(async (huntArg, options) => {
+      const huntName = normalizeHuntName(huntArg);
       try {
         if (options.includeTags || options.excludeTags) {
           const { configDir } = loadConfig(options.config);

@@ -699,9 +699,16 @@ spans. When the app emits no trace headers, nothing is recorded (no noise).
 
 ## CLI Reference
 
+A `<hunt-name>` is a hunt's file name under `.prowl/hunts/` — `homepage` for
+`.prowl/hunts/homepage.yml`, or `admin/users` for a nested
+`.prowl/hunts/admin/users.yml`. `run`, `watch`, and `history` also accept the
+literal path (`.prowl/hunts/homepage.yml` or `hunts/homepage.yml`, with or
+without the `.yml`/`.yaml` extension); it resolves to the same hunt.
+
 ```bash
 # Run a hunt
 prowl run <hunt-name>
+prowl run .prowl/hunts/homepage.yml     # A literal path resolves to `homepage`
 prowl run <hunt-name> --headed          # Show browser window
 prowl run <hunt-name> --trace           # Capture Playwright trace
 prowl run <hunt-name> --slow-mo 500     # Slow down actions (ms)
