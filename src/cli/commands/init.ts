@@ -84,7 +84,7 @@ export function buildInitCommand(): Command {
       console.log(welcomeBanner());
       console.log(chalk.green(`  Initialized ${CONFIG_DIR} directory.`));
       console.log(chalk.gray("  Run ") + chalk.bold("prowl run hello") + chalk.gray(" to get started."));
-      console.log(chalk.gray("  Browse hunt templates at ") + chalk.cyan("https://hub.prowl.tools") + "\n");
+      console.log(chalk.gray("  See ") + chalk.cyan(`${CONFIG_DIR}/hunts/login-flow.yml`) + chalk.gray(" for a fuller example.") + "\n");
     });
 
   return command;

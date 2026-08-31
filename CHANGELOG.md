@@ -4,6 +4,12 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **`prowl init` no longer points at the retired Prowl Hub.** The post-init
+  message now points at the bundled `login-flow.yml` starter instead of
+  `hub.prowl.tools` (the community hub was retired 2026-08-26; starters ship
+  inside the CLI).
+
 ### Added
 - **`prowl init` now scaffolds a login starter hunt.** Alongside `hello.yml`,
   `prowl init` writes `login-flow.yml` — a commented, real-world auth example
