@@ -140,37 +140,6 @@ from Appium/Espresso/Maestro users; use these verbatim-ish, they beat feature ch
 - Honest "not for you if..." section
 - Testimonial placeholders for when early users provide feedback
 
-{PROWL-070} **DOCS-001: README Getting Started is stale (8 phantom starter hunts, broken first-run flow)**
-   The README's Getting Started (lines ~90-133) claims `prowl init` creates 8 example hunts
-(homepage.yml, login-flow.yml, ...) and walks users through editing `homepage.yml` into a
-`name: smoke-test` hunt then running `prowl run smoke-test`. Reality since the examples were
-consolidated: `examples/hunts/` ships only `hello.yml` (init banner says "Run prowl run hello"),
-and the loader resolves hunts by FILE name (`loader.ts` resolves `<huntName>.yml`), so the documented
-flow fails twice over. The docs site fixed the same drift in prowl-docs PDOC-QA-011
-(doc-sweep-1, 2026-08-24) — port that corrected flow back here: real init tree, `prowl run
-hello` first, create `smoke-test.yml` (file name = hunt identity) before `prowl run smoke-test`.
-
-**Found during**: prowl-docs QA triage of qa-prowl-docs-e2e-20260802 {PDOC-QA-001} + doc-sweep-1
-review (2026-08-24)
-**Deliverable**: README Getting Started matches actual `prowl init` output and a working
-first-run path; grep README for other references to the removed starter hunts.
-
-{PROWL-071} **DOCS-002: `run`/`watch`/`history` help says "Hunt name or path" but path-style args are rejected**
-   The Commander argument help in `run.ts`/`watch.ts`/`history.ts` reads `"Hunt name or path
-(e.g. homepage or admin/users-crud)"`, but `hunt-name.ts` validation
-(`/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/`) rejects dots, so a literal file path like
-`.prowl/hunts/homepage.yml` fails with "Invalid hunt name" before anything runs — agents
-following the help text literally report every hunt as failed. "Path" actually means a
-slash-separated extensionless name under `hunts/`. Either accept real file paths (strip a
-`.prowl/hunts/` prefix and `.yml`/`.yaml` extension before validation) or reword the help to
-"Hunt name, optionally slash-nested (from prowl list)" — pick one and make help, error message,
-and README agree.
-
-**Found during**: prowl-docs QA triage of qa-prowl-docs-weekly-20260815 {PDOC-QA-006}
-(2026-08-23; recorded in that repo's Known non-issues ledger as a CLI-repo issue)
-**Deliverable**: help text, validation behavior, and error message are mutually consistent;
-unit test covering the chosen behavior.
-
 ## Low Priority
 
 {PROWL-003} **P2-008: `prowl ci --fail-fast` Option**
@@ -619,18 +588,6 @@ scheduled.
    - ARCH-006 shipped (prebuilt, signed/notarized universal binary, checksum-verified)
    - Fresh machine → first green macOS hunt in under five minutes with no source checkout
    - Docs: `prowl-docs` PQD-009
-
-{PROWL-075} **SUNSET-004: Reposition README + package metadata desktop-first**
-   The README headline is "CLI-first QA testing tool for deterministic web testing with
-   Playwright" and macOS first appears at line ~450 as a commented-out, "experimental" config
-   option. Rewrite the top of the README (headline, first example, feature list) to lead with
-   native macOS apps + web from one YAML; move the macOS section up; update `package.json`
-   description/keywords (`macos`, `desktop testing`, `accessibility`, `e2e`). Drop
-   "experimental" for macOS once PROWL-074 ships (use "beta" if a caveat is needed); keep
-   Android/iOS labelled experimental. Coordinate wording with `prowl-web` PQW-027 and the
-   GTM-002 positioning matrix.
-   **Acceptance Criteria**: README first screen shows a macOS example; npm listing reflects the
-   new keywords; no contradiction with prowl.tools copy.
 
 {PROWL-076} **SUNSET-005: Publish the "macOS app E2E in CI" recipe (dogfood write-up)**
    The owner already runs macOS-app hunts in CI on real projects. Getting Accessibility
