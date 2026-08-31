@@ -4,6 +4,26 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+- **README and npm metadata repositioned desktop-first.** The headline, intro,
+  and first-screen examples now lead with native macOS apps (Accessibility API)
+  and web apps (Playwright) from the same declarative YAML — a macOS example
+  runs alongside the web one, and the macOS Target section moved up to just after
+  Getting Started (it previously first surfaced as a commented-out config option
+  far down the file). macOS stays labelled **experimental** and the setup notes
+  stay honest that the driver still builds from source; the promotion to beta is
+  gated on the two-minute signed-helper install (PROWL-074). Comparison claims
+  are factual (Maestro is mobile/web, Playwright is web-only, XCUITest is
+  Swift + Xcode). `package.json` `description` now describes E2E testing for
+  native macOS and web apps, and `keywords` gain `macos`, `desktop-testing`, and
+  `accessibility`. The stale "Community Hub" section (a retired-hub reference)
+  was removed.
+- **Corrected the README Getting Started walkthrough.** It claimed `prowl init`
+  scaffolds 8 example hunts and had users edit `homepage.yml`; the real init
+  writes `hello.yml` and `login-flow.yml`, and a hunt's identity is its file
+  name. The flow now shows the real init tree/banner, runs `prowl run hello`
+  first, then creates a new `smoke-test.yml` (filename = hunt identity).
+
 ### Changed
 - **`prowl run`/`watch`/`history` now accept a literal hunt path, matching their
   help text.** A hunt's identity is its file name under `.prowl/hunts/`, but the
