@@ -87,20 +87,23 @@ prowl init
 
 <!-- ILLUSTRATION: Terminal screenshot showing `prowl init` output with raccoon mascot and file listing -->
 
-This creates a `.prowl/` directory with a config file and 8 example hunts:
+This creates a `.prowl/` directory with a config file and two starter hunts:
 
 ```text
 .prowl/
-├── config.yml              # Target URL, browser settings, guardrails
+├── config.yml         # Target URL, browser settings, guardrails
+├── .gitignore         # Keeps runs/, auth-state.json, and .env out of git
 └── hunts/
-    ├── homepage.yml         # Basic page load smoke test
-    ├── login-flow.yml       # Email/password authentication
-    ├── signup-flow.yml      # Registration with validation
-    ├── form-submit.yml      # Form fill and submit
-    ├── form-validation.yml  # Validation errors and resubmit
-    ├── crud-cycle.yml       # Create, read, update, delete lifecycle
-    ├── checkout-flow.yml    # E-commerce checkout
-    └── onboarding-wizard.yml # Multi-step SaaS onboarding
+    ├── hello.yml       # Minimal smoke test — verifies the app loads
+    └── login-flow.yml  # Fuller example — auth, secrets, assertions
+```
+
+`prowl init` finishes by pointing you at the first hunt:
+
+```text
+  Initialized .prowl directory.
+  Run prowl run hello to get started.
+  See .prowl/hunts/login-flow.yml for a fuller example.
 ```
 
 ### 3. Configure
@@ -112,11 +115,26 @@ target:
   url: "http://localhost:3000"
 ```
 
-### 4. Write Your First Hunt
+### 4. Run the starter hunt
 
-Edit `.prowl/hunts/homepage.yml` or create a new file:
+Run the bundled `hello` hunt to confirm your app is reachable:
+
+```bash
+prowl run hello
+```
+
+<!-- ILLUSTRATION: Terminal screenshot showing colorized pass/fail output with step timings -->
+
+A hunt's name is its **file name** under `.prowl/hunts/` — `hello` runs
+`.prowl/hunts/hello.yml`.
+
+### 5. Write your own hunt
+
+Create a new file `.prowl/hunts/smoke-test.yml`. The file name *is* the hunt
+name, so this hunt runs as `smoke-test`:
 
 ```yaml
+# .prowl/hunts/smoke-test.yml
 name: smoke-test
 steps:
   - navigate: "/"
@@ -127,13 +145,11 @@ assertions:
   - noConsoleErrors: true
 ```
 
-### 5. Run
+Run it by file name:
 
 ```bash
 prowl run smoke-test
 ```
-
-<!-- ILLUSTRATION: Terminal screenshot showing colorized pass/fail output with step timings -->
 
 That's it. You're testing.
 
