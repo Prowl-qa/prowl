@@ -1,0 +1,130 @@
+# Builds, signs, and notarizes the universal `prowl-macdriver` helper and
+# publishes it as a GitHub Release so `prowl macdriver install` can fetch it.
+# (PROWL-074 / PROWL-052). Triggered by pushing a `macdriver-v<version>` tag,
+# e.g. `macdriver-v0.1.0`. See macdriver/RELEASING.md for the owner runbook and
+# the one-time secret provisioning.
+name: macdriver-release
+
+on:
+  push:
+    tags:
+      - "macdriver-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Verify required signing secrets
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          missing=()
+          for var in \
+            MACOS_CERTIFICATE_P12 \
+            MACOS_CERTIFICATE_PASSWORD \
+            MACOS_SIGNING_IDENTITY \
+            NOTARY_API_KEY_ID \
+            NOTARY_API_ISSUER_ID \
+            NOTARY_API_KEY_P8_BASE64; do
+            if [ -z "${!var}" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Refusing to build an unsigned binary. Missing repo secrets: ${missing[*]}"
+            echo "Provision them per macdriver/RELEASING.md, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Resolve version from tag
+        run: |
+          version="${GITHUB_REF_NAME#macdriver-v}"
+          if [ -z "$version" ] || [ "$version" = "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not of the form macdriver-v<version>."
+            exit 1
+          fi
+          echo "MACDRIVER_VERSION=$version" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=prowl-macdriver-v${version}-universal.zip" >> "$GITHUB_ENV"
+
+      - name: Build arm64 and x86_64, lipo into a universal binary
+        working-directory: macdriver
+        run: |
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+          mkdir -p "$RUNNER_TEMP/out"
+          lipo -create -output "$RUNNER_TEMP/out/prowl-macdriver" \
+            .build/arm64-apple-macosx/release/prowl-macdriver \
+            .build/x86_64-apple-macosx/release/prowl-macdriver
+          lipo -info "$RUNNER_TEMP/out/prowl-macdriver"
+
+      - name: Import Developer ID signing certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/prowl-signing.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+
+      - name: Codesign (Developer ID, hardened runtime, timestamp)
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_SIGNING_IDENTITY" "$RUNNER_TEMP/out/prowl-macdriver"
+          codesign --verify --strict --verbose=2 "$RUNNER_TEMP/out/prowl-macdriver"
+
+      - name: Notarize (App Store Connect API key)
+        env:
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          NOTARY_API_KEY_P8_BASE64: ${{ secrets.NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          echo "$NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          # notarytool needs a container; ditto -c -k zips the bare binary.
+          ditto -c -k "$RUNNER_TEMP/out/prowl-macdriver" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$NOTARY_API_KEY_ID" \
+            --issuer "$NOTARY_API_ISSUER_ID" \
+            --wait
+          # A bare executable cannot be stapled (`stapler` only handles
+          # .app/.pkg/.dmg). Gatekeeper verifies the notarization ticket online
+          # at first launch; confirm acceptance via the notarytool history/log
+          # (see macdriver/RELEASING.md), not a stapled ticket.
+
+      - name: Package universal binary + checksum
+        run: |
+          mkdir -p dist
+          ditto -c -k "$RUNNER_TEMP/out/prowl-macdriver" "dist/${ASSET_NAME}"
+          ( cd dist && shasum -a 256 "${ASSET_NAME}" > "${ASSET_NAME}.sha256" )
+          cat "dist/${ASSET_NAME}.sha256"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/${ASSET_NAME}" \
+            "dist/${ASSET_NAME}.sha256" \
+            --title "prowl-macdriver ${MACDRIVER_VERSION}" \
+            --notes "Prebuilt, signed, and notarized universal \`prowl-macdriver\` ${MACDRIVER_VERSION} (arm64 + x86_64). Install with \`prowl macdriver install\`."
