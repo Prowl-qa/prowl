@@ -9,16 +9,18 @@ All notable changes to Prowl will be documented in this file.
   setup with no Xcode or Swift toolchain (PROWL-074 / PROWL-052).** `install`
   downloads the pinned, signed, notarized universal `prowl-macdriver` helper from
   GitHub Releases (raw `fetch`, redirects followed), verifies its SHA-256 against
-  the released `.sha256` sidecar, optionally checks the code signature, and
+  the released `.sha256` sidecar, validates the archive members before
+  extraction, verifies the Developer ID signature and Gatekeeper policy, and
   installs it to `~/.prowl/macdriver/<version>/prowl-macdriver` (mode 0755);
-  `--force` reinstalls. `status` reports the resolved binary and how it was found,
-  installed versions, whether the binary runs (via a new `prowl-macdriver version`
-  probe), and Accessibility / Screen Recording guidance. A new tag-triggered
-  `macdriver-release` workflow (`macdriver-v*`) builds, signs, notarizes, and
-  publishes the release; the owner provisions the signing secrets and cuts the
-  first release (see `macdriver/RELEASING.md`). Until then, `install` returns a
-  clear "no release yet — build from source" error and the source build remains
-  the working path.
+  `--force` stages and verifies the replacement before swapping it in. `status`
+  reports the resolved binary and how it was found, installed versions, whether
+  the binary runs (via a new `prowl-macdriver version` probe), and Accessibility /
+  Screen Recording guidance. A new tag-triggered `macdriver-release` workflow
+  (`macdriver-v*`) builds, signs, notarizes, and publishes the release after
+  confirming the tag, TypeScript pin, and Swift helper version match; the owner
+  provisions the signing secrets and cuts the first release (see
+  `macdriver/RELEASING.md`). Until then, `install` returns a clear "no release yet
+  — build from source" error and the source build remains the working path.
 
 ### Changed
 - **The macOS helper is now resolved from a user-level install first.**

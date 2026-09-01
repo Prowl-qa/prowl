@@ -7,13 +7,18 @@ import {
   downloadAndVerify,
   installMacdriver,
   parseChecksumFile,
+  validateMacdriverArchiveEntries,
+  verifyMacdriverSignature,
   sha256Hex,
+  type CommandRunner,
   type FetchLike,
   type FetchResponseLike
 } from "../src/browser/macdriver-install.js";
 import {
   HELPER_BINARY,
   MACDRIVER_VERSION,
+  MACDRIVER_SIGNING_AUTHORITY_PREFIX,
+  MACDRIVER_SIGNING_IDENTIFIER,
   macdriverAssetName,
   macdriverInstalledBinary
 } from "../src/browser/macdriver-release.js";
@@ -54,6 +59,10 @@ function fakeFetch(
 /** Fake extractor: drops a fake helper binary into the destination dir. */
 async function fakeExtract(_zipPath: string, destDir: string): Promise<void> {
   fs.writeFileSync(path.join(destDir, HELPER_BINARY), "#!/bin/sh\necho prowl-macdriver 0.1.0\n");
+}
+
+async function trustedArchiveEntries(): Promise<string[]> {
+  return [HELPER_BINARY];
 }
 
 let home: string;
@@ -113,11 +122,112 @@ describe("downloadAndVerify", () => {
   });
 });
 
+describe("validateMacdriverArchiveEntries", () => {
+  it("accepts the expected root helper binary", () => {
+    expect(() => validateMacdriverArchiveEntries([HELPER_BINARY])).not.toThrow();
+  });
+
+  it("rejects traversal and unexpected entries", () => {
+    expect(() => validateMacdriverArchiveEntries(["../owned"])).toThrow("Unsafe path");
+    expect(() => validateMacdriverArchiveEntries([HELPER_BINARY, "__MACOSX/._prowl-macdriver"])).toThrow(
+      "Unexpected prowl-macdriver release archive contents"
+    );
+  });
+});
+
+describe("verifyMacdriverSignature", () => {
+  const binaryPath = "/tmp/prowl-macdriver";
+  const validCodesignDetails =
+    `Identifier=${MACDRIVER_SIGNING_IDENTIFIER}\n` +
+    `Authority=${MACDRIVER_SIGNING_AUTHORITY_PREFIX} (ABC123DEFG)\n` +
+    "Authority=Developer ID Certification Authority\n" +
+    "Authority=Apple Root CA\n" +
+    "TeamIdentifier=ABC123DEFG\n";
+
+  it("requires codesign details and a successful Gatekeeper assessment", async () => {
+    const calls: string[] = [];
+    const run: CommandRunner = async (file, args) => {
+      calls.push(`${file} ${args.join(" ")}`);
+      if (file === "codesign" && args[0] === "--display") {
+        return { stderr: validCodesignDetails };
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await verifyMacdriverSignature(binaryPath, run);
+
+    expect(calls).toEqual([
+      `codesign --verify --strict ${binaryPath}`,
+      `codesign --display --verbose=4 ${binaryPath}`,
+      `spctl --assess --type execute --verbose=4 ${binaryPath}`
+    ]);
+  });
+
+  it("rejects a binary signed by a different Developer ID authority", async () => {
+    const run: CommandRunner = async (file, args) => {
+      if (file === "codesign" && args[0] === "--display") {
+        return {
+          stderr:
+            `Identifier=${MACDRIVER_SIGNING_IDENTIFIER}\n` +
+            "Authority=Developer ID Application: Someone Else (ABC123DEFG)\n" +
+            "TeamIdentifier=ABC123DEFG\n"
+        };
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await expect(verifyMacdriverSignature(binaryPath, run)).rejects.toThrow(
+      `expected ${MACDRIVER_SIGNING_AUTHORITY_PREFIX} signer`
+    );
+  });
+
+  it("rejects a TeamIdentifier that does not match the Developer ID authority", async () => {
+    const run: CommandRunner = async (file, args) => {
+      if (file === "codesign" && args[0] === "--display") {
+        return {
+          stderr:
+            `Identifier=${MACDRIVER_SIGNING_IDENTIFIER}\n` +
+            `Authority=${MACDRIVER_SIGNING_AUTHORITY_PREFIX} (ABC123DEFG)\n` +
+            "TeamIdentifier=ZZZ9876543\n"
+        };
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await expect(verifyMacdriverSignature(binaryPath, run)).rejects.toThrow(
+      "does not match Developer ID authority team"
+    );
+  });
+
+  it("rejects a failed Gatekeeper policy assessment", async () => {
+    const run: CommandRunner = async (file, args) => {
+      if (file === "codesign" && args[0] === "--display") {
+        return { stderr: validCodesignDetails };
+      }
+      if (file === "spctl") {
+        throw Object.assign(new Error("rejected"), { stderr: "source=Unnotarized Developer ID" });
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await expect(verifyMacdriverSignature(binaryPath, run)).rejects.toThrow("spctl assessment failed");
+  });
+
+  it("fails closed when a required verification command cannot run", async () => {
+    const run: CommandRunner = async (file) => {
+      throw Object.assign(new Error(`spawn ${file} ENOENT`), { code: "ENOENT" });
+    };
+
+    await expect(verifyMacdriverSignature(binaryPath, run)).rejects.toThrow("codesign verification failed");
+  });
+});
+
 describe("installMacdriver", () => {
   it("installs the pinned binary to ~/.prowl/macdriver/<version> with mode 0755", async () => {
     const result = await installMacdriver({
       homedir: home,
       fetchImpl: fakeFetch(),
+      listArchiveEntries: trustedArchiveEntries,
       extract: fakeExtract,
       verifySignature: async () => {}
     });
@@ -130,7 +240,13 @@ describe("installMacdriver", () => {
   });
 
   it("is a no-op when already installed and --force is not set", async () => {
-    const opts = { homedir: home, fetchImpl: fakeFetch(), extract: fakeExtract, verifySignature: async () => {} };
+    const opts = {
+      homedir: home,
+      fetchImpl: fakeFetch(),
+      listArchiveEntries: trustedArchiveEntries,
+      extract: fakeExtract,
+      verifySignature: async () => {}
+    };
     await installMacdriver(opts);
     const spied = fakeFetch();
     const result = await installMacdriver({ ...opts, fetchImpl: spied });
@@ -139,7 +255,7 @@ describe("installMacdriver", () => {
   });
 
   it("re-downloads when --force is set", async () => {
-    const opts = { homedir: home, extract: fakeExtract, verifySignature: async () => {} };
+    const opts = { homedir: home, listArchiveEntries: trustedArchiveEntries, extract: fakeExtract, verifySignature: async () => {} };
     await installMacdriver({ ...opts, fetchImpl: fakeFetch() });
     const forcedFetch = fakeFetch();
     const result = await installMacdriver({ ...opts, force: true, fetchImpl: forcedFetch });
@@ -152,6 +268,7 @@ describe("installMacdriver", () => {
       installMacdriver({
         homedir: home,
         fetchImpl: fakeFetch(),
+        listArchiveEntries: trustedArchiveEntries,
         extract: async () => {}, // extracts nothing
         verifySignature: async () => {}
       })
@@ -164,6 +281,7 @@ describe("installMacdriver", () => {
       installMacdriver({
         homedir: home,
         fetchImpl: fakeFetch(),
+        listArchiveEntries: trustedArchiveEntries,
         extract: fakeExtract,
         verifySignature: async () => {
           throw new Error("codesign verification failed");
@@ -171,6 +289,84 @@ describe("installMacdriver", () => {
       })
     ).rejects.toThrow("codesign verification failed");
     expect(fs.existsSync(macdriverInstalledBinary(MACDRIVER_VERSION, home))).toBe(false);
+  });
+
+  it("rejects traversal version values before deleting anything outside the install root", async () => {
+    const sentinelDir = path.join(home, ".prowl", "sentinel");
+    const sentinel = path.join(sentinelDir, "keep.txt");
+    fs.mkdirSync(sentinelDir, { recursive: true });
+    fs.writeFileSync(sentinel, "do not delete");
+
+    const fetchImpl = fakeFetch();
+    await expect(
+      installMacdriver({
+        version: "../sentinel",
+        homedir: home,
+        fetchImpl,
+        listArchiveEntries: trustedArchiveEntries,
+        extract: fakeExtract,
+        verifySignature: async () => {}
+      })
+    ).rejects.toThrow("Invalid prowl-macdriver version");
+    expect(fetchImpl as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(fs.readFileSync(sentinel, "utf8")).toBe("do not delete");
+  });
+
+  it("rejects traversal archive entries before extraction", async () => {
+    const extract = vi.fn(fakeExtract);
+    await expect(
+      installMacdriver({
+        homedir: home,
+        fetchImpl: fakeFetch(),
+        listArchiveEntries: async () => ["../owned"],
+        extract,
+        verifySignature: async () => {}
+      })
+    ).rejects.toThrow("Unsafe path");
+    expect(extract).not.toHaveBeenCalled();
+    expect(fs.existsSync(macdriverInstalledBinary(MACDRIVER_VERSION, home))).toBe(false);
+  });
+
+  it("rejects a helper entry that extracts as a symlink", async () => {
+    const sentinel = path.join(home, "outside-helper");
+    fs.writeFileSync(sentinel, "outside");
+
+    await expect(
+      installMacdriver({
+        homedir: home,
+        fetchImpl: fakeFetch(),
+        listArchiveEntries: trustedArchiveEntries,
+        extract: async (_zipPath, destDir) => {
+          fs.symlinkSync(sentinel, path.join(destDir, HELPER_BINARY));
+        },
+        verifySignature: async () => {}
+      })
+    ).rejects.toThrow("not a regular file");
+    expect(fs.readFileSync(sentinel, "utf8")).toBe("outside");
+  });
+
+  it("preserves an existing helper when a forced reinstall fails verification", async () => {
+    const opts = {
+      homedir: home,
+      fetchImpl: fakeFetch(),
+      listArchiveEntries: trustedArchiveEntries,
+      extract: fakeExtract,
+      verifySignature: async () => {}
+    };
+    await installMacdriver(opts);
+    const binaryPath = macdriverInstalledBinary(MACDRIVER_VERSION, home);
+    fs.writeFileSync(binaryPath, "existing helper");
+
+    await expect(
+      installMacdriver({
+        ...opts,
+        force: true,
+        verifySignature: async () => {
+          throw new Error("codesign verification failed");
+        }
+      })
+    ).rejects.toThrow("codesign verification failed");
+    expect(fs.readFileSync(binaryPath, "utf8")).toBe("existing helper");
   });
 });
 
@@ -194,6 +390,7 @@ describe("collectMacdriverStatus", () => {
     await installMacdriver({
       homedir: home,
       fetchImpl: fakeFetch(),
+      listArchiveEntries: trustedArchiveEntries,
       extract: fakeExtract,
       verifySignature: async () => {}
     });
@@ -205,9 +402,14 @@ describe("collectMacdriverStatus", () => {
   });
 
   it("reports no resolved binary when nothing is installed and no source build is found", async () => {
-    // A bogus PATH-free env and an empty home; the resolver may still find the
-    // repo's own .build, so only assert the installed list is empty here.
-    const status = await collectMacdriverStatus({ env: {} as NodeJS.ProcessEnv, homedir: home, probe });
-    expect(status.installed).toEqual([]);
+    const existsSync = vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    try {
+      const status = await collectMacdriverStatus({ env: {} as NodeJS.ProcessEnv, homedir: home, probe });
+      expect(status.resolved).toBeNull();
+      expect(status.probedVersion).toBeNull();
+      expect(status.installed).toEqual([]);
+    } finally {
+      existsSync.mockRestore();
+    }
   });
 });

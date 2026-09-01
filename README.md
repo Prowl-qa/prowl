@@ -285,7 +285,9 @@ the Accessibility grant directly from the helper (use the path `status` reports,
 or the source build):
 
 ```bash
-~/.prowl/macdriver/<version>/prowl-macdriver check   # or: macdriver/.build/release/prowl-macdriver check
+MACDRIVER_VERSION=0.1.0  # replace with the version shown by `prowl macdriver status`
+~/.prowl/macdriver/$MACDRIVER_VERSION/prowl-macdriver check
+# or: macdriver/.build/release/prowl-macdriver check
 # prints {"trusted": <bool>}; prompts on first run
 ```
 

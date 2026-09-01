@@ -24,14 +24,34 @@ export const MACDRIVER_VERSION = "0.1.0";
 /** GitHub `owner/repo` that hosts the helper releases. */
 export const MACDRIVER_REPO = "prowl-tools/prowl";
 
+/** Code-signing identifier assigned to release builds. */
+export const MACDRIVER_SIGNING_IDENTIFIER = "tools.prowl.macdriver";
+
+/** Developer ID Application common-name prefix expected on release builds. */
+export const MACDRIVER_SIGNING_AUTHORITY_PREFIX = "Developer ID Application: Genkei Labs";
+
+/** Accepted helper release version token. */
+export const MACDRIVER_VERSION_PATTERN =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z][0-9A-Za-z.-]*)?$/;
+
+/** Validate the helper release version before using it in URLs or paths. */
+export function validateMacdriverVersion(version: string): string {
+  if (!MACDRIVER_VERSION_PATTERN.test(version)) {
+    throw new Error(
+      `Invalid prowl-macdriver version "${version}". Expected a release version like 0.1.0.`
+    );
+  }
+  return version;
+}
+
 /** Git tag for a helper version — the release the workflow builds. */
 export function macdriverReleaseTag(version: string = MACDRIVER_VERSION): string {
-  return `macdriver-v${version}`;
+  return `macdriver-v${validateMacdriverVersion(version)}`;
 }
 
 /** Release asset file name for the universal (arm64 + x86_64) binary zip. */
 export function macdriverAssetName(version: string = MACDRIVER_VERSION): string {
-  return `prowl-macdriver-v${version}-universal.zip`;
+  return `prowl-macdriver-v${validateMacdriverVersion(version)}-universal.zip`;
 }
 
 /** Release asset file name for the SHA-256 checksum sidecar. */
@@ -54,7 +74,12 @@ export function macdriverVersionDir(
   version: string = MACDRIVER_VERSION,
   homedir: string = os.homedir()
 ): string {
-  return path.join(macdriverInstallRoot(homedir), version);
+  const root = path.resolve(macdriverInstallRoot(homedir));
+  const versionDir = path.resolve(root, validateMacdriverVersion(version));
+  if (!versionDir.startsWith(root + path.sep)) {
+    throw new Error(`Resolved prowl-macdriver version directory escaped install root: ${versionDir}`);
+  }
+  return versionDir;
 }
 
 /** Absolute path to the installed helper binary for a version. */

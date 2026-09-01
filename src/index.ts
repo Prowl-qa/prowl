@@ -23,16 +23,19 @@ export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions, ResolveHelper
 // Re-export prebuilt-helper distribution (PROWL-074 / PROWL-052)
 export {
   HELPER_BINARY, MACDRIVER_VERSION, MACDRIVER_REPO,
+  MACDRIVER_SIGNING_AUTHORITY_PREFIX, MACDRIVER_SIGNING_IDENTIFIER, MACDRIVER_VERSION_PATTERN,
   macdriverReleaseTag, macdriverAssetName, macdriverChecksumName, macdriverAssetUrl,
-  macdriverInstallRoot, macdriverVersionDir, macdriverInstalledBinary
+  macdriverInstallRoot, macdriverVersionDir, macdriverInstalledBinary, validateMacdriverVersion
 } from "./browser/macdriver-release.js";
 export {
   installMacdriver, downloadAndVerify, collectMacdriverStatus,
-  parseChecksumFile, sha256Hex, dittoExtractor, codesignVerifier, runVersionProbe, tccGuidance
+  parseChecksumFile, sha256Hex, dittoExtractor, codesignVerifier, runVersionProbe, tccGuidance,
+  zipinfoArchiveLister, validateMacdriverArchiveEntries, parseCodesignDetails, verifyMacdriverSignature
 } from "./browser/macdriver-install.js";
 export type {
   InstallOptions, InstallResult, DownloadOptions, StatusOptions,
-  MacdriverStatus, InstalledVersion, Extractor, SignatureVerifier, VersionProbe
+  MacdriverStatus, InstalledVersion, Extractor, ArchiveLister, SignatureVerifier, VersionProbe,
+  CommandResult, CommandRunner, CodesignDetails
 } from "./browser/macdriver-install.js";
 
 // Re-export the experimental Android target (PROWL-058)

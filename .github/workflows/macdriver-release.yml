@@ -54,8 +54,30 @@ jobs:
             echo "::error::Tag '$GITHUB_REF_NAME' is not of the form macdriver-v<version>."
             exit 1
           fi
-          echo "MACDRIVER_VERSION=$version" >> "$GITHUB_ENV"
-          echo "ASSET_NAME=prowl-macdriver-v${version}-universal.zip" >> "$GITHUB_ENV"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not contain a valid macdriver release version."
+            exit 1
+          fi
+          ts_version="$(sed -nE 's/^export const MACDRIVER_VERSION = "([^"]+)";$/\1/p' src/browser/macdriver-release.ts)"
+          swift_version="$(sed -nE 's/^public let macdriverVersion = "([^"]+)"$/\1/p' macdriver/Sources/prowl-macdriver/DriverCLI.swift)"
+          if [ -z "$ts_version" ] || [ -z "$swift_version" ]; then
+            echo "::error::Could not read macdriver version pins from TypeScript and Swift sources."
+            exit 1
+          fi
+          if [ "$version" != "$ts_version" ] || [ "$version" != "$swift_version" ]; then
+            echo "::error::Tag version ($version), TypeScript pin ($ts_version), and Swift version ($swift_version) must match."
+            exit 1
+          fi
+          signing_identifier="$(sed -nE 's/^export const MACDRIVER_SIGNING_IDENTIFIER = "([^"]+)";$/\1/p' src/browser/macdriver-release.ts)"
+          if [ -z "$signing_identifier" ]; then
+            echo "::error::Could not read MACDRIVER_SIGNING_IDENTIFIER from src/browser/macdriver-release.ts."
+            exit 1
+          fi
+          {
+            echo "MACDRIVER_VERSION=$version"
+            echo "MACDRIVER_SIGNING_IDENTIFIER=$signing_identifier"
+            echo "ASSET_NAME=prowl-macdriver-v${version}-universal.zip"
+          } >> "$GITHUB_ENV"
 
       - name: Build arm64 and x86_64, lipo into a universal binary
         working-directory: macdriver
@@ -90,6 +112,7 @@ jobs:
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           codesign --force --options runtime --timestamp \
+            --identifier "$MACDRIVER_SIGNING_IDENTIFIER" \
             --sign "$MACOS_SIGNING_IDENTITY" "$RUNNER_TEMP/out/prowl-macdriver"
           codesign --verify --strict --verbose=2 "$RUNNER_TEMP/out/prowl-macdriver"
 

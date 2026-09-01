@@ -5,8 +5,8 @@
  *
  * `prowl macdriver install` fetches the pinned version's universal binary from
  * GitHub Releases (raw `fetch`, redirects followed — no SDK), checksum-verifies
- * it against the released `.sha256` sidecar, optionally verifies the code
- * signature, and installs it to
+ * it against the released `.sha256` sidecar, validates the archive contents,
+ * verifies the code signature / Gatekeeper policy, and installs it to
  * `~/.prowl/macdriver/<version>/prowl-macdriver` (mode 0755).
  *
  * Every side effect (network, unzip, signature check, home dir) is injectable so
@@ -21,13 +21,16 @@ import { promisify } from "node:util";
 import { HELPER_BINARY, resolveHelperBinary } from "./mac-helper.js";
 import {
   MACDRIVER_VERSION,
+  MACDRIVER_SIGNING_AUTHORITY_PREFIX,
+  MACDRIVER_SIGNING_IDENTIFIER,
   macdriverAssetName,
   macdriverAssetUrl,
   macdriverChecksumName,
   macdriverInstallRoot,
   macdriverInstalledBinary,
   macdriverReleaseTag,
-  macdriverVersionDir
+  macdriverVersionDir,
+  validateMacdriverVersion
 } from "./macdriver-release.js";
 
 const execFileAsync = promisify(execFile);
@@ -49,8 +52,18 @@ export type FetchLike = (
 /** Extracts the binary out of a downloaded zip into `destDir`. */
 export type Extractor = (zipPath: string, destDir: string) => Promise<void>;
 
+/** Lists the raw path entries in a downloaded zip before extraction. */
+export type ArchiveLister = (zipPath: string) => Promise<string[]>;
+
 /** Verifies the code signature of an installed binary; throws if invalid. */
 export type SignatureVerifier = (binaryPath: string) => Promise<void>;
+
+export interface CommandResult {
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
+}
+
+export type CommandRunner = (file: string, args: string[]) => Promise<CommandResult>;
 
 /** Parse the hex digest out of a `shasum`-style `.sha256` file. */
 export function parseChecksumFile(text: string): string {
@@ -67,27 +80,168 @@ export function sha256Hex(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+const commandRunner: CommandRunner = async (file, args) => execFileAsync(file, args) as Promise<CommandResult>;
+
+function commandOutput(result: CommandResult): string {
+  return [result.stdout, result.stderr]
+    .filter((value): value is string | Buffer => value !== undefined)
+    .map((value) => value.toString())
+    .join("\n")
+    .trim();
+}
+
+function commandErrorDetail(error: unknown): string {
+  const err = error as NodeJS.ErrnoException & { stdout?: string | Buffer; stderr?: string | Buffer };
+  return [err.stderr, err.stdout, err.message]
+    .filter((value): value is string | Buffer => value !== undefined && value !== "")
+    .map((value) => value.toString())
+    .join("\n")
+    .trim();
+}
+
+async function runRequiredCommand(
+  run: CommandRunner,
+  binaryPath: string,
+  command: string,
+  args: string[],
+  label: string
+): Promise<CommandResult> {
+  try {
+    return await run(command, args);
+  } catch (error) {
+    const detail = commandErrorDetail(error);
+    throw new Error(`${label} failed for ${binaryPath}${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+/** Default archive lister: `zipinfo -1`, used before any extraction happens. */
+export const zipinfoArchiveLister: ArchiveLister = async (zipPath) => {
+  try {
+    const { stdout } = await execFileAsync("zipinfo", ["-1", zipPath]);
+    return stdout
+      .toString()
+      .split(/\r?\n/)
+      .filter((entry) => entry.length > 0);
+  } catch (error) {
+    const detail = commandErrorDetail(error);
+    throw new Error(`Failed to inspect release archive ${zipPath} with zipinfo${detail ? `: ${detail}` : ""}`);
+  }
+};
+
+function normalizeArchiveEntryName(entry: string): string {
+  if (entry.length === 0 || entry !== entry.trim() || entry.includes("\0") || entry.includes("\\")) {
+    throw new Error(`Unsafe path in prowl-macdriver release archive: ${JSON.stringify(entry)}`);
+  }
+  if (entry.endsWith("/")) {
+    throw new Error(`Unexpected directory in prowl-macdriver release archive: ${entry}`);
+  }
+  if (path.posix.isAbsolute(entry)) {
+    throw new Error(`Unsafe absolute path in prowl-macdriver release archive: ${entry}`);
+  }
+  const parts = entry.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new Error(`Unsafe path in prowl-macdriver release archive: ${entry}`);
+  }
+  return entry;
+}
+
+/** Validate the zip member list before extraction. */
+export function validateMacdriverArchiveEntries(entries: string[]): void {
+  const normalized = entries.map(normalizeArchiveEntryName);
+  if (normalized.length !== 1 || normalized[0] !== HELPER_BINARY) {
+    const shown = normalized.length > 0 ? normalized.join(", ") : "(empty archive)";
+    throw new Error(
+      `Unexpected prowl-macdriver release archive contents: ${shown}. ` +
+        `Expected exactly "${HELPER_BINARY}" at the archive root.`
+    );
+  }
+}
+
 /** Default extractor: Apple's `ditto`, which preserves the code signature. */
 export const dittoExtractor: Extractor = async (zipPath, destDir) => {
   await execFileAsync("ditto", ["-x", "-k", zipPath, destDir]);
 };
 
+export interface CodesignDetails {
+  identifier: string | null;
+  authorities: string[];
+  teamIdentifier: string | null;
+}
+
+export function parseCodesignDetails(text: string): CodesignDetails {
+  const details: CodesignDetails = { identifier: null, authorities: [], teamIdentifier: null };
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("Identifier=")) {
+      details.identifier = trimmed.slice("Identifier=".length);
+    } else if (trimmed.startsWith("Authority=")) {
+      details.authorities.push(trimmed.slice("Authority=".length));
+    } else if (trimmed.startsWith("TeamIdentifier=")) {
+      details.teamIdentifier = trimmed.slice("TeamIdentifier=".length);
+    }
+  }
+  return details;
+}
+
+function validateCodesignDetails(details: CodesignDetails, binaryPath: string): void {
+  if (details.identifier !== MACDRIVER_SIGNING_IDENTIFIER) {
+    throw new Error(
+      `codesign verification failed for ${binaryPath}: expected identifier ` +
+        `"${MACDRIVER_SIGNING_IDENTIFIER}", got "${details.identifier ?? "missing"}"`
+    );
+  }
+
+  const developerIdAuthority = details.authorities.find((authority) =>
+    authority.startsWith(`${MACDRIVER_SIGNING_AUTHORITY_PREFIX} (`)
+  );
+  const authorityTeamId = developerIdAuthority?.match(/\(([A-Z0-9]{10})\)$/)?.[1] ?? null;
+  if (!developerIdAuthority || !authorityTeamId) {
+    const shown = details.authorities.length > 0 ? details.authorities.join(" / ") : "missing";
+    throw new Error(
+      `codesign verification failed for ${binaryPath}: expected ${MACDRIVER_SIGNING_AUTHORITY_PREFIX} signer, got ${shown}`
+    );
+  }
+
+  if (!details.teamIdentifier) {
+    throw new Error(`codesign verification failed for ${binaryPath}: missing TeamIdentifier`);
+  }
+  if (details.teamIdentifier !== authorityTeamId) {
+    throw new Error(
+      `codesign verification failed for ${binaryPath}: TeamIdentifier ${details.teamIdentifier} ` +
+        `does not match Developer ID authority team ${authorityTeamId}`
+    );
+  }
+}
+
+export async function verifyMacdriverSignature(
+  binaryPath: string,
+  run: CommandRunner = commandRunner
+): Promise<void> {
+  await runRequiredCommand(run, binaryPath, "codesign", ["--verify", "--strict", binaryPath], "codesign verification");
+  const display = await runRequiredCommand(
+    run,
+    binaryPath,
+    "codesign",
+    ["--display", "--verbose=4", binaryPath],
+    "codesign detail inspection"
+  );
+  validateCodesignDetails(parseCodesignDetails(commandOutput(display)), binaryPath);
+  await runRequiredCommand(
+    run,
+    binaryPath,
+    "spctl",
+    ["--assess", "--type", "execute", "--verbose=4", binaryPath],
+    "spctl assessment"
+  );
+}
+
 /**
- * Default signature verifier: `codesign --verify --strict`. If `codesign` is
- * unavailable (non-macOS/dev box), the check is skipped rather than failing the
- * install — the checksum is still enforced.
+ * Default signature verifier: fail closed unless `codesign` verifies the
+ * signature, the identity matches the release contract, and Gatekeeper accepts
+ * the executable through `spctl --assess --type execute`.
  */
 export const codesignVerifier: SignatureVerifier = async (binaryPath) => {
-  try {
-    await execFileAsync("codesign", ["--verify", "--strict", binaryPath]);
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException & { stderr?: string };
-    if (err.code === "ENOENT") {
-      return; // codesign not present — skip, checksum already gates integrity
-    }
-    const detail = (err.stderr ?? err.message ?? "").toString().trim();
-    throw new Error(`codesign verification failed for ${binaryPath}${detail ? `: ${detail}` : ""}`);
-  }
+  await verifyMacdriverSignature(binaryPath);
 };
 
 export interface DownloadOptions {
@@ -145,6 +299,7 @@ export interface InstallOptions {
   force?: boolean;
   homedir?: string;
   fetchImpl?: FetchLike;
+  listArchiveEntries?: ArchiveLister;
   extract?: Extractor;
   verifySignature?: SignatureVerifier;
 }
@@ -158,15 +313,18 @@ export interface InstallResult {
 /**
  * Install the pinned helper to `~/.prowl/macdriver/<version>/prowl-macdriver`
  * (0755). Returns `alreadyInstalled: true` (a no-op) when the binary is already
- * present and `force` is not set. On any failure after download the partial
- * version directory is cleaned up so a retry starts fresh.
+ * present and `force` is not set. The downloaded archive is inspected before
+ * extraction, extracted into a temporary staging directory, and moved into place
+ * only after the staged helper passes file and signature verification.
  */
 export async function installMacdriver(options: InstallOptions = {}): Promise<InstallResult> {
-  const version = options.version ?? MACDRIVER_VERSION;
+  const version = validateMacdriverVersion(options.version ?? MACDRIVER_VERSION);
   const homedir = options.homedir ?? os.homedir();
+  const listArchiveEntries = options.listArchiveEntries ?? zipinfoArchiveLister;
   const extract = options.extract ?? dittoExtractor;
   const verifySignature = options.verifySignature ?? codesignVerifier;
 
+  const installRoot = macdriverInstallRoot(homedir);
   const versionDir = macdriverVersionDir(version, homedir);
   const binaryPath = macdriverInstalledBinary(version, homedir);
 
@@ -176,30 +334,69 @@ export async function installMacdriver(options: InstallOptions = {}): Promise<In
 
   const zipBytes = await downloadAndVerify({ version, fetchImpl: options.fetchImpl });
 
-  // Stage the zip in a private temp dir, extract straight into a clean version
-  // dir. On any failure the version dir is removed so a retry starts fresh and
-  // resolveHelperBinary never trips over a half-written binary.
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), `prowl-macdriver-${version}-`));
+  fs.mkdirSync(installRoot, { recursive: true });
+  const stagingDir = fs.mkdtempSync(path.join(installRoot, `.tmp-${version}-`));
+  const extractDir = path.join(stagingDir, "extract");
   const zipPath = path.join(stagingDir, macdriverAssetName(version));
   try {
-    fs.rmSync(versionDir, { recursive: true, force: true });
-    fs.mkdirSync(versionDir, { recursive: true });
+    fs.mkdirSync(extractDir);
     fs.writeFileSync(zipPath, zipBytes);
-    await extract(zipPath, versionDir);
+    validateMacdriverArchiveEntries(await listArchiveEntries(zipPath));
+    await extract(zipPath, extractDir);
 
-    if (!fs.existsSync(binaryPath)) {
-      throw new Error(`The release archive did not contain a "${HELPER_BINARY}" binary.`);
-    }
-    fs.chmodSync(binaryPath, 0o755);
-    await verifySignature(binaryPath);
-  } catch (error) {
-    fs.rmSync(versionDir, { recursive: true, force: true });
-    throw error;
+    const stagedBinaryPath = path.join(extractDir, HELPER_BINARY);
+    assertExtractedHelper(extractDir, stagedBinaryPath);
+    fs.chmodSync(stagedBinaryPath, 0o755);
+    await verifySignature(stagedBinaryPath);
+    replaceVersionDir(versionDir, extractDir, installRoot);
   } finally {
     fs.rmSync(stagingDir, { recursive: true, force: true });
   }
 
   return { version, binaryPath, alreadyInstalled: false };
+}
+
+function assertExtractedHelper(extractDir: string, binaryPath: string): void {
+  const entries = fs.readdirSync(extractDir);
+  if (!entries.includes(HELPER_BINARY)) {
+    throw new Error(`The release archive did not contain a "${HELPER_BINARY}" binary.`);
+  }
+  if (entries.length !== 1 || entries[0] !== HELPER_BINARY) {
+    const shown = entries.length > 0 ? entries.join(", ") : "(empty directory)";
+    throw new Error(
+      `Unexpected extracted prowl-macdriver archive contents: ${shown}. ` +
+        `Expected exactly "${HELPER_BINARY}".`
+    );
+  }
+  let stat: fs.Stats | null = null;
+  try {
+    stat = fs.lstatSync(binaryPath);
+  } catch {
+    // The existence check below keeps the missing-helper error specific.
+  }
+  if (!stat?.isFile()) {
+    throw new Error(`The release archive "${HELPER_BINARY}" entry is not a regular file.`);
+  }
+}
+
+function replaceVersionDir(versionDir: string, stagedVersionDir: string, installRoot: string): void {
+  const backupDir = path.join(installRoot, `.previous-${path.basename(versionDir)}-${process.pid}-${Date.now()}`);
+  let backedUp = false;
+  try {
+    if (fs.existsSync(versionDir)) {
+      fs.renameSync(versionDir, backupDir);
+      backedUp = true;
+    }
+    fs.renameSync(stagedVersionDir, versionDir);
+    if (backedUp) {
+      fs.rmSync(backupDir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    if (backedUp && !fs.existsSync(versionDir) && fs.existsSync(backupDir)) {
+      fs.renameSync(backupDir, versionDir);
+    }
+    throw error;
+  }
 }
 
 export interface InstalledVersion {
@@ -261,7 +458,12 @@ export async function collectMacdriverStatus(options: StatusOptions = {}): Promi
   if (fs.existsSync(root)) {
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const binaryPath = macdriverInstalledBinary(entry.name, homedir);
+      let binaryPath: string;
+      try {
+        binaryPath = macdriverInstalledBinary(entry.name, homedir);
+      } catch {
+        continue;
+      }
       if (fs.existsSync(binaryPath)) {
         installed.push({ version: entry.name, binaryPath });
       }
