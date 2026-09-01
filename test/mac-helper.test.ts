@@ -11,6 +11,7 @@ import {
   SpawnMacHelperClient
 } from "../src/browser/mac-helper.js";
 import type { MacHelperClient } from "../src/browser/mac-driver.js";
+import { MACDRIVER_VERSION, macdriverInstalledBinary } from "../src/browser/macdriver-release.js";
 import { executeSteps } from "../src/runner/steps.js";
 import type { Step } from "../src/types/index.js";
 
@@ -45,10 +46,38 @@ describe("resolveHelperBinary", () => {
     );
   });
 
-  it("build instructions mention the local build and the env override", () => {
+  it("build instructions lead with `prowl macdriver install`, then source build and env override", () => {
     const text = macdriverBuildInstructions();
+    expect(text).toContain("prowl macdriver install");
     expect(text).toContain("swift build");
     expect(text).toContain("PROWL_MACDRIVER_BIN");
+  });
+
+  it("resolves a user-level install of the pinned version when no env override is set", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-resolve-home-"));
+    try {
+      const userBinary = macdriverInstalledBinary(MACDRIVER_VERSION, home);
+      fs.mkdirSync(path.dirname(userBinary), { recursive: true });
+      fs.writeFileSync(userBinary, "bin");
+      expect(resolveHelperBinary({} as NodeJS.ProcessEnv, { homedir: home })).toBe(userBinary);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers the env override over a user-level install", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-resolve-home-"));
+    try {
+      const userBinary = macdriverInstalledBinary(MACDRIVER_VERSION, home);
+      fs.mkdirSync(path.dirname(userBinary), { recursive: true });
+      fs.writeFileSync(userBinary, "bin");
+      const override = fileURLToPath(import.meta.url);
+      expect(resolveHelperBinary({ PROWL_MACDRIVER_BIN: override } as NodeJS.ProcessEnv, { homedir: home })).toBe(
+        override
+      );
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
