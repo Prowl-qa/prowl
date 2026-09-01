@@ -6,12 +6,22 @@ TypeScript `MacDriver` spawns it in `serve` mode and drives a native macOS app �
 including menu bar extras (`NSStatusItem` + `NSMenu`) — over newline-delimited
 JSON on stdio.
 
-> **Distribution is deferred.** This binary is **not** bundled in the npm
-> package (`prowl-tools`); the tarball whitelist in `package.json` is unchanged.
-> Build it locally (below) to use the macOS target. It is gated behind
-> `target.type: "macos"` and is not on the default web path.
+> **Distribution.** This binary is **not** bundled in the npm tarball. End users
+> install a prebuilt, signed, notarized universal build with
+> `prowl macdriver install` (published via GitHub Releases by the
+> `.github/workflows/macdriver-release.yml` workflow — see
+> [RELEASING.md](./RELEASING.md)). Contributors build from source (below). The
+> target is gated behind `target.type: "macos"` and is not on the default web
+> path.
 
-## Build
+## Install (end users)
+
+```bash
+prowl macdriver install     # downloads + checksum-verifies the pinned signed build
+prowl macdriver status      # shows the resolved binary, versions, and TCC guidance
+```
+
+## Build (contributors)
 
 ```bash
 cd macdriver
@@ -20,10 +30,20 @@ swift build -c release        # binary at .build/release/prowl-macdriver
 
 Prowl locates the binary via, in order:
 1. `PROWL_MACDRIVER_BIN` (absolute path to the binary), then
-2. `macdriver/.build/release/prowl-macdriver`, then
-3. `macdriver/.build/debug/prowl-macdriver`,
-relative to the Prowl package root. If none exist, Prowl fails with a clear
-"build the helper" message instead of crashing.
+2. the user-level install `~/.prowl/macdriver/<version>/prowl-macdriver`
+   (what `prowl macdriver install` writes), then
+3. the repo-local source build `macdriver/.build/release/prowl-macdriver`, then
+   `macdriver/.build/debug/prowl-macdriver`.
+If none exist, Prowl fails with a clear message pointing at
+`prowl macdriver install` (source build as the contributor fallback) instead of
+crashing.
+
+## Version
+
+The helper's own version line is `macdriverVersion` in
+`Sources/prowl-macdriver/DriverCLI.swift`, printed by `prowl-macdriver version`.
+It must match the CLI's pinned `MACDRIVER_VERSION`
+(`src/browser/macdriver-release.ts`); bump both together when cutting a release.
 
 ## Accessibility permission
 
