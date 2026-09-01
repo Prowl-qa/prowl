@@ -390,9 +390,28 @@ Notes: `press` maps Enter/Return/Space onto the element's activate action (other
 are unsupported); `type` fills the focused control; app teardown quits the target app
 after the run.
 
+#### Hunt-level assertion compatibility
+
+Hunt-level `assertions:` are evaluated after the steps complete (even when a step
+failed, matching the web path). Selector assertions run on every target; URL, console,
+and network assertions are web-only and are reported as **`skipped`** on a native
+target — visible in `result.json` / `summary.md` / JUnit, never silently dropped and
+never a hard error.
+
+| Assertion | Web | macOS | Android | iOS |
+|---|---|---|---|---|
+| `selectorExists`, `selectorNotExists` | ✅ runs | ✅ runs | ✅ runs | ✅ runs |
+| `urlIncludes`, `urlEquals` | ✅ runs | ⏭️ skipped (web-only) | ⏭️ skipped | ⏭️ skipped |
+| `noConsoleErrors`, `noNetworkErrors` | ✅ runs | ⏭️ skipped (web-only) | ⏭️ skipped | ⏭️ skipped |
+
+A web-only assertion a hunt explicitly authored also prints a console warning naming
+the target; the `noConsoleErrors` / `noNetworkErrors` config defaults are surfaced as
+`skipped` but do not warn on every run. For per-step checks on a native target, use
+inline `assert: visible` / `notVisible` steps.
+
 > Docs follow-up: the customer-facing docs site (`prowl-docs`) should gain a "macOS
 > target" page mirroring this section (target type + step-compatibility matrix +
-> permission setup); tracked separately from this repo.
+> assertion-compatibility matrix + permission setup); tracked separately from this repo.
 
 ---
 
@@ -694,6 +713,10 @@ assertions:
   - noConsoleErrors: true              # No console.error messages
   - noNetworkErrors: true              # No HTTP responses >= 400
 ```
+
+On native targets (macOS / Android / iOS) the selector assertions run and the
+URL/console/network ones are reported as `skipped` — see the
+[hunt-level assertion compatibility matrix](#hunt-level-assertion-compatibility).
 
 ---
 
@@ -1321,6 +1344,11 @@ equivalent yet and are rejected with a clear message; scroll-gesture support is 
 follow-up. A degraded pure-`adb` fallback (`uiautomator dump` + `input tap`) is a
 possible future diagnostic mode, not the primary path.
 
+Hunt-level `assertions:` behave as on macOS — `selectorExists` / `selectorNotExists`
+run against the device; `urlIncludes` / `urlEquals` / `noConsoleErrors` /
+`noNetworkErrors` are web-only and reported as `skipped`. See the
+[hunt-level assertion compatibility matrix](#hunt-level-assertion-compatibility).
+
 ### Finding selectors (Android)
 
 Don't guess selectors — dump them. `prowl analyze` works on the Android target the
@@ -1465,6 +1493,11 @@ Notes: `type` and `fill` set text on the focused / matched field via WDA's
 message. Screenshots are captured with `simctl` (not WDA), so artifacts still work
 even if the agent wedges. `hover` and `scrollTo` have no touch equivalent yet and are
 rejected with a clear message; scroll-gesture support is a follow-up.
+
+Hunt-level `assertions:` behave as on macOS — `selectorExists` / `selectorNotExists`
+run against the simulator; `urlIncludes` / `urlEquals` / `noConsoleErrors` /
+`noNetworkErrors` are web-only and reported as `skipped`. See the
+[hunt-level assertion compatibility matrix](#hunt-level-assertion-compatibility).
 
 ### Finding selectors (iOS)
 
