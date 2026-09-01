@@ -30,8 +30,8 @@ All notable changes to Prowl will be documented in this file.
   argument help suggested paths the name validator then rejected (a leading
   `.prowl/hunts/` or a `.yml` extension failed with "Invalid hunt name"). The
   positional hunt argument is now normalized before validation — supported
-  `.prowl/hunts/...` or `hunts/...` file paths have their prefix stripped, and a
-  trailing `.yml`/`.yaml` extension is removed — so `prowl run homepage`,
+  `.prowl/hunts/...` or `hunts/...` `.yml` file paths have their prefix stripped,
+  and a trailing `.yml` extension is removed — so `prowl run homepage`,
   `prowl run hunts/homepage.yml`, and `prowl run .prowl/hunts/homepage.yml` all
   resolve to the same hunt (nested hunts included:
   `.prowl/hunts/admin/users.yml` → `admin/users`). Extensionless nested hunt

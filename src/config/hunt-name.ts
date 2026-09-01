@@ -1,5 +1,5 @@
 const HUNT_NAME_PATTERN = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
-const HUNT_FILE_EXTENSION_PATTERN = /\.ya?ml$/i;
+const HUNT_FILE_EXTENSION_PATTERN = /\.yml$/i;
 
 /** Return whether a string is already a valid bare hunt identity. */
 export function isValidHuntName(name: string): boolean {
@@ -14,14 +14,13 @@ export function isValidHuntName(name: string): boolean {
  *
  *   .prowl/hunts/homepage.yml      -> homepage
  *   hunts/homepage.yml             -> homepage
- *   .prowl/hunts/admin/users.yaml  -> admin/users
+ *   .prowl/hunts/admin/users.yml   -> admin/users
  *   hunts/admin/users              -> hunts/admin/users (already bare; unchanged)
  *   homepage                       -> homepage   (already bare; unchanged)
  *
  * Only supported hunt file paths have their hunts-directory prefix stripped.
- * A trailing `.yml`/`.yaml` extension is also stripped; anything else is left
- * untouched so that genuinely invalid input still fails validation with a clear
- * message.
+ * A trailing `.yml` extension is also stripped; anything else is left untouched
+ * so that genuinely invalid input still fails validation with a clear message.
  */
 export function normalizeHuntName(input: string): string {
   let name = input.trim();

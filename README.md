@@ -930,9 +930,10 @@ spans. When the app emits no trace headers, nothing is recorded (no noise).
 
 A `<hunt-name>` is a hunt's file name under `.prowl/hunts/` — `homepage` for
 `.prowl/hunts/homepage.yml`, or `admin/users` for a nested
-`.prowl/hunts/admin/users.yml`. `run`, `watch`, and `history` also accept the
-literal path (`.prowl/hunts/homepage.yml` or `hunts/homepage.yml`, with or
-without the `.yml`/`.yaml` extension); it resolves to the same hunt.
+`.prowl/hunts/admin/users.yml`. `run`, `watch`, and `history` also accept
+supported `.yml` path forms (`.prowl/hunts/homepage.yml` or
+`hunts/homepage.yml`) and a bare `.yml` file name (`homepage.yml`); they resolve
+to the same hunt.
 
 ```bash
 # Run a hunt

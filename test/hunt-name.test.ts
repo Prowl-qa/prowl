@@ -30,9 +30,14 @@ describe("normalizeHuntName", () => {
     expect(normalizeHuntName("hunts/admin/users")).toBe("hunts/admin/users");
   });
 
-  it("strips a .yaml extension as well as .yml", () => {
-    expect(normalizeHuntName(".prowl/hunts/homepage.yaml")).toBe("homepage");
-    expect(normalizeHuntName("homepage.yaml")).toBe("homepage");
+  it("strips a .yml extension", () => {
+    expect(normalizeHuntName("homepage.yml")).toBe("homepage");
+  });
+
+  it("does not accept .yaml paths the loader cannot resolve", () => {
+    const normalized = normalizeHuntName(".prowl/hunts/homepage.yaml");
+    expect(normalized).toBe(".prowl/hunts/homepage.yaml");
+    expect(isValidHuntName(normalized)).toBe(false);
   });
 
   it("strips a leading ./ before the hunts prefix", () => {
@@ -65,9 +70,6 @@ describe("normalizeHuntName + validation", () => {
   it("produces a valid name for every accepted path form", () => {
     expect(isValidHuntName(normalizeHuntName(".prowl/hunts/homepage.yml"))).toBe(true);
     expect(isValidHuntName(normalizeHuntName("hunts/homepage.yml"))).toBe(true);
-    expect(isValidHuntName(normalizeHuntName(".prowl/hunts/admin/users.yaml"))).toBe(
-      true
-    );
     expect(isValidHuntName(normalizeHuntName("homepage"))).toBe(true);
   });
 
