@@ -2,19 +2,25 @@ import fs from "node:fs";
 import chalk from "chalk";
 import { Command } from "commander";
 import { loadConfig } from "../../config/loader.js";
+import { normalizeHuntName } from "../../config/hunt-name.js";
 import { runHunt } from "../../runner/index.js";
 import { createDebouncer, getWatchTargets } from "../watch-utils.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 
+/** Build the `prowl watch` command and normalize path-like hunt arguments. */
 export function buildWatchCommand(): Command {
   const command = new Command("watch")
-    .argument("<hunt-name>", "Hunt name or path (e.g. homepage or admin/users-crud)")
+    .argument(
+      "<hunt-name>",
+      "Hunt name or path (e.g. homepage, admin/users-crud, or .prowl/hunts/homepage.yml)"
+    )
     .option("--url <target>", "Override target URL")
     .option("--headed", "Show browser window")
     .option("--slow-mo <ms>", "Slow down Playwright actions", (value) => Number(value))
     .option("--trace", "Capture Playwright trace")
     .option("--config <path>", "Custom config path")
-    .action(async (huntName, options) => {
+    .action(async (huntArg, options) => {
+      const huntName = normalizeHuntName(huntArg);
       const { configDir } = loadConfig(options.config);
       const watchTargets = getWatchTargets(configDir, huntName);
 

@@ -4,7 +4,41 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+- **README and npm metadata repositioned desktop-first.** The headline, intro,
+  and first-screen examples now lead with native macOS apps (Accessibility API)
+  and web apps (Playwright) from the same declarative YAML — a macOS example
+  runs alongside the web one, and the macOS Target section moved up to just after
+  Getting Started (it previously first surfaced as a commented-out config option
+  far down the file). macOS stays labelled **experimental** and the setup notes
+  stay honest that the driver still builds from source; the promotion to beta is
+  gated on the two-minute signed-helper install (PROWL-074). Comparison claims
+  are factual (Maestro is mobile/web, Playwright is web-only, XCUITest is
+  Swift + Xcode). `package.json` `description` now describes E2E testing for
+  native macOS and web apps, and `keywords` gain `macos`, `desktop-testing`, and
+  `accessibility`. The stale "Community Hub" section (a retired-hub reference)
+  was removed.
+- **Corrected the README Getting Started walkthrough.** It claimed `prowl init`
+  scaffolds 8 example hunts and had users edit `homepage.yml`; the real init
+  writes `hello.yml` and `login-flow.yml`, and a hunt's identity is its file
+  name. The flow now shows the real init tree/banner, runs `prowl run hello`
+  first, then creates a new `smoke-test.yml` (filename = hunt identity).
+
 ### Changed
+- **`prowl run`/`watch`/`history` now accept a literal hunt path, matching their
+  help text.** A hunt's identity is its file name under `.prowl/hunts/`, but the
+  argument help suggested paths the name validator then rejected (a leading
+  `.prowl/hunts/` or a `.yml` extension failed with "Invalid hunt name"). The
+  positional hunt argument is now normalized before validation — supported
+  `.prowl/hunts/...` or `hunts/...` `.yml` file paths have their prefix stripped,
+  and a trailing `.yml` extension is removed — so `prowl run homepage`,
+  `prowl run hunts/homepage.yml`, and `prowl run .prowl/hunts/homepage.yml` all
+  resolve to the same hunt (nested hunts included:
+  `.prowl/hunts/admin/users.yml` → `admin/users`). Extensionless nested hunt
+  identities that start with `hunts/` are preserved, so `hunts/admin/users` still
+  resolves to `.prowl/hunts/hunts/admin/users.yml`. Input that is still invalid
+  after normalization now fails with an error that spells out the accepted forms.
+  Help text, error message, README, and behavior now agree.
 - **`prowl init` no longer points at the retired Prowl Hub.** The post-init
   message now points at the bundled `login-flow.yml` starter instead of
   `hub.prowl.tools` (the community hub was retired 2026-08-26; starters ship

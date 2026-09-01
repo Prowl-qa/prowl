@@ -1,7 +1,7 @@
 {
   "name": "prowl-tools",
   "version": "0.1.6",
-  "description": "CLI-first QA testing tool for deterministic Playwright flows.",
+  "description": "E2E testing for native macOS apps and web apps from declarative YAML hunts.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Prowl Tools",
@@ -16,9 +16,12 @@
   "keywords": [
     "testing",
     "qa",
+    "e2e",
+    "macos",
+    "desktop-testing",
+    "accessibility",
     "playwright",
     "yaml",
-    "e2e",
     "browser-testing",
     "automation",
     "web-testing",

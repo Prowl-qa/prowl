@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const mockRunHunt = vi.fn();
@@ -5,6 +6,8 @@ const mockLoadConfig = vi.fn();
 const mockListHunts = vi.fn();
 const mockLoadHuntTags = vi.fn();
 const mockLoadHuntMeta = vi.fn();
+const mockGetWatchTargets = vi.fn();
+const mockCreateDebouncer = vi.fn();
 
 vi.mock("../src/runner/index.js", () => ({
   runHunt: (...args: unknown[]) => mockRunHunt(...args)
@@ -15,6 +18,11 @@ vi.mock("../src/config/loader.js", () => ({
   listHunts: (...args: unknown[]) => mockListHunts(...args),
   loadHuntTags: (...args: unknown[]) => mockLoadHuntTags(...args),
   loadHuntMeta: (...args: unknown[]) => mockLoadHuntMeta(...args)
+}));
+
+vi.mock("../src/cli/watch-utils.js", () => ({
+  getWatchTargets: (...args: unknown[]) => mockGetWatchTargets(...args),
+  createDebouncer: (...args: unknown[]) => mockCreateDebouncer(...args)
 }));
 
 vi.mock("../src/cli/output.js", () => ({
@@ -33,6 +41,7 @@ vi.mock("../src/cli/mascot.js", () => ({
 }));
 
 import { buildRunCommand } from "../src/cli/commands/run.js";
+import { buildWatchCommand } from "../src/cli/commands/watch.js";
 import { buildListCommand } from "../src/cli/commands/list.js";
 
 describe("run command", () => {
@@ -70,6 +79,38 @@ describe("run command", () => {
       expect.objectContaining({
         huntName: "homepage",
         urlOverride: "http://example.com"
+      })
+    );
+  });
+
+  it("normalizes hunt paths before loading tags and running the hunt", async () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadHuntTags.mockReturnValue(["smoke"]);
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowl/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync([
+      "node",
+      "prowl",
+      ".prowl/hunts/homepage.yml",
+      "--include-tags",
+      "smoke"
+    ]);
+
+    expect(mockLoadHuntTags).toHaveBeenCalledWith("homepage", "/tmp/.prowl");
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        huntName: "homepage"
       })
     );
   });
@@ -282,6 +323,49 @@ describe("run command", () => {
     expect(printStepResult).not.toHaveBeenCalled();
     expect(printHuntSummary).not.toHaveBeenCalled();
     expect(resultMascot).not.toHaveBeenCalled();
+  });
+});
+
+describe("watch command", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(fs, "watchFile").mockImplementation(() => undefined);
+    vi.spyOn(process, "on").mockImplementation(() => process);
+    process.exitCode = undefined;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.exitCode = undefined;
+  });
+
+  it("normalizes hunt paths before resolving watch targets and running the hunt", async () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockGetWatchTargets.mockReturnValue(["/tmp/.prowl/hunts/homepage.yml"]);
+    mockCreateDebouncer.mockReturnValue({ trigger: vi.fn(), cancel: vi.fn() });
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowl/runs/test"
+    });
+
+    const cmd = buildWatchCommand();
+    await cmd.parseAsync(["node", "prowl", ".prowl/hunts/homepage.yml"]);
+
+    expect(mockGetWatchTargets).toHaveBeenCalledWith("/tmp/.prowl", "homepage");
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        huntName: "homepage"
+      })
+    );
   });
 });
 

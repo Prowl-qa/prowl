@@ -1,12 +1,17 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfig } from "../../config/loader.js";
+import { normalizeHuntName } from "../../config/hunt-name.js";
 import { readHuntHistory } from "../../runner/history.js";
 import type { HistoryEntry } from "../../types/index.js";
 
+/** Build the `prowl history` command and normalize path-like hunt arguments. */
 export function buildHistoryCommand(): Command {
   const command = new Command("history")
-    .argument("<hunt-name>", "Hunt name or path (e.g. homepage or admin/users-crud)")
+    .argument(
+      "<hunt-name>",
+      "Hunt name or path (e.g. homepage, admin/users-crud, or .prowl/hunts/homepage.yml)"
+    )
     .description("Show run history for a hunt")
     .option("--config <path>", "Custom config path")
     .option("--limit <n>", "Show the last N runs (default: 20)", (value) => {
@@ -17,7 +22,8 @@ export function buildHistoryCommand(): Command {
       return n;
     })
     .option("--json", "Output as JSON")
-    .action((huntName: string, options) => {
+    .action((huntArg: string, options) => {
+      const huntName = normalizeHuntName(huntArg);
       try {
         const { configDir } = loadConfig(options.config);
         const entries = readHuntHistory(configDir, huntName);

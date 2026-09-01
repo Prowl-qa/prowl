@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { ensureAllowedDomain, findConfigPath, loadConfig, loadHunt } from "../src/config/loader.js";
+import { normalizeHuntName } from "../src/config/hunt-name.js";
 
 function setupTempProject(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-"));
@@ -87,6 +88,33 @@ describe("loadHunt", () => {
       const { configDir } = loadConfig();
       const hunt = loadHunt("admin/users-crud", configDir);
       expect(hunt.steps.length).toBe(1);
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("loads an extensionless nested identity starting with hunts without dropping its prefix", () => {
+    const project = setupTempProject();
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+
+      const prowlDir = path.join(project, ".prowl");
+      fs.mkdirSync(path.join(prowlDir, "hunts", "admin"), { recursive: true });
+      fs.mkdirSync(path.join(prowlDir, "hunts", "hunts", "admin"), { recursive: true });
+      fs.writeFileSync(
+        path.join(prowlDir, "hunts", "admin", "users.yml"),
+        "steps:\n  - navigate: '/wrong-hunt'\n"
+      );
+      fs.writeFileSync(
+        path.join(prowlDir, "hunts", "hunts", "admin", "users.yml"),
+        "steps:\n  - navigate: '/nested-identity'\n"
+      );
+
+      const { configDir } = loadConfig();
+      const hunt = loadHunt(normalizeHuntName("hunts/admin/users"), configDir);
+      expect(hunt.steps[0]).toEqual({ navigate: "/nested-identity" });
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });
