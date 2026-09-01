@@ -1,5 +1,7 @@
 const HUNT_NAME_PATTERN = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/;
+const HUNT_FILE_EXTENSION_PATTERN = /\.ya?ml$/i;
 
+/** Return whether a string is already a valid bare hunt identity. */
 export function isValidHuntName(name: string): boolean {
   return HUNT_NAME_PATTERN.test(name);
 }
@@ -13,11 +15,13 @@ export function isValidHuntName(name: string): boolean {
  *   .prowl/hunts/homepage.yml      -> homepage
  *   hunts/homepage.yml             -> homepage
  *   .prowl/hunts/admin/users.yaml  -> admin/users
+ *   hunts/admin/users              -> hunts/admin/users (already bare; unchanged)
  *   homepage                       -> homepage   (already bare; unchanged)
  *
- * Only the hunts-directory prefix and a trailing `.yml`/`.yaml` extension are
- * stripped; anything else is left untouched so that genuinely invalid input
- * still fails validation with a clear message.
+ * Only supported hunt file paths have their hunts-directory prefix stripped.
+ * A trailing `.yml`/`.yaml` extension is also stripped; anything else is left
+ * untouched so that genuinely invalid input still fails validation with a clear
+ * message.
  */
 export function normalizeHuntName(input: string): string {
   let name = input.trim();
@@ -26,17 +30,19 @@ export function normalizeHuntName(input: string): string {
     name = name.slice(2);
   }
 
-  if (name.startsWith(".prowl/hunts/")) {
+  const isSupportedHuntPath = HUNT_FILE_EXTENSION_PATTERN.test(name);
+  if (isSupportedHuntPath && name.startsWith(".prowl/hunts/")) {
     name = name.slice(".prowl/hunts/".length);
-  } else if (name.startsWith("hunts/")) {
+  } else if (isSupportedHuntPath && name.startsWith("hunts/")) {
     name = name.slice("hunts/".length);
   }
 
-  name = name.replace(/\.ya?ml$/i, "");
+  name = name.replace(HUNT_FILE_EXTENSION_PATTERN, "");
 
   return name;
 }
 
+/** Throw a user-facing error when a normalized hunt identity is invalid. */
 export function assertValidHuntName(name: string): void {
   if (!isValidHuntName(name)) {
     throw new Error(

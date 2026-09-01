@@ -5,6 +5,7 @@ import { normalizeHuntName } from "../../config/hunt-name.js";
 import { readHuntHistory } from "../../runner/history.js";
 import type { HistoryEntry } from "../../types/index.js";
 
+/** Build the `prowl history` command and normalize path-like hunt arguments. */
 export function buildHistoryCommand(): Command {
   const command = new Command("history")
     .argument(

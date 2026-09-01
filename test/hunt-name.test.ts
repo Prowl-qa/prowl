@@ -26,6 +26,10 @@ describe("normalizeHuntName", () => {
     expect(normalizeHuntName("hunts/homepage.yml")).toBe("homepage");
   });
 
+  it("preserves an extensionless nested hunt identity starting with hunts", () => {
+    expect(normalizeHuntName("hunts/admin/users")).toBe("hunts/admin/users");
+  });
+
   it("strips a .yaml extension as well as .yml", () => {
     expect(normalizeHuntName(".prowl/hunts/homepage.yaml")).toBe("homepage");
     expect(normalizeHuntName("homepage.yaml")).toBe("homepage");

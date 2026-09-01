@@ -33,7 +33,7 @@ steps:
       visible: "Saved"
 ```
 
-```
+```text
   ● Running hunt: save-note
     ✓ click "id=newNote" (90ms)
     ✓ type "Buy milk" (40ms)
@@ -61,7 +61,7 @@ steps:
       visible: "Dashboard"
 ```
 
-```
+```text
   ● Running hunt: login-flow
     ✓ navigate "/login" (120ms)
     ✓ fill "Email" (85ms)
@@ -73,7 +73,7 @@ steps:
   Artifacts: .prowl/runs/2026-02-09_10-30-45
 ```
 
-### Why Prowl
+## Why Prowl
 
 - **Desktop-first, from the same YAML.** Native macOS apps (Accessibility API)
   and web apps (Playwright) share one step vocabulary, one config, one report

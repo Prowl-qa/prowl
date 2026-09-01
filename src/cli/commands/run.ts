@@ -6,6 +6,7 @@ import { normalizeHuntName } from "../../config/hunt-name.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 import { resultMascot } from "../mascot.js";
 
+/** Build the `prowl run` command and normalize path-like hunt arguments. */
 export function buildRunCommand(): Command {
   const command = new Command("run")
     .argument(

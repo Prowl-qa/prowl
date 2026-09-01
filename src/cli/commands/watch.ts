@@ -7,6 +7,7 @@ import { runHunt } from "../../runner/index.js";
 import { createDebouncer, getWatchTargets } from "../watch-utils.js";
 import { printHuntHeader, printStepResult, printHuntSummary } from "../output.js";
 
+/** Build the `prowl watch` command and normalize path-like hunt arguments. */
 export function buildWatchCommand(): Command {
   const command = new Command("watch")
     .argument(

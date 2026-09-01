@@ -51,6 +51,16 @@ describe("history command", () => {
     expect(output).toContain("missing-hunt");
   });
 
+  it("normalizes hunt paths before reading hunt history", () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockReadHuntHistory.mockReturnValue([]);
+
+    const cmd = buildHistoryCommand();
+    cmd.parse(["node", "prowl", ".prowl/hunts/homepage.yml", "--json"]);
+
+    expect(mockReadHuntHistory).toHaveBeenCalledWith("/tmp/.prowl", "homepage");
+  });
+
   it("prints a table of runs with status, timestamp, and duration", () => {
     mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
     mockReadHuntHistory.mockReturnValue([

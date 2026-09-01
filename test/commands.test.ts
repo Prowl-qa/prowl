@@ -74,6 +74,38 @@ describe("run command", () => {
     );
   });
 
+  it("normalizes hunt paths before loading tags and running the hunt", async () => {
+    mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
+    mockLoadHuntTags.mockReturnValue(["smoke"]);
+    mockRunHunt.mockResolvedValue({
+      result: {
+        status: "pass",
+        exitCode: 0,
+        hunt: "homepage",
+        steps: [],
+        assertions: [],
+        artifacts: {}
+      },
+      runDir: "/tmp/prowl/runs/test"
+    });
+
+    const cmd = buildRunCommand();
+    await cmd.parseAsync([
+      "node",
+      "prowl",
+      ".prowl/hunts/homepage.yml",
+      "--include-tags",
+      "smoke"
+    ]);
+
+    expect(mockLoadHuntTags).toHaveBeenCalledWith("homepage", "/tmp/.prowl");
+    expect(mockRunHunt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        huntName: "homepage"
+      })
+    );
+  });
+
   it("skips hunt when include-tags do not match", async () => {
     mockLoadConfig.mockReturnValue({ configDir: "/tmp/.prowl" });
     mockLoadHuntTags.mockReturnValue(["smoke"]);
