@@ -5,6 +5,20 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Hunt-level assertions now run on native targets (macOS / Android / iOS)
+  instead of being silently skipped (PROWL-050 / ARCH-004).** The native run
+  path previously discarded every `assertions:` block (`assertions: []`). It now
+  evaluates the applicable subset — `selectorExists` / `selectorNotExists`,
+  resolved against the session driver — after the steps complete, and a failing
+  one fails the hunt, exactly like the web path (assertions run even when a step
+  failed). Web-only assertion types (`urlIncludes`, `urlEquals`,
+  `noConsoleErrors`, `noNetworkErrors`) are reported per-assertion with the new
+  `skipped` status (visible in `result.json`, `summary.md` as `[SKIPPED]`, and
+  JUnit as `<skipped/>`) rather than silently dropped or hard-erroring; a console
+  warning naming the target is emitted for the web-only assertions a hunt
+  explicitly authored. Config- and hunt-level assertion blocks merge identically
+  to the web path; the `noConsoleErrors`/`noNetworkErrors` config defaults are
+  surfaced as skipped (auditable) but do not warn on every run.
 - **`prowl macdriver install` / `prowl macdriver status` — a two-minute macOS
   setup with no Xcode or Swift toolchain (PROWL-074 / PROWL-052).** `install`
   downloads the pinned, signed, notarized universal `prowl-macdriver` helper from

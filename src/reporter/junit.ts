@@ -16,6 +16,7 @@ export function writeJunit(runDir: string, result: RunResult): string {
   const failures =
     result.steps.filter((s) => s.status === "fail").length +
     result.assertions.filter((a) => a.status === "fail").length;
+  const skipped = result.assertions.filter((a) => a.status === "skipped").length;
   const timeSeconds = (result.durationMs / 1000).toFixed(3);
   const huntName = escapeXml(result.hunt);
 
@@ -23,7 +24,7 @@ export function writeJunit(runDir: string, result: RunResult): string {
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push("<testsuites>");
   lines.push(
-    `  <testsuite name="${huntName}" tests="${totalTests}" failures="${failures}" errors="0" time="${timeSeconds}" timestamp="${escapeXml(result.startedAt)}">`
+    `  <testsuite name="${huntName}" tests="${totalTests}" failures="${failures}" errors="0" skipped="${skipped}" time="${timeSeconds}" timestamp="${escapeXml(result.startedAt)}">`
   );
 
   for (let i = 0; i < result.steps.length; i++) {
@@ -50,6 +51,11 @@ export function writeJunit(runDir: string, result: RunResult): string {
       const escapedFailureText = escapeXml(failureText);
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="0">`);
       lines.push(`      <failure message="${escapedFailureText}" type="assertion">${escapedFailureText}</failure>`);
+      lines.push("    </testcase>");
+    } else if (assertion.status === "skipped") {
+      const skipText = escapeXml(assertion.error ?? "skipped");
+      lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="0">`);
+      lines.push(`      <skipped message="${skipText}"/>`);
       lines.push("    </testcase>");
     } else {
       lines.push(`    <testcase name="${caseName}" classname="${huntName}" time="0"/>`);

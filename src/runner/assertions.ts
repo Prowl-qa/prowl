@@ -154,3 +154,88 @@ export async function evaluateAssertions(options: {
 
   return results;
 }
+
+/** The minimal driver surface the native assertion evaluator queries. */
+type NativeAssertionDriver = {
+  count(selector: string): Promise<number>;
+};
+
+export type NativeAssertionEvaluation = {
+  results: AssertionResult[];
+  /** Human-facing warnings (one per web-only assertion skipped), to log. */
+  warnings: string[];
+};
+
+/**
+ * PROWL-050 / ARCH-004 — evaluate hunt- and config-level assertions on a native
+ * (macOS / Android / iOS) target. Config- and hunt-level blocks are merged with
+ * exactly the same {@link mergeAssertions} the web path uses, so precedence is
+ * identical. Assertion types that resolve a selector
+ * ({@link NATIVE_APPLICABLE_ASSERTION_TYPES}) run against the driver's `count`;
+ * web-only types (URL / console / network) are reported with status `skipped`,
+ * never silently dropped and never a hard error. Mirrors the web path's
+ * semantics: config- and hunt-level blocks merge identically and assertions are
+ * evaluated after steps regardless of whether a step failed.
+ *
+ * A console warning is emitted only for web-only assertions the **hunt** authored
+ * (clear intent), not for the `noConsoleErrors`/`noNetworkErrors` config defaults
+ * that apply to every run — those still surface as skipped results, so they are
+ * fully auditable without spamming a warning on every native run.
+ */
+export async function evaluateNativeAssertions(options: {
+  driver: NativeAssertionDriver;
+  config: Config;
+  huntAssertions?: Assertion[];
+  /** Display label for the target, e.g. "macOS" / "Android" / "iOS". */
+  targetLabel: string;
+}): Promise<NativeAssertionEvaluation> {
+  const assertions = mergeAssertions(options.config, options.huntAssertions);
+  const authoredTypes = new Set(
+    (options.huntAssertions ?? []).map((assertion) => Object.keys(assertion)[0])
+  );
+  const results: AssertionResult[] = [];
+  const warnings: string[] = [];
+
+  for (const assertion of assertions) {
+    const type = Object.keys(assertion)[0] ?? "assertion";
+    try {
+      if ("selectorExists" in assertion) {
+        const count = await options.driver.count(assertion.selectorExists);
+        results.push({
+          type: "selectorExists",
+          value: assertion.selectorExists,
+          status: count > 0 ? "pass" : "fail",
+          error: count > 0 ? undefined : "Selector not found"
+        });
+        continue;
+      }
+      if ("selectorNotExists" in assertion) {
+        const count = await options.driver.count(assertion.selectorNotExists);
+        results.push({
+          type: "selectorNotExists",
+          value: assertion.selectorNotExists,
+          status: count === 0 ? "pass" : "fail",
+          error: count === 0 ? undefined : "Selector exists"
+        });
+        continue;
+      }
+
+      // Every remaining Assertion type is web-only on a native target.
+      const rawValue = (assertion as Record<string, string | boolean>)[type];
+      results.push({
+        type,
+        value: rawValue,
+        status: "skipped",
+        error: `skipped (web-only): not supported on the ${options.targetLabel} target`
+      });
+      if (authoredTypes.has(type)) {
+        warnings.push(`${type} is web-only; skipped on ${options.targetLabel} target`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Assertion failed";
+      results.push({ type, status: "fail", error: message });
+    }
+  }
+
+  return { results, warnings };
+}

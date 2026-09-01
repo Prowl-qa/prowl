@@ -50,8 +50,31 @@ export function webOnlyReason(step: Step): string | null {
   return null;
 }
 
-/** Human-facing label for a native (non-web) target, used in error messages. */
-function nativeTargetLabel(target: Target["type"]): string {
+/**
+ * Assertion types that are portable to native (non-web) targets: they resolve a
+ * selector against the driver, which every target supports. Everything else in
+ * the {@link Assertion} union (`urlIncludes`, `urlEquals`, `noConsoleErrors`,
+ * `noNetworkErrors`) is web-only — see {@link WEB_ONLY_ASSERTION_TYPES}.
+ */
+export const NATIVE_APPLICABLE_ASSERTION_TYPES: ReadonlySet<string> = new Set([
+  "selectorExists",
+  "selectorNotExists"
+]);
+
+/**
+ * Assertion types that only have meaning on the web target (a URL, or the
+ * browser console / network layer). On a native target these are reported as
+ * `skipped (web-only)` rather than evaluated — see the native run path.
+ */
+export const WEB_ONLY_ASSERTION_TYPES: ReadonlySet<string> = new Set([
+  "urlIncludes",
+  "urlEquals",
+  "noConsoleErrors",
+  "noNetworkErrors"
+]);
+
+/** Human-facing label for a native (non-web) target, used in messages. */
+export function nativeTargetLabel(target: Target["type"]): string {
   if (target === "android") {
     return "Android";
   }
@@ -92,6 +115,16 @@ export function assertStepsSupportedByTarget(steps: Step[], target: Target["type
   }
 }
 
+/**
+ * Reject hunt-level assertions declared on a **sub-hunt** invoked via `runHunt`
+ * on a native target. Hunt-level assertions are a top-level concept — a sub-hunt
+ * contributes only its steps, and its `assertions:` block is never evaluated on
+ * any target (the web path silently ignores it). On a native target that silent
+ * drop is surfaced as a hard error so a factored-out `selectorExists` assertion
+ * cannot vanish unnoticed. The top-level native run path does NOT use this: it
+ * evaluates the applicable subset and reports web-only types as skipped (see
+ * {@link NATIVE_APPLICABLE_ASSERTION_TYPES} / {@link WEB_ONLY_ASSERTION_TYPES}).
+ */
 export function assertHuntAssertionsSupportedByTarget(
   assertions: unknown[] | undefined,
   target: Target["type"]

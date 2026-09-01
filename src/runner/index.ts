@@ -5,10 +5,10 @@ import { loadConfig, loadHunt, ensureAllowedDomain, resolveViewport } from "../c
 import { interpolateHunt } from "../config/interpolate.js";
 import {
   assertAndroidAppAllowed,
-  assertHuntAssertionsSupportedByTarget,
   assertIosAppAllowed,
   assertStepsSupportedByTarget,
-  assertTargetAppAllowed
+  assertTargetAppAllowed,
+  nativeTargetLabel
 } from "../config/target.js";
 import { launchBrowser, closeBrowser, createPlaywrightDriver } from "../browser/controller.js";
 import { launchMacSession, closeMacSession, type MacSession } from "../browser/mac-helper.js";
@@ -27,7 +27,12 @@ import {
   type LaunchIosOptions
 } from "../browser/ios-helper.js";
 import { captureFinalScreenshot, executeSteps, type StepCallback } from "./steps.js";
-import { evaluateAssertions, type ConsoleEntry, type NetworkEntry } from "./assertions.js";
+import {
+  evaluateAssertions,
+  evaluateNativeAssertions,
+  type ConsoleEntry,
+  type NetworkEntry
+} from "./assertions.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
@@ -449,8 +454,24 @@ async function executeNativeHuntAttempt<TSession>(
       finalScreenshot = undefined;
     }
 
+    // Evaluate hunt-/config-level assertions after steps complete, matching the
+    // web path's semantics (assertions run even when a step failed). Applicable
+    // types (selectorExists/selectorNotExists) run against the driver; web-only
+    // types are reported as skipped and warned, never silently dropped.
+    const { results: assertionResults, warnings: assertionWarnings } =
+      await evaluateNativeAssertions({
+        driver,
+        config,
+        huntAssertions: interpolatedHunt.assertions,
+        targetLabel: nativeTargetLabel(native.targetType)
+      });
+    for (const warning of assertionWarnings) {
+      console.warn(warning);
+    }
+
     const durationMs = Date.now() - startTime;
-    const status: "pass" | "fail" = stepFailed ? "fail" : "pass";
+    const assertionsFailed = assertionResults.some((assertion) => assertion.status === "fail");
+    const status: "pass" | "fail" = stepFailed || assertionsFailed ? "fail" : "pass";
     const artifacts: RunResult["artifacts"] = {
       screenshots: finalScreenshot ? [...stepScreenshots, finalScreenshot] : stepScreenshots
     };
@@ -462,7 +483,7 @@ async function executeNativeHuntAttempt<TSession>(
       hunt: options.huntName,
       targetUrl: targetLabel,
       steps: stepResults,
-      assertions: [],
+      assertions: assertionResults,
       artifacts
     });
 
@@ -652,9 +673,10 @@ async function runNativeHunt<TTarget extends NativeRunTarget>(
   const hunt = loadHunt(options.huntName, configDir);
   const { hunt: interpolatedHunt, redactedFillSteps, randomVars } = interpolateHunt(hunt, process.env);
 
-  // Fail fast on web-only steps/assertions and out-of-scope apps before launching anything.
+  // Fail fast on web-only steps and out-of-scope apps before launching anything.
+  // Hunt-level assertions are NOT rejected here: the applicable subset runs after
+  // steps and web-only types are reported as skipped (see executeNativeHuntAttempt).
   assertStepsSupportedByTarget(interpolatedHunt.steps, native.targetType);
-  assertHuntAssertionsSupportedByTarget(interpolatedHunt.assertions, native.targetType);
   native.assertAppAllowed(config.guardrails.allowedApps, target);
 
   const maxSteps = config.guardrails.maxSteps;
