@@ -17,30 +17,56 @@
 - Consider filing a trademark application in Classes 9 and 42 specifically for QA testing tools
 - Using "Prowl" or "prowl" as the primary brand provides stronger differentiation
 
-{PROWL-024} **P6-001: VS Code Extension**
-   VS Code extension for Prowl hunt authoring and execution.
+**Status (2026-09-01, {PROWL-077} review)**: kept High — legal de-risk that should land
+before the {PROWL-078} distribution push invests further in the brand.
 
-**Maestro equivalent**: Maestro Workbench + Maestro Assistant
+{PROWL-079} **REL-002: Organization signing chain for `prowl-macdriver` releases (release gate)**
+   The macdriver release automation ({PROWL-052}) is merged and ready, but going live is
+   blocked on a signing identity: release binaries must be signed with a **Developer ID
+   certificate issued to the organization**, so the signature — publicly inspectable via
+   `codesign -dvv` on every distributed copy — carries the organization's name. Signing with
+   an individual-account certificate is ruled out by the project's publishing policy. An
+   Apple Developer **organization** enrollment has its own prerequisite chain, which is the
+   real work of this item.
 
-**Acceptance Criteria**:
-- YAML syntax highlighting for `.prowl/hunts/*.yml` with Prowl schema awareness
-- IntelliSense/autocomplete for step types, assertion types, config options
-- Run hunt from editor (right-click → "Run Hunt" or CodeLens above hunt name)
-- View results inline (pass/fail badges, screenshot previews in hover)
-- Go-to-definition for `runHunt` references
-- Publish to VS Code Marketplace
+**Found during**: macdriver-distribution release planning (2026-09-01)
+**Prerequisite chain / Acceptance Criteria** (in order):
+- Legal entity for the organization confirmed/registered (Apple rejects sole proprietorships/DBAs for org accounts)
+- D-U-N-S number for the entity (free via Dun & Bradstreet, ~days; requires a business contact phone)
+- Business phone number (a VoIP number may pass Apple's verification call; fallback is a low-cost real-SIM line) — the current sticking point
+- Apple Developer Program organization enrollment ($99/yr; includes a verification call; days-to-weeks)
+- Developer ID Application certificate + App Store Connect API key created under the org account
+- The six repo secrets provisioned per `macdriver/RELEASING.md`
+- Tag `macdriver-v0.1.0` → workflow green with notarization `status: Accepted` → live-verify `prowl macdriver install`
+- Blocks {PROWL-074} completion and therefore {PROWL-076}/{PROWL-078}
 
-{PROWL-025} **P6-002: `prowl studio` — Interactive Test Builder**
-   Open a browser alongside a terminal UI. Click elements to generate YAML steps. See selectors on hover. Export to hunt file.
+{PROWL-037} **GTM-002: Competitive Positioning Matrix**
+   Sharpen the comparison table on prowl.tools beyond feature checkmarks. Define what Prowl uniquely does better than Playwright Test, Cypress, Maestro, and Selenium — and be honest about where it's weaker. Current comparison table exists but isn't grounded in user feedback or win/loss data.
 
-**Maestro equivalent**: Maestro Studio Desktop
-
-**Acceptance Criteria**:
-- `prowl studio` opens target URL in headed browser with inspector overlay
-- Clicking elements generates YAML step (click/fill/etc.) in terminal or output file
-- Hovering shows available selectors for each element
-- Export accumulated steps to `.prowl/hunts/<name>.yml`
-- Support for recording fill values (prompt user for input)
+**Found during**: Gap analysis (2026-02-16)
+**Status (2026-09-01, {PROWL-077} review)**: promoted Medium → High — the comparison page is
+a named deliverable of the {PROWL-078} distribution sprint and can be drafted now, ahead of
+the release gate ({PROWL-079}).
+**Practitioner pain points to ground it in** (Reddit thread research, 2026-08-16 — real language
+from Appium/Espresso/Maestro users; use these verbatim-ish, they beat feature checkmarks):
+- *"Flakiness drives me up the wall … debugging timing crap or CI fails that work fine locally"*
+  (Appium) → Prowl's answers: Playwright auto-waiting, deterministic scripted steps, flake
+  scoring/quarantine ({PROWL-035}), pinned container image ({PROWL-042}) for CI/local parity.
+  Be honest: the macOS target is black-box AX (no in-process idle signal à la Espresso).
+- *"Reliable and quick, but Android-only, and the boilerplate is a slog"* (Espresso) → hunts are
+  ~a dozen lines, no instrumentation build; platform coverage is web + experimental macOS.
+- *"YAML starts feeling like a cage when I need more control"* (Maestro) → Prowl's escape
+  hatches: `runHunt` composition, `if`/`repeat`, runtime vars, `evalScript`/`runScript`, and the
+  **library API** for graduating gnarly flows to TS (docs path tracked in prowl-docs PQD-005).
+- *"No IDs or anything useful"* → stable-selector philosophy + `prowl analyze` selector ranking
+  (macOS analog tracked as {PROWL-055}).
+- The poster's wish list (MCP-native, AI-assisted, local/BYOK, no lock-in) is Prowl's mission
+  statement — lead with it.
+**Deliverable**: Updated comparison page with:
+- "Best for" statement per competitor
+- Prowl's unique angle (YAML simplicity + agent-native + Playwright power)
+- Honest "not for you if..." section
+- Testimonial placeholders for when early users provide feedback
 
 ## Medium Priority
 
@@ -114,31 +140,6 @@ npx license-checker --summary --exclude 'MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-C
 - Summary report shows "Passed on attempt 2 of 3" with first-attempt failure reason
 - `prowl history` shows retry frequency per hunt over time
 - Helps distinguish "flaky test" from "slow environment" from "real regression"
-
-{PROWL-037} **GTM-002: Competitive Positioning Matrix**
-   Sharpen the comparison table on prowl.tools beyond feature checkmarks. Define what Prowl uniquely does better than Playwright Test, Cypress, Maestro, and Selenium — and be honest about where it's weaker. Current comparison table exists but isn't grounded in user feedback or win/loss data.
-
-**Found during**: Gap analysis (2026-02-16)
-**Practitioner pain points to ground it in** (Reddit thread research, 2026-08-16 — real language
-from Appium/Espresso/Maestro users; use these verbatim-ish, they beat feature checkmarks):
-- *"Flakiness drives me up the wall … debugging timing crap or CI fails that work fine locally"*
-  (Appium) → Prowl's answers: Playwright auto-waiting, deterministic scripted steps, flake
-  scoring/quarantine ({PROWL-035}), pinned container image ({PROWL-042}) for CI/local parity.
-  Be honest: the macOS target is black-box AX (no in-process idle signal à la Espresso).
-- *"Reliable and quick, but Android-only, and the boilerplate is a slog"* (Espresso) → hunts are
-  ~a dozen lines, no instrumentation build; platform coverage is web + experimental macOS.
-- *"YAML starts feeling like a cage when I need more control"* (Maestro) → Prowl's escape
-  hatches: `runHunt` composition, `if`/`repeat`, runtime vars, `evalScript`/`runScript`, and the
-  **library API** for graduating gnarly flows to TS (docs path tracked in prowl-docs PQD-005).
-- *"No IDs or anything useful"* → stable-selector philosophy + `prowl analyze` selector ranking
-  (macOS analog tracked as {PROWL-055}).
-- The poster's wish list (MCP-native, AI-assisted, local/BYOK, no lock-in) is Prowl's mission
-  statement — lead with it.
-**Deliverable**: Updated comparison page with:
-- "Best for" statement per competitor
-- Prowl's unique angle (YAML simplicity + agent-native + Playwright power)
-- Honest "not for you if..." section
-- Testimonial placeholders for when early users provide feedback
 
 ## Low Priority
 
@@ -269,12 +270,47 @@ steps:
 - `/for/developers` — quick setup, YAML simplicity, local-first focus
 - `/for/ai-agents` — JSON output, library API, programmatic integration focus
 
+## Parked — behind the first-ten-human-users gate
+
+Breadth items parked by the {PROWL-077} beachhead review (2026-09-01): none of these help a
+Mac or web developer *try* Prowl in the next 60 days. They keep their numbers and re-enter
+scheduling only after {PROWL-078}'s success metric (ten humans who ran a hunt) is met.
+
+{PROWL-024} **P6-001: VS Code Extension (PARKED)**
+   VS Code extension for Prowl hunt authoring and execution.
+
+**Maestro equivalent**: Maestro Workbench + Maestro Assistant
+
+**Acceptance Criteria**:
+- YAML syntax highlighting for `.prowl/hunts/*.yml` with Prowl schema awareness
+- IntelliSense/autocomplete for step types, assertion types, config options
+- Run hunt from editor (right-click → "Run Hunt" or CodeLens above hunt name)
+- View results inline (pass/fail badges, screenshot previews in hover)
+- Go-to-definition for `runHunt` references
+- Publish to VS Code Marketplace
+
+{PROWL-025} **P6-002: `prowl studio` — Interactive Test Builder (PARKED)**
+   Open a browser alongside a terminal UI. Click elements to generate YAML steps. See selectors on hover. Export to hunt file.
+
+**Maestro equivalent**: Maestro Studio Desktop
+
+**Acceptance Criteria**:
+- `prowl studio` opens target URL in headed browser with inspector overlay
+- Clicking elements generates YAML step (click/fill/etc.) in terminal or output file
+- Hovering shows available selectors for each element
+- Export accumulated steps to `.prowl/hunts/<name>.yml`
+- Support for recording fill values (prompt user for input)
+
 ## macOS Target — Phase 2 (Epic)
 
 Follow-ups to the experimental macOS native target ({PROWL-048}, shipped 2026-08-15 on `main`,
 unreleased). Priorities should be re-ordered by dogfood feedback from the first real consumer
 (Sentwise menu bar app, `prowl-hunts` branch in that repo). Phase 1 scope notes live in
 `resolved.md` under PROWL-048.
+
+**Epic status (2026-09-01, {PROWL-077} review): ACTIVE** — the core beachhead epic. Next code
+items: {PROWL-050} then {PROWL-051}; {PROWL-056} after those. {PROWL-052}'s go-live is gated
+on {PROWL-079}.
 
 {PROWL-050} **ARCH-004: Hunt-level assertions on the macOS path**
    The macOS run path passes `assertions: []` — config/hunt `assertions:` blocks are silently
@@ -322,7 +358,8 @@ code + README), and the tag-triggered `.github/workflows/macdriver-release.yml`
 tarball stays JS-only. **Remains (owner)**: provision the signing secrets
 (`macdriver/RELEASING.md`), cut the first `macdriver-v0.1.0` release, and confirm
 a notarized binary installs cleanly — until then `install` 404s by design.
-Homebrew formula for the helper not pursued (npm install path covers it).
+Homebrew formula for the helper not pursued (npm install path covers it). The
+signing-identity prerequisite chain is tracked as {PROWL-079}.
 
 {PROWL-056} **ARCH-008: Event-driven AX waits via AXObserver (BiDi lesson applied to macdriver)**
    The Swift helper is a classic command/poll design: `waitFor` loops on 100ms sleeps, menu-open
@@ -362,6 +399,10 @@ free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062
 devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
 swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
 
+**Epic status (2026-09-01, {PROWL-077} review): FROZEN (experimental)** — Android and
+iOS-simulator support shipped and stays maintained, but no new scope until a real user asks;
+{PROWL-062} remains deferred.
+
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
 make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and
@@ -388,6 +429,10 @@ dashboard-blocking backlash and Maestro's discount resellers (DeviceCloud, Morop
 cautionary tales. Server-side components will live in a new repo (working name `prowl-cloud`);
 this epic tracks the CLI-side work and the overall sequencing. Build order: **BIZ-001 →
 BIZ-002 → BIZ-003**, with BIZ-004 as the second act and BIZ-005 alongside first paid launch.
+
+**Epic status (2026-09-01, {PROWL-077} review): PARKED — gated on the first ten human users.**
+No BIZ item is scheduled until ten real humans have run a hunt ({PROWL-078}'s metric). The
+model decision and standing guarantees above are unchanged and apply when the epic reopens.
 
 {PROWL-063} **BIZ-001: Prowl account + CLI auth (`prowl login`)**
    *As a user, I want to sign in from the CLI so AI features can work without me managing an API
@@ -473,6 +518,10 @@ your data or your exit.
 ## CI/CD & OpenShift (Epic)
 
 Make Prowl usable as an automated go/no-go acceptance gate in CI/CD pipelines and OpenShift Pipelines (Tekton), in addition to its original manual/exploratory use. The CLI already has the runtime primitives (`prowl ci` with exit codes 0/1/2, `--json`, `--junit`, `--url`, `--parallel`); the missing piece is packaging/distribution, not core behavior. Positioning: an **agent-friendly acceptance/smoke layer** ("plain-English end-to-end checks that protect deploys"), **not** a replacement for unit/integration suites. Build order: **CICD-001 first** (shared dependency), then 002/003/004 in parallel as desired; **CICD-005 (Operator/enterprise) is intentionally last and large — do not start it before 001–004 ship.** Everything here is additive/opt-in; users not doing CI/CD are unaffected.
+
+**Epic status (2026-09-01, {PROWL-077} review): PARKED — gated on the first ten human users.**
+The CLI-side runtime primitives already shipped; the packaging items (CICD-001..005,
+{PROWL-068}) wait until real users exist to consume them.
 
 {PROWL-042} **CICD-001: Publish a `prowl` container image**
    *As a platform/devops user, I want a ready-to-run Prowl container so I can run hunts in CI without installing Node, the CLI, and Playwright browsers myself.*
@@ -572,7 +621,8 @@ target** — the one position no incumbent holds (Maestro: mobile/web; Playwrigh
 Swift/Xcode). These items capture what lands on this repo from that decision; they are meant
 to be re-evaluated against the epics above (in particular, the Commercialization / Prowl Cloud
 and CI/CD & OpenShift epics should be re-prioritised against the beachhead) before being
-scheduled.
+scheduled. **That re-evaluation ({PROWL-077}) was completed 2026-09-01** — decisions are
+recorded on each epic header and on the affected items' status lines.
 
 {PROWL-072} **SUNSET-001: Lean starter hunts in `prowl init` + curated docs examples (Hub replacement)**
    With the community hub retired, do NOT rebuild a template registry inside the CLI — no
@@ -612,7 +662,8 @@ scheduled.
    time the fresh-machine `npm i -g prowl-tools && prowl macdriver install` flow
    under five minutes; then relabel the macOS target experimental → beta
    (PROWL-075). `prowl-docs` PQD-009 is a separate-repo follow-up. Item stays open
-   until the owner verifies the live install.
+   until the owner verifies the live install. The signing-identity prerequisite
+   chain is tracked as {PROWL-079}.
 
 {PROWL-076} **SUNSET-005: Publish the "macOS app E2E in CI" recipe (dogfood write-up)**
    The owner already runs macOS-app hunts in CI on real projects. Getting Accessibility
@@ -622,17 +673,6 @@ scheduled.
    PQD-009) and a blog post on prowl.tools, with a ≤20-line hunt and the workflow file.
    **Acceptance Criteria**: guide + post published; a reader can reproduce the CI setup from
    the text alone (no private-runbook dependency).
-
-{PROWL-077} **SUNSET-006: Backlog re-evaluation against the desktop-first beachhead**
-   Walk every open item and epic in this file with one question: *does this help a Mac (or
-   web) developer try Prowl in the next 60 days?* Expected outcomes to confirm or reject:
-   park the Commercialization — Prowl Cloud epic and the CI/CD & OpenShift epic behind a
-   "first ten human users" gate; keep the macOS Phase 2 epic and pull ARCH-006 to the front;
-   leave the Mobile epic experimental with no new scope until someone asks; drop or park
-   P6-001 (VS Code extension) and similar breadth items. Record the decisions inline (item
-   status lines), keep numbers stable.
-   **Acceptance Criteria**: each epic header carries a one-line status (active / parked +
-   gate); High Priority contains only items that serve the beachhead.
 
 {PROWL-078} **SUNSET-007: 60-day macOS-beachhead distribution sprint (success metric: humans)**
    Zero organic users after seven months means the constraint is reach, not features.
