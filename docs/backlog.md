@@ -309,19 +309,8 @@ unreleased). Priorities should be re-ordered by dogfood feedback from the first 
 `resolved.md` under PROWL-048.
 
 **Epic status (2026-09-01, {PROWL-077} review): ACTIVE** — the core beachhead epic. Next code
-items: {PROWL-050} then {PROWL-051}; {PROWL-056} after those. {PROWL-052}'s go-live is gated
+item: {PROWL-051}; {PROWL-056} after that. {PROWL-052}'s go-live is gated
 on {PROWL-079}.
-
-{PROWL-050} **ARCH-004: Hunt-level assertions on the macOS path**
-   The macOS run path passes `assertions: []` — config/hunt `assertions:` blocks are silently
-skipped. Evaluate the applicable subset (e.g. `selectorExists`; console/network assertions stay
-web-only) and reject or warn on inapplicable ones instead of ignoring them.
-
-**Found during**: PROWL-048 phase-1 scope notes (2026-08-15)
-**Acceptance Criteria**:
-- Applicable hunt-level assertions run after macOS steps complete
-- Web-only assertion types produce a validation error or explicit "skipped (web-only)" result, never silence
-- Tests for both paths
 
 {PROWL-051} **ARCH-005: Arbitrary key support for `press` on macOS**
    The helper maps Enter/Return/Space onto `AXPress` and rejects everything else. Synthesize
