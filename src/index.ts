@@ -18,7 +18,25 @@ export {
   launchMacSession, closeMacSession, resolveHelperBinary,
   macdriverBuildInstructions, SpawnMacHelperClient, DEFAULT_REQUEST_TIMEOUT_MS
 } from "./browser/mac-helper.js";
-export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions } from "./browser/mac-helper.js";
+export type { MacSession, LaunchMacOptions, SpawnMacHelperOptions, ResolveHelperOptions } from "./browser/mac-helper.js";
+
+// Re-export prebuilt-helper distribution (PROWL-074 / PROWL-052)
+export {
+  HELPER_BINARY, MACDRIVER_VERSION, MACDRIVER_REPO,
+  MACDRIVER_SIGNING_AUTHORITY_PREFIX, MACDRIVER_SIGNING_IDENTIFIER, MACDRIVER_VERSION_PATTERN,
+  macdriverReleaseTag, macdriverAssetName, macdriverChecksumName, macdriverAssetUrl,
+  macdriverInstallRoot, macdriverVersionDir, macdriverInstalledBinary, validateMacdriverVersion
+} from "./browser/macdriver-release.js";
+export {
+  installMacdriver, downloadAndVerify, collectMacdriverStatus,
+  parseChecksumFile, sha256Hex, dittoExtractor, codesignVerifier, runVersionProbe, tccGuidance,
+  zipinfoArchiveLister, validateMacdriverArchiveEntries, parseCodesignDetails, verifyMacdriverSignature
+} from "./browser/macdriver-install.js";
+export type {
+  InstallOptions, InstallResult, DownloadOptions, StatusOptions,
+  MacdriverStatus, InstalledVersion, Extractor, ArchiveLister, SignatureVerifier, VersionProbe,
+  CommandResult, CommandRunner, CodesignDetails
+} from "./browser/macdriver-install.js";
 
 // Re-export the experimental Android target (PROWL-058)
 export {

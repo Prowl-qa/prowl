@@ -15,9 +15,9 @@ is the gap no other tool fills: [Maestro](https://maestro.mobile.dev) targets
 mobile and web, [Playwright](https://playwright.dev) is web-only, and
 [XCUITest](https://developer.apple.com/documentation/xctest) means Swift and
 Xcode. Web is Prowl's second first-class target; iOS and Android are
-experimental. The macOS target is **experimental today** — its driver still
-builds from source (see [macOS Target](#macos-target-experimental)) — but it's
-where Prowl leads.
+experimental. The macOS target is **experimental today** — install its signed
+helper with `prowl macdriver install` (see
+[macOS Target](#macos-target-experimental)) — but it's where Prowl leads.
 
 **Native macOS app** — driven through the Accessibility API:
 
@@ -218,21 +218,43 @@ That's it. You're testing.
 > **Experimental (PROWL-048).** Prowl can drive **native macOS apps** — including
 > menu bar extras (`NSStatusItem` + `NSMenu`) — through Apple's Accessibility API,
 > in addition to the web. The API, selector dialect, and step coverage may change.
-> **Distribution is deferred:** the required helper binary is **not** shipped in the
-> npm package; you build it locally (below).
 
 ### Enabling it
 
-1. **Build the helper** (one time; requires the Swift toolchain / Xcode CLT):
+1. **Install the helper** (recommended — no Xcode, no Swift toolchain):
+
+   ```bash
+   prowl macdriver install
+   ```
+
+   This downloads the pinned, **signed and notarized** `prowl-macdriver` binary
+   from GitHub Releases, verifies its SHA-256 against the released checksum, and
+   installs it to `~/.prowl/macdriver/<version>/prowl-macdriver`. Check what's
+   resolved at any time with `prowl macdriver status`.
+
+   > **Until the first signed release is cut, `prowl macdriver install` returns a
+   > 404** (the maintainer publishes the first `macdriver-v*` release and
+   > verifies the flow before this becomes the default path). In the meantime,
+   > build from source as below.
+
+   **Contributors / pre-release — build from source** (requires the Swift
+   toolchain / Xcode CLT):
 
    ```bash
    cd macdriver
    swift build -c release
    ```
 
-   Prowl finds the binary at `macdriver/.build/release/prowl-macdriver`, or at
-   `$PROWL_MACDRIVER_BIN` if set. If it is missing, Prowl fails with a clear
-   "build the helper" message rather than crashing.
+   **Binary search order.** Prowl resolves the helper via, in order:
+   1. `$PROWL_MACDRIVER_BIN` (absolute path to a binary), then
+   2. the user-level install at `~/.prowl/macdriver/<version>/prowl-macdriver`
+      (what `prowl macdriver install` writes), then
+   3. the repo-local source build at `macdriver/.build/release/prowl-macdriver`
+      (then `.../debug/...`).
+
+   If none is found, Prowl fails with a clear message pointing at
+   `prowl macdriver install` (with the source build as the contributor fallback)
+   rather than crashing.
 
 2. **Point your config at a macOS target:**
 
@@ -257,10 +279,16 @@ That's it. You're testing.
 The **process that hosts** Prowl (your terminal — Terminal, iTerm, VS Code, or a CI
 agent) must be granted **Accessibility** permission: **System Settings → Privacy &
 Security → Accessibility**, then enable that app. macOS attributes the grant to the
-hosting app, not to `prowl-macdriver`. Preflight from the helper:
+hosting app, not to `prowl-macdriver`. `prowl macdriver status` prints the
+resolved binary path, installed versions, and this permission guidance. Preflight
+the Accessibility grant directly from the helper (use the path `status` reports,
+or the source build):
 
 ```bash
-macdriver/.build/release/prowl-macdriver check   # prints {"trusted": <bool>}; prompts on first run
+MACDRIVER_VERSION=0.1.0  # replace with the version shown by `prowl macdriver status`
+~/.prowl/macdriver/$MACDRIVER_VERSION/prowl-macdriver check
+# or: macdriver/.build/release/prowl-macdriver check
+# prints {"trusted": <bool>}; prompts on first run
 ```
 
 The `screenshot`/`assertScreenshot` steps additionally need **Screen Recording**

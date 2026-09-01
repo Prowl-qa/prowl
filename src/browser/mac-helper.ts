@@ -3,23 +3,33 @@
  *
  * Spawns the `prowl-macdriver` Swift helper in `serve` mode and speaks its
  * newline-delimited JSON protocol (one request/response per line, matched by
- * id). The helper is built locally (`swift build` in `macdriver/`) and is NOT
- * bundled in the npm package, so binary resolution fails with a clear "build
- * the helper" message rather than crashing.
+ * id). The helper is resolved by {@link resolveHelperBinary}; when none is
+ * found, resolution fails with a clear message pointing at
+ * `prowl macdriver install` (with build-from-source as the contributor
+ * fallback) rather than crashing.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMacDriver, type MacHelperClient } from "./mac-driver.js";
 import type { SessionDriver } from "./driver.js";
+import { HELPER_BINARY, MACDRIVER_VERSION, macdriverInstalledBinary } from "./macdriver-release.js";
 
-export const HELPER_BINARY = "prowl-macdriver";
+export { HELPER_BINARY };
 
+/**
+ * Guidance shown when the helper can't be resolved. Leads with the
+ * two-minute `prowl macdriver install` path; source build and the
+ * `PROWL_MACDRIVER_BIN` override are the contributor fallbacks.
+ */
 export function macdriverBuildInstructions(): string {
   return (
-    "The macOS target requires the experimental `prowl-macdriver` helper, which is " +
-    "not shipped in the npm package. Build it locally:\n" +
+    "The macOS target needs the `prowl-macdriver` helper. Install the prebuilt, signed " +
+    "binary (recommended):\n" +
+    "  prowl macdriver install\n" +
+    "Contributors building from source can instead run:\n" +
     "  cd macdriver && swift build -c release\n" +
     "or point Prowl at a prebuilt binary via the PROWL_MACDRIVER_BIN environment variable."
   );
@@ -37,12 +47,26 @@ function getPackageRoot(): string {
   return root;
 }
 
+export type ResolveHelperOptions = {
+  /** Home directory for the user-level install lookup (defaults to `os.homedir()`). */
+  homedir?: string;
+};
+
 /**
- * Resolve the helper binary path. Order: `PROWL_MACDRIVER_BIN`, then the
- * release then debug build under `macdriver/.build/`. Throws with build
- * instructions when none is found.
+ * Resolve the helper binary path. Search order (documented in the README's
+ * macOS Target section):
+ *   1. `PROWL_MACDRIVER_BIN` env override (absolute path to the binary);
+ *   2. the user-level install of the pinned version at
+ *      `~/.prowl/macdriver/<MACDRIVER_VERSION>/prowl-macdriver`
+ *      (what `prowl macdriver install` writes);
+ *   3. the contributor's repo-local source build under `macdriver/.build/`
+ *      (`release` then `debug`).
+ * Throws with install-first guidance when none is found.
  */
-export function resolveHelperBinary(env: NodeJS.ProcessEnv = process.env): string {
+export function resolveHelperBinary(
+  env: NodeJS.ProcessEnv = process.env,
+  options: ResolveHelperOptions = {}
+): string {
   const override = env.PROWL_MACDRIVER_BIN;
   if (override) {
     if (!fs.existsSync(override)) {
@@ -53,6 +77,14 @@ export function resolveHelperBinary(env: NodeJS.ProcessEnv = process.env): strin
     return override;
   }
 
+  // 2. User-level install of the pinned version (`prowl macdriver install`).
+  const homedir = options.homedir ?? os.homedir();
+  const userBinary = macdriverInstalledBinary(MACDRIVER_VERSION, homedir);
+  if (fs.existsSync(userBinary)) {
+    return userBinary;
+  }
+
+  // 3. Repo-local source build (contributor fallback).
   const root = getPackageRoot();
   const candidates = [
     path.join(root, "macdriver", ".build", "release", HELPER_BINARY),

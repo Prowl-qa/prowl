@@ -3,6 +3,10 @@
 import ApplicationServices
 import Foundation
 
+/// Helper version, pinned to the CLI's `MACDRIVER_VERSION`. Bump both together
+/// when cutting a new `macdriver-v<version>` release.
+public let macdriverVersion = "0.1.0"
+
 func writeStdoutLine(_ object: [String: Any], fallbackId: Any? = nil) {
     guard let data = try? JSONSerialization.data(withJSONObject: object, options: []) else {
         var fallback: [String: Any] = ["ok": false, "error": "failed to encode response"]
@@ -126,8 +130,12 @@ public func runMain(arguments: [String] = CommandLine.arguments) {
         let trusted = AXIsProcessTrustedWithOptions(options)
         writeStdoutLine(["trusted": trusted])
         exit(trusted ? 0 : 1)
+    case "version", "--version", "-v":
+        // Stable, greppable line the CLI's `prowl macdriver status` probe parses.
+        print("prowl-macdriver \(macdriverVersion)")
+        exit(0)
     default:
-        writeStderr("usage: prowl-macdriver [serve|check]")
+        writeStderr("usage: prowl-macdriver [serve|check|version]")
         exit(2)
     }
 }

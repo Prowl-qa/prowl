@@ -311,6 +311,19 @@ with an install/download command (`prowl doctor --fix`-style), and/or a Homebrew
 - `resolveHelperBinary` search order documented and extended (user-level install location)
 - CI recipe for macOS runners updated
 
+**Status (2026-08-31, branch `macdriver-distribution`)**: automation shipped, not
+yet live. Delivered: `prowl macdriver install` (raw-fetch download from GitHub
+Releases + SHA-256 verify + codesign check, installs to
+`~/.prowl/macdriver/<version>/`), `prowl macdriver status`, the pinned
+`MACDRIVER_VERSION` (`src/browser/macdriver-release.ts`), the extended
+`resolveHelperBinary` order (env → user-install → source build, documented in
+code + README), and the tag-triggered `.github/workflows/macdriver-release.yml`
+(build → lipo universal → codesign → notarize → checksum → GitHub Release). npm
+tarball stays JS-only. **Remains (owner)**: provision the signing secrets
+(`macdriver/RELEASING.md`), cut the first `macdriver-v0.1.0` release, and confirm
+a notarized binary installs cleanly — until then `install` 404s by design.
+Homebrew formula for the helper not pursued (npm install path covers it).
+
 {PROWL-056} **ARCH-008: Event-driven AX waits via AXObserver (BiDi lesson applied to macdriver)**
    The Swift helper is a classic command/poll design: `waitFor` loops on 100ms sleeps, menu-open
 detection polls children. The WebDriver BiDi insight — UIs are event-driven, and protocols that
@@ -588,6 +601,18 @@ scheduled.
    - ARCH-006 shipped (prebuilt, signed/notarized universal binary, checksum-verified)
    - Fresh machine → first green macOS hunt in under five minutes with no source checkout
    - Docs: `prowl-docs` PQD-009
+
+   **Status (2026-08-31, branch `macdriver-distribution`)**: CLI/onboarding half
+   shipped on top of the PROWL-052 automation. Delivered: `prowl macdriver
+   install` as the primary, no-Xcode setup path; `prowl macdriver status` for the
+   resolved-binary/versions/TCC-permission walkthrough (kept scoped to the
+   macdriver — the general `prowl doctor` stays PROWL-026); README macOS section
+   rewritten install-first. **Remains (owner)**: the live steps that can't be run
+   here — provision signing secrets, cut the first `macdriver-v*` release, and
+   time the fresh-machine `npm i -g prowl-tools && prowl macdriver install` flow
+   under five minutes; then relabel the macOS target experimental → beta
+   (PROWL-075). `prowl-docs` PQD-009 is a separate-repo follow-up. Item stays open
+   until the owner verifies the live install.
 
 {PROWL-076} **SUNSET-005: Publish the "macOS app E2E in CI" recipe (dogfood write-up)**
    The owner already runs macOS-app hunts in CI on real projects. Getting Accessibility
