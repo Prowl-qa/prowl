@@ -171,20 +171,83 @@ describe("runHunt — macOS target (PROWL-048)", () => {
     }
   });
 
-  it("rejects top-level hunt assertions before launching the helper", async () => {
+  it("runs applicable top-level hunt assertions and marks web-only ones skipped", async () => {
+    // PROWL-050 / ARCH-004: applicable assertions (selectorExists/selectorNotExists)
+    // run against the driver after steps; web-only ones (urlIncludes, and the
+    // config-default noConsoleErrors/noNetworkErrors) are reported as skipped with
+    // a warning, never silently dropped and never a hard error.
     const project = setupProject(
       MAC_CONFIG,
       "with-assertions",
-      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+      [
+        "steps:",
+        "  - click: 'Save'",
+        "assertions:",
+        "  - selectorExists: 'Saved'",
+        "  - selectorNotExists: 'Missing'",
+        "  - urlIncludes: '/home'",
+        ""
+      ].join("\n")
     );
-    const client = new FakeClient(macResponder);
+    // selectorExists → count 1 (pass); selectorNotExists → count 0 (pass).
+    const client = new FakeClient((cmd, params) => {
+      if (cmd === "count") {
+        const query = params.query as { value?: string } | undefined;
+        return { count: query?.value === "Missing" ? 0 : 1 };
+      }
+      return macResponder(cmd);
+    });
     const cwd = process.cwd();
     try {
       process.chdir(project);
-      await expect(runHunt({ huntName: "with-assertions", macClientFactory: () => client })).rejects.toThrow(
-        "Hunt-level assertions are not supported by the macOS target"
-      );
-      expect(client.calls).toHaveLength(0);
+      const { result, runDir } = await runHunt({
+        huntName: "with-assertions",
+        macClientFactory: () => client
+      });
+
+      expect(result.status).toBe("pass");
+      // Helper WAS launched now (assertions no longer reject before launch).
+      expect(client.calls.map((c) => c.cmd)).toContain("launch");
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
+
+      const byType = (t: string) => result.assertions.find((a) => a.type === t);
+      expect(byType("selectorExists")).toMatchObject({ status: "pass", value: "Saved" });
+      expect(byType("selectorNotExists")).toMatchObject({ status: "pass", value: "Missing" });
+      expect(byType("urlIncludes")?.status).toBe("skipped");
+      expect(byType("urlIncludes")?.error).toContain("web-only");
+      // Config defaults are web-only on native, surfaced as skipped (not silent).
+      expect(byType("noConsoleErrors")?.status).toBe("skipped");
+      expect(byType("noNetworkErrors")?.status).toBe("skipped");
+
+      // Skipped assertions are visible in result.json and summary.md.
+      const written = JSON.parse(fs.readFileSync(path.join(runDir, "result.json"), "utf-8"));
+      expect(written.assertions.some((a: { status: string }) => a.status === "skipped")).toBe(true);
+      const summary = fs.readFileSync(path.join(runDir, "summary.md"), "utf-8");
+      expect(summary).toContain("[SKIPPED]");
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the hunt when an applicable top-level assertion fails", async () => {
+    // A failing applicable assertion fails the hunt, matching the web path.
+    const project = setupProject(
+      MAC_CONFIG,
+      "assert-fail",
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Nope'\n"
+    );
+    // count 0 → selectorExists fails.
+    const client = new FakeClient((cmd) => (cmd === "count" ? { count: 0 } : macResponder(cmd)));
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({ huntName: "assert-fail", macClientFactory: () => client });
+      expect(result.status).toBe("fail");
+      expect(result.exitCode).toBe(1);
+      const selectorExists = result.assertions.find((a) => a.type === "selectorExists");
+      expect(selectorExists).toMatchObject({ status: "fail", value: "Nope" });
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
     } finally {
       process.chdir(cwd);
       fs.rmSync(project, { recursive: true, force: true });
