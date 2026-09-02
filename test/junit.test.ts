@@ -129,6 +129,32 @@ describe("writeJunit", () => {
     }
   });
 
+  it("includes skipped elements for skipped assertions", () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
+    try {
+      const result = makeResult({
+        assertions: [
+          {
+            type: "urlIncludes",
+            value: "/dashboard",
+            status: "skipped",
+            error: 'skipped (web-only): not supported on the "macOS" target & <native>'
+          }
+        ]
+      });
+      writeJunit(runDir, result);
+      const content = fs.readFileSync(path.join(runDir, "junit.xml"), "utf-8");
+
+      expect(content).toContain('skipped="1"');
+      expect(content).toContain('name="assertion: urlIncludes"');
+      expect(content).toContain(
+        '<skipped message="skipped (web-only): not supported on the &quot;macOS&quot; target &amp; &lt;native&gt;"/>'
+      );
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
   it("includes fallback failure text for failed step without error", () => {
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-junit-"));
     try {

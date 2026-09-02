@@ -232,8 +232,12 @@ export async function evaluateNativeAssertions(options: {
         warnings.push(`${type} is web-only; skipped on ${options.targetLabel} target`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Assertion failed";
-      results.push({ type, status: "fail", error: message });
+      const detail = error instanceof Error ? error.message : "no error details";
+      results.push({
+        type,
+        status: "fail",
+        error: `Native assertion "${type}" failed: ${detail}`
+      });
     }
   }
 

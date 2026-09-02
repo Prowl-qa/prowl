@@ -18,7 +18,8 @@ All notable changes to Prowl will be documented in this file.
   warning naming the target is emitted for the web-only assertions a hunt
   explicitly authored. Config- and hunt-level assertion blocks merge identically
   to the web path; the `noConsoleErrors`/`noNetworkErrors` config defaults are
-  surfaced as skipped (auditable) but do not warn on every run.
+  surfaced as skipped (auditable) but do not warn on every run. Native assertion
+  driver errors now include the assertion type in the reported failure message.
 - **`prowl macdriver install` / `prowl macdriver status` — a two-minute macOS
   setup with no Xcode or Swift toolchain (PROWL-074 / PROWL-052).** `install`
   downloads the pinned, signed, notarized universal `prowl-macdriver` helper from

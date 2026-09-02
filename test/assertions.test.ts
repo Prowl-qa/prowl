@@ -118,6 +118,38 @@ describe("evaluateNativeAssertions (PROWL-050 / ARCH-004)", () => {
     expect(results.find((r) => r.type === "selectorExists")?.status).toBe("fail");
   });
 
+  it("fails selectorNotExists when the selector is present", async () => {
+    const { results } = await evaluateNativeAssertions({
+      driver: driver({ Saved: 1 }),
+      config: baseConfig,
+      huntAssertions: [{ selectorNotExists: "Saved" }],
+      targetLabel: "macOS"
+    });
+
+    expect(results.find((r) => r.type === "selectorNotExists")).toMatchObject({
+      status: "fail",
+      error: "Selector exists"
+    });
+  });
+
+  it("includes the assertion type when native driver assertions throw", async () => {
+    const { results } = await evaluateNativeAssertions({
+      driver: {
+        count: async () => {
+          throw new Error("driver unavailable");
+        }
+      },
+      config: baseConfig,
+      huntAssertions: [{ selectorExists: "Saved" }],
+      targetLabel: "macOS"
+    });
+
+    expect(results.find((r) => r.type === "selectorExists")).toMatchObject({
+      status: "fail",
+      error: 'Native assertion "selectorExists" failed: driver unavailable'
+    });
+  });
+
   it("marks hunt-authored web-only assertions skipped and warns for them", async () => {
     const { results, warnings } = await evaluateNativeAssertions({
       driver: driver({}),
