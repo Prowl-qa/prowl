@@ -230,6 +230,54 @@ describe("runHunt — macOS target (PROWL-048)", () => {
     }
   });
 
+  it("applies forbidden selector guardrails to top-level native assertions", async () => {
+    const project = setupProject(
+      [
+        "target:",
+        "  type: macos",
+        "  app: 'com.example.App'",
+        "guardrails:",
+        "  allowedApps: ['com.example.App']",
+        "  forbiddenSelectors:",
+        "    - 'text=\"Danger\"'",
+        ""
+      ].join("\n"),
+      "assert-forbidden",
+      [
+        "steps:",
+        "  - click: 'Save'",
+        "assertions:",
+        "  - selectorExists: 'text=\"Danger Zone\"'",
+        ""
+      ].join("\n")
+    );
+    const client = new FakeClient(macResponder);
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({
+        huntName: "assert-forbidden",
+        macClientFactory: () => client
+      });
+
+      expect(result.status).toBe("fail");
+      expect(result.exitCode).toBe(1);
+      expect(result.assertions.find((a) => a.type === "selectorExists")).toMatchObject({
+        status: "fail",
+        error: 'Native assertion "selectorExists" failed: Forbidden selector: text="Danger Zone"'
+      });
+      expect(
+        client.calls.some(
+          (c) => c.cmd === "count" && JSON.stringify(c.params).includes("Danger Zone")
+        )
+      ).toBe(false);
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
   it("fails the hunt when an applicable top-level assertion fails", async () => {
     // A failing applicable assertion fails the hunt, matching the web path.
     const project = setupProject(
@@ -247,6 +295,47 @@ describe("runHunt — macOS target (PROWL-048)", () => {
       expect(result.exitCode).toBe(1);
       const selectorExists = result.assertions.find((a) => a.type === "selectorExists");
       expect(selectorExists).toMatchObject({ status: "fail", value: "Nope" });
+      expect(client.calls.map((c) => c.cmd)).toContain("quit");
+    } finally {
+      process.chdir(cwd);
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("evaluates top-level native assertions after a step failure", async () => {
+    const project = setupProject(
+      MAC_CONFIG,
+      "step-fail-assertions",
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+    );
+    const client = new FakeClient((cmd) => {
+      if (cmd === "click") {
+        throw new Error("click failed");
+      }
+      if (cmd === "count") {
+        return { count: 1 };
+      }
+      return macResponder(cmd);
+    });
+    const cwd = process.cwd();
+    try {
+      process.chdir(project);
+      const { result } = await runHunt({
+        huntName: "step-fail-assertions",
+        macClientFactory: () => client
+      });
+
+      expect(result.status).toBe("fail");
+      expect(result.exitCode).toBe(1);
+      expect(result.steps.find((s) => s.type === "click")).toMatchObject({
+        status: "fail",
+        error: "click failed"
+      });
+      expect(result.assertions.find((a) => a.type === "selectorExists")).toMatchObject({
+        status: "pass",
+        value: "Saved"
+      });
+      expect(client.calls.map((c) => c.cmd)).toContain("count");
       expect(client.calls.map((c) => c.cmd)).toContain("quit");
     } finally {
       process.chdir(cwd);

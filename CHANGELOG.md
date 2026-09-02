@@ -11,7 +11,10 @@ All notable changes to Prowl will be documented in this file.
   evaluates the applicable subset — `selectorExists` / `selectorNotExists`,
   resolved against the session driver — after the steps complete, and a failing
   one fails the hunt, exactly like the web path (assertions run even when a step
-  failed). Web-only assertion types (`urlIncludes`, `urlEquals`,
+  failed). Native selector assertions now pass through the same
+  `guardrails.forbiddenSelectors` policy as step selectors before probing the
+  driver, so blocked selectors fail without querying the app. Web-only assertion
+  types (`urlIncludes`, `urlEquals`,
   `noConsoleErrors`, `noNetworkErrors`) are reported per-assertion with the new
   `skipped` status (visible in `result.json`, `summary.md` as `[SKIPPED]`, and
   JUnit as `<skipped/>`) rather than silently dropped or hard-erroring; a console

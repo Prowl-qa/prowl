@@ -132,6 +132,32 @@ describe("evaluateNativeAssertions (PROWL-050 / ARCH-004)", () => {
     });
   });
 
+  it("checks native selector assertions against the provided selector guardrail", async () => {
+    let countCalls = 0;
+    const { results } = await evaluateNativeAssertions({
+      driver: {
+        count: async () => {
+          countCalls += 1;
+          return 1;
+        }
+      },
+      config: baseConfig,
+      huntAssertions: [{ selectorExists: 'text="Danger Zone"' }],
+      assertAllowedSelector: (selector) => {
+        if (selector.includes("Danger")) {
+          throw new Error(`Forbidden selector: ${selector}`);
+        }
+      },
+      targetLabel: "macOS"
+    });
+
+    expect(countCalls).toBe(0);
+    expect(results.find((r) => r.type === "selectorExists")).toMatchObject({
+      status: "fail",
+      error: 'Native assertion "selectorExists" failed: Forbidden selector: text="Danger Zone"'
+    });
+  });
+
   it("includes the assertion type when native driver assertions throw", async () => {
     const { results } = await evaluateNativeAssertions({
       driver: {

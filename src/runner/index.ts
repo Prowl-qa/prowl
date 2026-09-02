@@ -33,6 +33,7 @@ import {
   type ConsoleEntry,
   type NetworkEntry
 } from "./assertions.js";
+import { createRunPolicy } from "./policy.js";
 import { captureTraceCorrelation, DEFAULT_TRACE_HEADER } from "./tracing.js";
 import { writeReports } from "../reporter/index.js";
 import { timestamp } from "../utils/timestamp.js";
@@ -411,6 +412,13 @@ async function executeNativeHuntAttempt<TSession>(
     const appIdentity = native.sessionAppIdentity(session);
     const targetLabel = `${native.targetType}:${appIdentity}`;
     const effectiveAllowedApps = [...new Set([...allowedApps, native.targetApp, appIdentity])];
+    const assertionPolicy = createRunPolicy(driver, {
+      forbiddenSelectors: config.guardrails.forbiddenSelectors,
+      allowedDomains: [],
+      allowedApps: effectiveAllowedApps,
+      maxSteps,
+      selfHealing: config.guardrails.selfHealing
+    });
     const startedAt = new Date().toISOString();
     const startTime = Date.now();
 
@@ -463,6 +471,7 @@ async function executeNativeHuntAttempt<TSession>(
         driver,
         config,
         huntAssertions: interpolatedHunt.assertions,
+        assertAllowedSelector: assertionPolicy.assertAllowedSelector,
         targetLabel: nativeTargetLabel(native.targetType)
       });
     for (const warning of assertionWarnings) {

@@ -1,4 +1,5 @@
 import type { Assertion, AssertionResult, Config } from "../types/index.js";
+import type { RunPolicy } from "./policy.js";
 
 /**
  * The minimal session surface assertions read from. Both a live Playwright page
@@ -186,6 +187,7 @@ export async function evaluateNativeAssertions(options: {
   driver: NativeAssertionDriver;
   config: Config;
   huntAssertions?: Assertion[];
+  assertAllowedSelector?: RunPolicy["assertAllowedSelector"];
   /** Display label for the target, e.g. "macOS" / "Android" / "iOS". */
   targetLabel: string;
 }): Promise<NativeAssertionEvaluation> {
@@ -200,6 +202,7 @@ export async function evaluateNativeAssertions(options: {
     const type = Object.keys(assertion)[0] ?? "assertion";
     try {
       if ("selectorExists" in assertion) {
+        options.assertAllowedSelector?.(assertion.selectorExists);
         const count = await options.driver.count(assertion.selectorExists);
         results.push({
           type: "selectorExists",
@@ -210,6 +213,7 @@ export async function evaluateNativeAssertions(options: {
         continue;
       }
       if ("selectorNotExists" in assertion) {
+        options.assertAllowedSelector?.(assertion.selectorNotExists);
         const count = await options.driver.count(assertion.selectorNotExists);
         results.push({
           type: "selectorNotExists",
