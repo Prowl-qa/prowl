@@ -23,6 +23,7 @@ All notable changes to Prowl will be documented in this file.
   to the web path; the `noConsoleErrors`/`noNetworkErrors` config defaults are
   surfaced as skipped (auditable) but do not warn on every run. Native assertion
   driver errors now include the assertion type in the reported failure message.
+
 - **`prowl macdriver install` / `prowl macdriver status` — a two-minute macOS
   setup with no Xcode or Swift toolchain (PROWL-074 / PROWL-052).** `install`
   downloads the pinned, signed, notarized universal `prowl-macdriver` helper from
@@ -39,6 +40,12 @@ All notable changes to Prowl will be documented in this file.
   provisions the signing secrets and cuts the first release (see
   `macdriver/RELEASING.md`). Until then, `install` returns a clear "no release yet
   — build from source" error and the source build remains the working path.
+
+### Fixed
+- **The self-hosted Android mobile smoke gate now cold-starts Settings before
+  running its scratch hunt.** This clears restored Settings activity state on the
+  persistent CI emulator so the smoke waits against the top-level Settings list
+  instead of a previously opened sub-screen.
 
 ### Changed
 - **The macOS helper is now resolved from a user-level install first.**
