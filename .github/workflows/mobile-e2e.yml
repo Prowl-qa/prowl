@@ -69,6 +69,7 @@ jobs:
           target:
             type: android
             app: "com.android.settings"
+            coldStart: true
           browser:
             headless: true
             timeout: 60000

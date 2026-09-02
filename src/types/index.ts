@@ -279,7 +279,9 @@ export type StepResult = {
 export type AssertionResult = {
   type: string;
   value?: string | boolean;
-  status: "pass" | "fail";
+  // "skipped" marks an assertion that did not run on this target (e.g. a web-only
+  // assertion type on a native target); it neither passes nor fails the run.
+  status: "pass" | "fail" | "skipped";
   error?: string;
 };
 

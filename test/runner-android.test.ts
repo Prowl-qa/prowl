@@ -148,18 +148,32 @@ describe("runHunt — Android target (PROWL-058)", () => {
     });
   });
 
-  it("rejects top-level hunt assertions before launching the agent", async () => {
+  it("runs applicable hunt assertions and skips web-only ones (Android target)", async () => {
+    // PROWL-050 / ARCH-004: the applicable subset (selectorExists) runs against
+    // the driver; web-only types (urlIncludes) are reported as skipped, never
+    // silently dropped and never a hard error — mirrored on this second native
+    // target to prove the shared native run path applies the fix uniformly.
     const project = setupProject(
       ANDROID_CONFIG,
       "with-assertions",
-      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n  - urlIncludes: '/home'\n"
     );
     const h = harness();
     await withProject(project, async () => {
-      await expect(
-        runHunt({ huntName: "with-assertions", androidSessionFactory: h.factory })
-      ).rejects.toThrow("Hunt-level assertions are not supported by the Android target");
-      expect(h.launched).toHaveLength(0);
+      const { result } = await runHunt({ huntName: "with-assertions", androidSessionFactory: h.factory });
+      // The fake agent finds one element for any query, so selectorExists passes.
+      expect(result.status).toBe("pass");
+      expect(h.launched).toHaveLength(1);
+
+      const selectorExists = result.assertions.find((a) => a.type === "selectorExists");
+      expect(selectorExists).toMatchObject({ status: "pass", value: "Saved" });
+
+      const urlIncludes = result.assertions.find((a) => a.type === "urlIncludes");
+      expect(urlIncludes?.status).toBe("skipped");
+      expect(urlIncludes?.error).toContain("web-only");
+
+      // Config defaults (noConsoleErrors/noNetworkErrors) are web-only too.
+      expect(result.assertions.some((a) => a.type === "noConsoleErrors" && a.status === "skipped")).toBe(true);
     });
   });
 

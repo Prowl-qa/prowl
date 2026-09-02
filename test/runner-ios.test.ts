@@ -131,18 +131,26 @@ describe("runHunt — iOS target (PROWL-059)", () => {
     });
   });
 
-  it("rejects top-level hunt assertions before launching WDA", async () => {
+  it("fails the hunt when an applicable hunt assertion fails (iOS target)", async () => {
+    // PROWL-050 / ARCH-004: a failing applicable assertion fails the hunt, the
+    // same as the web path. The fake agent finds one element for any query, so
+    // selectorNotExists (expects zero) fails.
     const project = setupProject(
       IOS_CONFIG,
       "with-assertions",
-      "steps:\n  - click: 'Save'\nassertions:\n  - selectorExists: 'Saved'\n"
+      "steps:\n  - click: 'Save'\nassertions:\n  - selectorNotExists: 'Saved'\n"
     );
     const h = harness();
     await withProject(project, async (configPath) => {
-      await expect(
-        runHunt({ huntName: "with-assertions", iosSessionFactory: h.factory, configPath })
-      ).rejects.toThrow("Hunt-level assertions are not supported by the iOS target");
-      expect(h.launched).toHaveLength(0);
+      const { result } = await runHunt({
+        huntName: "with-assertions",
+        iosSessionFactory: h.factory,
+        configPath
+      });
+      expect(result.status).toBe("fail");
+      expect(h.launched).toHaveLength(1);
+      const selectorNotExists = result.assertions.find((a) => a.type === "selectorNotExists");
+      expect(selectorNotExists).toMatchObject({ status: "fail", value: "Saved" });
     });
   });
 
