@@ -5,6 +5,27 @@ All notable changes to Prowl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`press` on the macOS target now supports the web target's full key
+  vocabulary (PROWL-051 / ARCH-005).** The `prowl-macdriver` Swift helper
+  previously mapped only Enter/Return/Space onto `AXPress` and rejected every
+  other key. It now synthesizes real keystrokes: a new pure key-name parser
+  resolves the Playwright-style names the web `press` step accepts — Escape, Tab,
+  Backspace, Delete, Home, End, PageUp, PageDown, arrows
+  (`ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight`), F1–F12, single printable
+  characters, and `+`-joined modifier combos using `Control`/`Shift`/`Alt`/`Meta`
+  (plus `Ctrl`/`Option`/`Cmd`/`Command` aliases) — into a virtual keycode and
+  modifier flags, with case-insensitive matching and a clear category-summary
+  error for anything unknown. A bare Enter/Return/Space still takes the
+  deterministic, focus-independent `AXPress` fast path when the element supports
+  it; everything else activates the target app, focuses the resolved element, and
+  posts `keyDown`/`keyUp` to the app's PID via `CGEvent.postToPid` so keystrokes
+  can never land in another application (printable characters ride on
+  `keyboardSetUnicodeString` for keyboard-layout independence). No new permission
+  is required — CGEvent posting is already covered by the Accessibility grant. The
+  macOS target stays experimental. This helper change ships with the next
+  `macdriver-v*` release (the pinned helper version is bumped at release time, not
+  on this branch).
+
 - **Hunt-level assertions now run on native targets (macOS / Android / iOS)
   instead of being silently skipped (PROWL-050 / ARCH-004).** The native run
   path previously discarded every `assertions:` block (`assertions: []`). It now
