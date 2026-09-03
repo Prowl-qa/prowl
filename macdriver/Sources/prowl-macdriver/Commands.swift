@@ -361,18 +361,57 @@ final class Session {
 
     func press(_ queryDict: [String: Any], key: String) throws -> [String: Any] {
         let element = try firstOrThrow(queryDict)
-        // AX cannot synthesize arbitrary keystrokes at an element; the activating
-        // keys map onto AXPress. Anything else is rejected honestly.
-        switch key.lowercased() {
-        case "enter", "return", "space", " ":
+        let keystroke = try KeySynthesis.parse(key)
+
+        // Fast path: a bare Enter/Return/Space maps cleanly onto AXPress, which is
+        // deterministic and focus-independent — but only when the element actually
+        // advertises the press action. If it doesn't (a text field, say), fall
+        // through to synthesized key events rather than erroring.
+        if keystroke.isActivationKey, axSupportsAction(element, kAXPressAction as String) {
             let error = axPress(element)
             guard error == .success || error == .cannotComplete else {
                 throw AXFailure("AXPress failed (\(error.rawValue))")
             }
-            return ["pressed": key]
-        default:
-            throw AXFailure("press key \"\(key)\" is not supported by the macOS target (only Enter/Return/Space)")
+            return ["pressed": key, "via": "axpress"]
         }
+
+        // Synthesis path: post real keyDown/keyUp events to the target app's PID
+        // (never whatever is frontmost), activating it first so it processes them.
+        try synthesizeKeystroke(keystroke, on: element)
+        return ["pressed": key, "via": "cgevent"]
+    }
+
+    /// Post a synthesized keystroke to the attached app. Activates the app (many
+    /// apps only handle key events while active) and focuses the resolved element
+    /// (best-effort — proceed with an app-level post if it can't take focus), then
+    /// posts keyDown/keyUp targeted at the app's PID via `CGEvent.postToPid` so the
+    /// keystroke can never land in another application.
+    private func synthesizeKeystroke(_ keystroke: Keystroke, on element: AXUIElement) throws {
+        guard let pid = runningApp?.processIdentifier else {
+            throw AXFailure("no app attached — send a \"launch\" command first")
+        }
+
+        runningApp?.activate(options: [])
+        // Best-effort focus so the keystroke lands in the intended field; ignore
+        // the result because non-focusable elements still take an app-level post.
+        _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            throw AXFailure("could not create a CGEventSource for key synthesis")
+        }
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keystroke.keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keystroke.keyCode, keyDown: false) else {
+            throw AXFailure("could not synthesize key events")
+        }
+        keyDown.flags = keystroke.flags
+        keyUp.flags = keystroke.flags
+        if let unicode = keystroke.unicodeString {
+            var utf16 = Array(unicode.utf16)
+            keyDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+            keyUp.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+        }
+        keyDown.postToPid(pid)
+        keyUp.postToPid(pid)
     }
 
     func hover(_ queryDict: [String: Any]) throws -> [String: Any] {
