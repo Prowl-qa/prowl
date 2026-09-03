@@ -487,6 +487,8 @@ Key names follow the web (Playwright) vocabulary — e.g. `Enter`, `Escape`, `Ta
 `Backspace`, `Delete`, arrows, `F1`–`F12`, single characters, and modifier combos like
 `Control+a` or `Shift+Tab`. The macOS target accepts the same names (see the macOS target
 notes above); `Cmd`/`Command`/`Option` are also accepted there as aliases for `Meta`/`Alt`.
+On macOS, a shortcut letter in a combo (e.g. `Meta+s`) is synthesized against the US/ANSI
+physical keyboard layout — the standard trade-off for synthesized keystrokes.
 
 ### select / selectOption
 

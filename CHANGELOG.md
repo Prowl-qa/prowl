@@ -19,8 +19,11 @@ All notable changes to Prowl will be documented in this file.
   deterministic, focus-independent `AXPress` fast path when the element supports
   it; everything else activates the target app, focuses the resolved element, and
   posts `keyDown`/`keyUp` to the app's PID via `CGEvent.postToPid` so keystrokes
-  can never land in another application (printable characters ride on
-  `keyboardSetUnicodeString` for keyboard-layout independence). No new permission
+  can never land in another application. A bare printable character rides on
+  `keyboardSetUnicodeString` for keyboard-layout independence; a shortcut letter
+  in a modifier combo (e.g. `Meta+s`) instead resolves to a real US/ANSI physical
+  keycode so an app reading the keycode can't misread it (keycode 0 is physically
+  `A`, so a Unicode-only `Meta+s` could be seen as Cmd+A). No new permission
   is required — CGEvent posting is already covered by the Accessibility grant. The
   macOS target stays experimental. This helper change ships with the next
   `macdriver-v*` release (the pinned helper version is bumped at release time, not
