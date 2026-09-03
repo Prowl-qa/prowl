@@ -52,11 +52,48 @@ final class KeySynthesisTests: XCTestCase {
         XCTAssertEqual(capital.unicodeString, "A", "case is preserved for printable characters")
     }
 
-    func testModifierComboMapsToFlagsPlusKey() throws {
-        let keystroke = try KeySynthesis.parse("Control+a")
-        XCTAssertTrue(keystroke.flags.contains(.maskControl))
-        XCTAssertEqual(keystroke.unicodeString, "a")
+    func testModifiedLetterResolvesToAnsiKeycodeNotUnicodeString() throws {
+        // keycode 0 is physically kVK_ANSI_A; a modified letter must carry a real
+        // ANSI keycode so an app that reads the keycode can't misread e.g. Meta+s
+        // as Cmd+A and fire Select All when the hunt asked for Save.
+        let save = try KeySynthesis.parse("Meta+s")
+        XCTAssertEqual(save.keyCode, 1, "Meta+s must map to kVK_ANSI_S (1)")
+        XCTAssertTrue(save.flags.contains(.maskCommand))
+        XCTAssertNil(save.unicodeString, "a modified shortcut carries no unicode string")
+
+        let selectAll = try KeySynthesis.parse("Control+a")
+        XCTAssertEqual(selectAll.keyCode, 0, "Control+a maps to kVK_ANSI_A (0)")
+        XCTAssertTrue(selectAll.flags.contains(.maskControl))
+        XCTAssertNil(selectAll.unicodeString)
+    }
+
+    func testBareLetterKeepsUnicodePathWhileModifiedLetterDoesNot() throws {
+        // The bare "a" and the modified "Control+a" must parse differently: the
+        // bare character stays on the layout-independent unicode path (keycode 0
+        // + unicode "a"), the combo resolves a real keycode with no unicode.
+        let bare = try KeySynthesis.parse("a")
+        let modified = try KeySynthesis.parse("Control+a")
+        XCTAssertEqual(bare.unicodeString, "a")
+        XCTAssertNil(modified.unicodeString)
+        XCTAssertNotEqual(bare, modified)
+    }
+
+    func testModifiedNonAnsiCharacterFallsBackToUnicodePath() throws {
+        // A modified character with no ANSI mapping (e.g. an accented letter)
+        // keeps the unicode fallback rather than erroring.
+        let keystroke = try KeySynthesis.parse("Control+é")
         XCTAssertEqual(keystroke.keyCode, 0)
+        XCTAssertEqual(keystroke.unicodeString, "é")
+        XCTAssertTrue(keystroke.flags.contains(.maskControl))
+    }
+
+    func testCommonShortcutPunctuationResolvesToAnsiKeycodes() throws {
+        // Spot-check the punctuation used in real shortcuts (e.g. Cmd+-, Cmd+=).
+        XCTAssertEqual(try KeySynthesis.parse("Meta+-").keyCode, 27)
+        XCTAssertEqual(try KeySynthesis.parse("Meta+=").keyCode, 24)
+        for combo in ["Meta+-", "Meta+="] {
+            XCTAssertNil(try KeySynthesis.parse(combo).unicodeString)
+        }
     }
 
     func testShiftTabKeepsTheNamedKeycode() throws {

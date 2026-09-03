@@ -59,6 +59,25 @@ enum KeySynthesis {
         "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111
     ]
 
+    /// Printable characters → their ANSI (US physical layout) virtual keycode.
+    /// Used for a character in a modifier combo (e.g. `Meta+s`): keycode 0 is
+    /// physically `kVK_ANSI_A`, so emitting a modified character on the Unicode
+    /// path with keycode 0 makes an app that reads the keycode (or the
+    /// charactersIgnoringModifiers derived from it) see `Cmd+A` — firing Select
+    /// All when the hunt asked for Save. Resolving a real keycode avoids that
+    /// misfire. Shortcut letters in combos therefore assume a US/ANSI physical
+    /// layout — the standard synthesized-keystroke trade-off.
+    static let ansiKeyCodes: [String: CGKeyCode] = [
+        "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4,
+        "i": 34, "j": 38, "k": 40, "l": 37, "m": 46, "n": 45, "o": 31, "p": 35,
+        "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7,
+        "y": 16, "z": 6,
+        "0": 29, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26,
+        "8": 28, "9": 25,
+        "-": 27, "=": 24, "[": 33, "]": 30, ";": 41, "'": 39, ",": 43,
+        ".": 47, "/": 44, "\\": 42, "`": 50
+    ]
+
     /// One-line summary of the supported vocabulary, used in the unknown-key
     /// error so the message stays a category summary rather than 100 names.
     static let vocabularySummary =
@@ -120,9 +139,17 @@ enum KeySynthesis {
             return Keystroke(keyCode: keyCode, flags: flags, unicodeString: nil)
         }
 
-        // A single printable character rides on the event's Unicode string with
-        // keycode 0, so it is layout-independent; modifiers still apply via flags.
         if keyToken.count == 1 {
+            // A modified character (a shortcut like `Meta+s`) must resolve to a
+            // real physical keycode: keycode 0 is `kVK_ANSI_A`, so the Unicode-
+            // string path would let an app read `Meta+s` as Cmd+A and misfire.
+            // Fall back to the Unicode path only for a modified character with no
+            // ANSI mapping (rare — accented characters, etc.).
+            if !flags.isEmpty, let ansi = ansiKeyCodes[keyToken.lowercased()] {
+                return Keystroke(keyCode: ansi, flags: flags, unicodeString: nil)
+            }
+            // A bare printable character rides on the event's Unicode string with
+            // keycode 0, so plain typing stays keyboard-layout independent.
             return Keystroke(keyCode: 0, flags: flags, unicodeString: keyToken)
         }
 
