@@ -93,6 +93,25 @@ describe("createMacDriver", () => {
     expect(client.last()).toEqual({ cmd: "click", params: { query: { by: "role", role: "button", name: "Save" } } });
   });
 
+  it("forwards a press key verbatim to the helper (no client-side key vocabulary)", async () => {
+    // The macOS key vocabulary lives in the Swift helper (PROWL-051 / ARCH-005);
+    // the TS driver forwards whatever key the hunt authored — including modifier
+    // combos — so the helper is the single source of truth for what is supported.
+    const client = new FakeClient();
+    const driver = createMacDriver(client);
+    await driver.press('role=textField[name="Search"]', "Control+a");
+    expect(client.last()).toEqual({
+      cmd: "press",
+      params: { query: { by: "role", role: "textField", name: "Search" }, key: "Control+a" }
+    });
+
+    await driver.press("id=search", "Escape");
+    expect(client.last()).toEqual({
+      cmd: "press",
+      params: { query: { by: "id", value: "search" }, key: "Escape" }
+    });
+  });
+
   it("fills the focused element for a :focus selector (type step)", async () => {
     const client = new FakeClient();
     const driver = createMacDriver(client);
