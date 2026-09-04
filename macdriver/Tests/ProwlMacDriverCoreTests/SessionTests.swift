@@ -265,6 +265,50 @@ final class SessionTests: XCTestCase {
         XCTAssertTrue(posted.isEmpty)
     }
 
+    func testPressSynthesizesActivationKeyWhenElementDoesNotSupportAXPress() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        var supportQueries: [String] = []
+        var pressCallCount = 0
+        var focusCallCount = 0
+        var posted: [(Keystroke, pid_t)] = []
+
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            supportsAction: { _, action in
+                supportQueries.append(action)
+                return false
+            },
+            performPressAction: { _ in
+                pressCallCount += 1
+                return .success
+            },
+            focusElement: { _ in
+                focusCallCount += 1
+                return .success
+            },
+            postKeystroke: { keystroke, pid in posted.append((keystroke, pid)) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.press(["by": "focused"], key: "Enter")
+
+        XCTAssertEqual(result["pressed"] as? String, "Enter")
+        XCTAssertEqual(result["via"] as? String, "cgevent")
+        XCTAssertEqual(supportQueries, [kAXPressAction as String])
+        XCTAssertEqual(pressCallCount, 0)
+        XCTAssertEqual(app.activateCallCount, 1)
+        XCTAssertEqual(focusCallCount, 1)
+        XCTAssertEqual(posted.count, 1)
+        XCTAssertEqual(posted[0].1, 101)
+        XCTAssertEqual(posted[0].0.keyCode, KeySynthesis.returnKeyCode)
+        XCTAssertTrue(posted[0].0.flags.isEmpty)
+        XCTAssertNil(posted[0].0.unicodeString)
+    }
+
     func testPressSynthesizesKeystrokeToAttachedPidAfterActivationAndFocus() throws {
         let app = FakeRunningApplication(pid: 101)
         let workspace = FakeWorkspace()
