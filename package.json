@@ -1,6 +1,6 @@
 {
   "name": "prowl-tools",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "E2E testing for native macOS apps and web apps from declarative YAML hunts.",
   "type": "module",
   "license": "Apache-2.0",
