@@ -74,7 +74,7 @@ enum KeySynthesis {
         "y": 16, "z": 6,
         "0": 29, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26,
         "8": 28, "9": 25,
-        "-": 27, "=": 24, "[": 33, "]": 30, ";": 41, "'": 39, ",": 43,
+        "-": 27, "=": 24, "+": 24, "[": 33, "]": 30, ";": 41, "'": 39, ",": 43,
         ".": 47, "/": 44, "\\": 42, "`": 50
     ]
 
@@ -84,8 +84,9 @@ enum KeySynthesis {
         "supported: single printable characters; Enter, Return, Space, Tab, Escape, "
             + "Backspace, Delete, Home, End, PageUp, PageDown; arrows "
             + "(ArrowUp/ArrowDown/ArrowLeft/ArrowRight); F1–F12; and combos joined with "
-            + "\"+\" using Control/Shift/Alt/Meta (aliases: Ctrl, Option/Opt, Cmd/Command), "
-            + "e.g. \"Control+a\", \"Shift+Tab\", \"Meta+s\""
+            + "\"+\" using Control/Shift/Alt/Meta/ControlOrMeta "
+            + "(aliases: Ctrl, Option/Opt, Cmd/Command), e.g. \"Control+a\", "
+            + "\"ControlOrMeta+a\", \"Shift+Tab\", \"Meta+s\""
 
     /// Parse a key name into a {@link Keystroke}, throwing an {@link AXFailure}
     /// with the vocabulary summary for anything unrecognized. Pure — no I/O, no
@@ -124,6 +125,7 @@ enum KeySynthesis {
             case "shift": flags.insert(.maskShift)
             case "alt", "option", "opt": flags.insert(.maskAlternate)
             case "meta", "cmd", "command": flags.insert(.maskCommand)
+            case "controlormeta": flags.insert(.maskCommand)
             case "":
                 throw AXFailure("press key \"\(raw)\" has an empty modifier; \(vocabularySummary)")
             default:
@@ -145,6 +147,9 @@ enum KeySynthesis {
             // string path would let an app read `Meta+s` as Cmd+A and misfire.
             // Fall back to the Unicode path only for a modified character with no
             // ANSI mapping (rare — accented characters, etc.).
+            if !flags.isEmpty, keyToken == "+" {
+                flags.insert(.maskShift)
+            }
             if !flags.isEmpty, let ansi = ansiKeyCodes[keyToken.lowercased()] {
                 return Keystroke(keyCode: ansi, flags: flags, unicodeString: nil)
             }

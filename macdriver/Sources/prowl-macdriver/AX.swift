@@ -53,10 +53,13 @@ func axPerform(_ el: AXUIElement, _ action: String) -> AXError {
 /// Whether an element advertises a given action (e.g. `kAXPressAction`). Used to
 /// decide whether the AXPress fast path applies before falling back to synthesized
 /// key events.
-func axSupportsAction(_ el: AXUIElement, _ action: String) -> Bool {
+func axSupportsAction(_ el: AXUIElement, _ action: String) throws -> Bool {
     var names: CFArray?
-    guard AXUIElementCopyActionNames(el, &names) == .success,
-          let actions = names as? [String] else { return false }
+    let status = AXUIElementCopyActionNames(el, &names)
+    guard status == .success else {
+        throw AXFailure("could not query actions for element (\(status.rawValue))")
+    }
+    let actions = (names as? [String]) ?? []
     return actions.contains(action)
 }
 

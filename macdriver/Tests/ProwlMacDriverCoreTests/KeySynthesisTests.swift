@@ -105,6 +105,8 @@ final class KeySynthesisTests: XCTestCase {
 
     func testMacFriendlyModifierAliasesMapToWebModifiers() throws {
         XCTAssertTrue(try KeySynthesis.parse("Ctrl+a").flags.contains(.maskControl))
+        XCTAssertTrue(try KeySynthesis.parse("ControlOrMeta+a").flags.contains(.maskCommand))
+        XCTAssertFalse(try KeySynthesis.parse("ControlOrMeta+a").flags.contains(.maskControl))
         XCTAssertTrue(try KeySynthesis.parse("Cmd+s").flags.contains(.maskCommand))
         XCTAssertTrue(try KeySynthesis.parse("Command+s").flags.contains(.maskCommand))
         XCTAssertTrue(try KeySynthesis.parse("Meta+s").flags.contains(.maskCommand))
@@ -128,9 +130,17 @@ final class KeySynthesisTests: XCTestCase {
 
     func testLiteralPlusKey() throws {
         XCTAssertEqual(try KeySynthesis.parse("+").unicodeString, "+")
-        let combo = try KeySynthesis.parse("Shift++")
-        XCTAssertTrue(combo.flags.contains(.maskShift))
-        XCTAssertEqual(combo.unicodeString, "+")
+
+        let shifted = try KeySynthesis.parse("Shift++")
+        XCTAssertEqual(shifted.keyCode, 24)
+        XCTAssertTrue(shifted.flags.contains(.maskShift))
+        XCTAssertNil(shifted.unicodeString)
+
+        let commandPlus = try KeySynthesis.parse("Meta++")
+        XCTAssertEqual(commandPlus.keyCode, 24)
+        XCTAssertTrue(commandPlus.flags.contains(.maskCommand))
+        XCTAssertTrue(commandPlus.flags.contains(.maskShift))
+        XCTAssertNil(commandPlus.unicodeString)
     }
 
     func testActivationKeyFlag() throws {
