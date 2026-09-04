@@ -33,13 +33,12 @@ Project-specific details for the `release-prep-npm` skill (the generic workflow 
   matching `v*`: `npm ci` → build → lint → test → `npm publish --provenance --access public`,
   then extracts release notes and creates a GitHub Release. **Do not run `npm publish` locally** —
   push the tag and let CI publish.
-- **Publishing auth (`NPM_TOKEN`)**: the publish step uses the `NPM_TOKEN` GitHub Actions secret
-  in `prowl-tools/prowl`. The token is granular and **expires every 90 days** (last rotated
-  2026-05-29 → next expiry ~2026-08-27). When it expires, `npm publish` fails with a misleading
-  `404 Not Found - PUT .../prowl-tools` (npm masks an auth failure as a 404) even though
-  build/lint/test pass. Fix: mint a new token (publish rights on `prowl-tools`), update the
-  `NPM_TOKEN` repo secret, then re-run the failed job (`gh run rerun <run-id> --failed`) — no
-  re-tagging needed. Check the token isn't near expiry before each release.
+- **Publishing auth (OIDC Trusted Publishing — no token)**: since v0.1.5 (PROWL-057,
+  2026-08-21) the publish step authenticates via GitHub Actions OIDC (`id-token: write`) with
+  the trusted publisher configured on the npm package (GitHub Actions · `prowl-tools/prowl` ·
+  `publish.yml`). There is no `NPM_TOKEN` secret and nothing expires or rotates. OIDC needs
+  Node ≥ 22.14.0 / npm ≥ 11.5.1 (the workflow pins these). The package's publishing access is
+  "require 2FA and disallow bypass tokens".
 - **Release notes source**: the workflow extracts the section under `## [<version>]` in
   `CHANGELOG.md` (version = tag without the `v`). The heading must exist and be non-empty or the
   release job fails. Before tagging: rename `## [Unreleased]` → `## [x.y.z] - YYYY-MM-DD` and add
@@ -63,6 +62,11 @@ Project-specific details for the `release-prep-npm` skill (the generic workflow 
   `latest` — bumping realigns them.
 - **Downstream — docs/web**: update `prowl-docs` for new commands/step types and `prowl-web` for
   major feature descriptions (see workspace cross-repo duties).
+- **Post-release — blog post (content-writer)**: after the tag is pushed and the publish
+  verified, invoke the **`content-writer` agent** (defined at `~/.claude/agents/content-writer.md`)
+  for the release's blog post. It researches the release, interviews the owner, and drafts a
+  story/how-to MDX post into `prowl-web/content/blog/` on a branch for the owner's review — it
+  never publishes on its own. Skip only if the owner says the release doesn't warrant a post.
 
 ## Hunt Authoring in Other Repos
 When asked to create hunts (`.prowl/` config and hunt YAML files) in another repo, create the
