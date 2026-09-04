@@ -379,7 +379,32 @@ swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the 
 
 **Epic status (2026-09-01, {PROWL-077} review): FROZEN (experimental)** — Android and
 iOS-simulator support shipped and stays maintained, but no new scope until a real user asks;
-{PROWL-062} remains deferred.
+{PROWL-062} remains deferred. **Scoped exception (2026-09-04): {PROWL-080}** — the owner,
+dogfooding the iOS Simulator target on a real app, hit the missing scroll/swipe gap; that is
+the epic's documented unfreeze condition, so that one item is admitted.
+
+{PROWL-080} **ARCH-014: `scroll`/`swipe` gestures on mobile targets (iOS/Android)**
+   Mobile hunts currently have no way to scroll: `scroll` is gated web-only at validation (it
+   runs `window.scrollBy` via evaluate), and both mobile drivers hard-reject `scrollTo`
+   (`src/browser/ios-driver.ts:286`, `src/browser/android-driver.ts:314`). Any flow below the
+   fold is untestable on a phone-sized screen — the first real dogfood blocker on the iOS
+   target. Proposed shape: drive touch gestures through the **W3C actions endpoint**
+   (`POST /session/:id/actions`, pointer type `touch`), which both on-device agents
+   (WebDriverAgent, appium-uiautomator2-server) already support over the existing raw-`fetch`
+   transports — no new dependencies, same pattern on both platforms.
+
+**Found during**: Owner dogfooding the iOS Simulator target on a real app (2026-09-04)
+**Acceptance Criteria**:
+- `scroll: { direction, amount? }` works on iOS/Android via a synthesized touch swipe
+  (screen-relative; direction semantics match the web step — content moves as if scrolled)
+- `scrollTo: { selector }` scrolls the target element into view (platform scroll-to-element
+  gesture where the agent offers one, else bounded repeated swipes + visibility probe; clear
+  error if the element never appears)
+- Consider an explicit `swipe` step (direction/from/to coordinates) for gesture-driven UIs
+  (carousels, pull-to-refresh) — decide during design; not required for the core fix
+- The web-only step gate admits these steps for mobile targets; the macOS target keeps
+  rejecting them with a clear message (AX scrolling is a separate item if ever asked)
+- Step-compatibility matrix + README updated; unit tests with faked agents per repo pattern
 
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
