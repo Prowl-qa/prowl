@@ -389,8 +389,9 @@ macOS target (with a clear error), and `prowl login` / URL guardrails do not app
 Notes: `press` accepts the same key vocabulary as the web target — single printable
 characters, `Enter`/`Return`/`Space`, `Tab`, `Escape`, `Backspace`, `Delete`, `Home`,
 `End`, `PageUp`, `PageDown`, arrows (`ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight`),
-`F1`–`F12`, and `+`-joined modifier combos (`Control`/`Shift`/`Alt`/`Meta`, with
-`Ctrl`/`Option`/`Cmd`/`Command` aliases), e.g. `Shift+Tab` or `Meta+a`; unknown keys
+`F1`–`F12`, and `+`-joined modifier combos (`Control`, `Shift`, `Alt`, `Meta`,
+`ControlOrMeta`; aliases: `Ctrl`, `Option`, `Cmd`, `Command`; `ControlOrMeta` maps
+to Command on macOS), e.g. `Shift+Tab`, `ControlOrMeta+a`, or `Meta+a`; unknown keys
 error clearly. A bare `Enter`/`Return`/`Space` uses the element's activate action when
 available, otherwise keystrokes are synthesized and posted to the target app (activated
 first) so they never land elsewhere — the existing Accessibility grant already covers
@@ -485,8 +486,9 @@ Press a keyboard key on a specific element.
 
 Key names follow the web (Playwright) vocabulary — e.g. `Enter`, `Escape`, `Tab`,
 `Backspace`, `Delete`, arrows, `F1`–`F12`, single characters, and modifier combos like
-`Control+a` or `Shift+Tab`. The macOS target accepts the same names (see the macOS target
-notes above); `Cmd`/`Command`/`Option` are also accepted there as aliases for `Meta`/`Alt`.
+`Control+a`, `ControlOrMeta+a`, or `Shift+Tab`. The macOS target accepts the same names
+(see the macOS target notes above); `ControlOrMeta` maps to Command, and
+`Cmd`/`Command`/`Option` are also accepted there as aliases for `Meta`/`Alt`.
 On macOS, a shortcut letter in a combo (e.g. `Meta+s`) is synthesized against the US/ANSI
 physical keyboard layout — the standard trade-off for synthesized keystrokes.
 
