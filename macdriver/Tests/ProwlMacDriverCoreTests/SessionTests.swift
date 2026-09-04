@@ -220,12 +220,228 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(menuController.receivedApp, true)
     }
 
+    func testPressUsesAXPressForPressableActivationKey() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        var supportQueries: [String] = []
+        var pressCallCount = 0
+        var posted: [(Keystroke, pid_t)] = []
+
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, query in
+                guard case .identifier(let value) = query else {
+                    XCTFail("expected id query")
+                    return nil
+                }
+                XCTAssertEqual(value, "submit")
+                return target
+            },
+            supportsAction: { _, action in
+                supportQueries.append(action)
+                return true
+            },
+            performPressAction: { _ in
+                pressCallCount += 1
+                return .success
+            },
+            focusElement: { _ in
+                XCTFail("AXPress fast path should not focus the element")
+                return .success
+            },
+            postKeystroke: { keystroke, pid in posted.append((keystroke, pid)) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.press(["by": "id", "value": "submit"], key: "Enter")
+
+        XCTAssertEqual(result["pressed"] as? String, "Enter")
+        XCTAssertEqual(result["via"] as? String, "axpress")
+        XCTAssertEqual(supportQueries, [kAXPressAction as String])
+        XCTAssertEqual(pressCallCount, 1)
+        XCTAssertEqual(app.activateCallCount, 0)
+        XCTAssertTrue(posted.isEmpty)
+    }
+
+    func testPressSynthesizesActivationKeyWhenElementDoesNotSupportAXPress() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        var supportQueries: [String] = []
+        var pressCallCount = 0
+        var focusCallCount = 0
+        var posted: [(Keystroke, pid_t)] = []
+
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            supportsAction: { _, action in
+                supportQueries.append(action)
+                return false
+            },
+            performPressAction: { _ in
+                pressCallCount += 1
+                return .success
+            },
+            focusElement: { _ in
+                focusCallCount += 1
+                return .success
+            },
+            postKeystroke: { keystroke, pid in posted.append((keystroke, pid)) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.press(["by": "focused"], key: "Enter")
+
+        XCTAssertEqual(result["pressed"] as? String, "Enter")
+        XCTAssertEqual(result["via"] as? String, "cgevent")
+        XCTAssertEqual(supportQueries, [kAXPressAction as String])
+        XCTAssertEqual(pressCallCount, 0)
+        XCTAssertEqual(app.activateCallCount, 1)
+        XCTAssertEqual(focusCallCount, 1)
+        XCTAssertEqual(posted.count, 1)
+        XCTAssertEqual(posted[0].1, 101)
+        XCTAssertEqual(posted[0].0.keyCode, KeySynthesis.returnKeyCode)
+        XCTAssertTrue(posted[0].0.flags.isEmpty)
+        XCTAssertNil(posted[0].0.unicodeString)
+    }
+
+    func testPressSynthesizesKeystrokeToAttachedPidAfterActivationAndFocus() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        var supportQueryCount = 0
+        var focusCallCount = 0
+        var posted: [(Keystroke, pid_t)] = []
+
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            supportsAction: { _, _ in
+                supportQueryCount += 1
+                return true
+            },
+            performPressAction: { _ in
+                XCTFail("non-activation keys should not use AXPress")
+                return .success
+            },
+            focusElement: { _ in
+                focusCallCount += 1
+                return .success
+            },
+            postKeystroke: { keystroke, pid in posted.append((keystroke, pid)) }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+        let result = try session.press(["by": "focused"], key: "Control+a")
+
+        XCTAssertEqual(result["pressed"] as? String, "Control+a")
+        XCTAssertEqual(result["via"] as? String, "cgevent")
+        XCTAssertEqual(supportQueryCount, 0)
+        XCTAssertEqual(app.activateCallCount, 1)
+        XCTAssertEqual(focusCallCount, 1)
+        XCTAssertEqual(posted.count, 1)
+        XCTAssertEqual(posted[0].1, 101)
+        XCTAssertEqual(posted[0].0.keyCode, 0)
+        XCTAssertTrue(posted[0].0.flags.contains(.maskControl))
+        XCTAssertNil(posted[0].0.unicodeString)
+    }
+
+    func testPressPropagatesActionQueryFailureBeforeFallbackSynthesis() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            supportsAction: { _, _ in throw AXFailure("could not query actions for element (-25204)") },
+            focusElement: { _ in
+                XCTFail("action query failures should not fall through to synthesis")
+                return .success
+            },
+            postKeystroke: { _, _ in XCTFail("action query failures should not post events") }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+
+        XCTAssertThrowsError(try session.press(["by": "focused"], key: "Space")) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("could not query actions"))
+        }
+        XCTAssertEqual(app.activateCallCount, 0)
+    }
+
+    func testPressThrowsWhenActivationFailsBeforePosting() throws {
+        let app = FakeRunningApplication(pid: 101)
+        app.activateResult = false
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            focusElement: { _ in
+                XCTFail("activation failure should stop before focus")
+                return .success
+            },
+            postKeystroke: { _, _ in XCTFail("activation failure should stop before posting") }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+
+        XCTAssertThrowsError(try session.press(["by": "focused"], key: "Escape")) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("could not activate target app"))
+        }
+        XCTAssertEqual(app.activateCallCount, 1)
+    }
+
+    func testPressThrowsWhenElementFocusFailsBeforePosting() throws {
+        let app = FakeRunningApplication(pid: 101)
+        let workspace = FakeWorkspace()
+        workspace.runningApplicationsForBundle = { _ in [app] }
+        let target = AXUIElementCreateSystemWide()
+        let (session, _, _) = makeSession(
+            workspace: workspace,
+            resolveFirstElement: { _, _ in target },
+            focusElement: { _ in .cannotComplete },
+            postKeystroke: { _, _ in XCTFail("focus failure should stop before posting") }
+        )
+
+        _ = try session.launch(app: "com.example.App", timeout: 1.0)
+
+        XCTAssertThrowsError(try session.press(["by": "focused"], key: "Escape")) { error in
+            guard let failure = error as? AXFailure else {
+                return XCTFail("expected AXFailure, got \(error)")
+            }
+            XCTAssertTrue(failure.message.contains("could not focus element"))
+            XCTAssertTrue(failure.message.contains("\(AXError.cannotComplete.rawValue)"))
+        }
+        XCTAssertEqual(app.activateCallCount, 1)
+    }
+
     private func makeSession(
         workspace: FakeWorkspace,
         menuController: FakeStatusMenuController = FakeStatusMenuController(result: true),
         terminationTimeout: TimeInterval = 0.5,
         listOnScreenWindows: @escaping () -> [[String: Any]] = { [] },
-        runScreencapture: @escaping ([String]) throws -> Void = { _ in }
+        runScreencapture: @escaping ([String]) throws -> Void = { _ in },
+        resolveFirstElement: @escaping (AXUIElement, Query) -> AXUIElement? = { root, query in
+            resolveFirst(root: root, query: query)
+        },
+        supportsAction: @escaping (AXUIElement, String) throws -> Bool = { _, _ in false },
+        performPressAction: @escaping (AXUIElement) -> AXError = { _ in .success },
+        focusElement: @escaping (AXUIElement) -> AXError = { _ in .success },
+        postKeystroke: @escaping (Keystroke, pid_t) throws -> Void = { _, _ in }
     ) -> (Session, ManualClock, FakeStatusMenuController) {
         let clock = ManualClock()
         let session = Session(
@@ -234,6 +450,11 @@ final class SessionTests: XCTestCase {
             isProcessTrusted: { true },
             createApplication: { _ in AXUIElementCreateSystemWide() },
             setMessagingTimeout: { _, _ in },
+            resolveFirstElement: resolveFirstElement,
+            supportsAction: supportsAction,
+            performPressAction: performPressAction,
+            focusElement: focusElement,
+            postKeystroke: postKeystroke,
             now: clock.now,
             sleep: clock.sleep,
             terminationTimeout: terminationTimeout,
@@ -252,6 +473,7 @@ private final class FakeRunningApplication: RunningApplication {
     var terminateCallCount = 0
     var forceTerminateCallCount = 0
     var activateCallCount = 0
+    var activateResult = true
     var terminateResult = true
     var forceTerminateResult = true
     var onTerminate: (() -> Void)?
@@ -271,7 +493,7 @@ private final class FakeRunningApplication: RunningApplication {
 
     func activate(options _: NSApplication.ActivationOptions) -> Bool {
         activateCallCount += 1
-        return true
+        return activateResult
     }
 
     func terminate() -> Bool {

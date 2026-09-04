@@ -308,20 +308,9 @@ unreleased). Priorities should be re-ordered by dogfood feedback from the first 
 (Sentwise menu bar app, `prowl-hunts` branch in that repo). Phase 1 scope notes live in
 `resolved.md` under PROWL-048.
 
-**Epic status (2026-09-01, {PROWL-077} review): ACTIVE** — the core beachhead epic. Next code
-item: {PROWL-051}; {PROWL-056} after that. {PROWL-052}'s go-live is gated
+**Epic status (2026-09-03, {PROWL-051} shipped): ACTIVE** — the core beachhead epic. Next code
+item: {PROWL-056}. {PROWL-052}'s go-live is gated
 on {PROWL-079}.
-
-{PROWL-051} **ARCH-005: Arbitrary key support for `press` on macOS**
-   The helper maps Enter/Return/Space onto `AXPress` and rejects everything else. Synthesize
-real keystrokes (CGEvent posting to the target app) so `press` supports the same key names as
-the web target (Escape, Tab, arrows, modifiers).
-
-**Found during**: PROWL-048 phase-1 scope notes (2026-08-15)
-**Acceptance Criteria**:
-- `press` accepts the common key vocabulary; unknown keys still error clearly
-- Keystrokes go to the target app (activate first), not whatever is frontmost
-- Docs/compatibility matrix updated
 
 {PROWL-052} **ARCH-006: Distribute the `prowl-macdriver` helper**
    The macOS target currently requires a source checkout and local `swift build`. Ship the

@@ -88,6 +88,11 @@ final class Session {
     private let isProcessTrusted: () -> Bool
     private let createApplication: (pid_t) -> AXUIElement
     private let setMessagingTimeout: (AXUIElement, TimeInterval) -> Void
+    private let resolveFirstElement: (AXUIElement, Query) -> AXUIElement?
+    private let supportsAction: (AXUIElement, String) throws -> Bool
+    private let performPressAction: (AXUIElement) -> AXError
+    private let focusElement: (AXUIElement) -> AXError
+    private let postKeystroke: (Keystroke, pid_t) throws -> Void
     private let now: () -> Date
     private let sleep: (useconds_t) -> Void
 
@@ -115,6 +120,17 @@ final class Session {
         setMessagingTimeout: @escaping (AXUIElement, TimeInterval) -> Void = { element, timeout in
             AXUIElementSetMessagingTimeout(element, Float(timeout))
         },
+        resolveFirstElement: @escaping (AXUIElement, Query) -> AXUIElement? = { root, query in
+            resolveFirst(root: root, query: query)
+        },
+        supportsAction: @escaping (AXUIElement, String) throws -> Bool = axSupportsAction,
+        performPressAction: @escaping (AXUIElement) -> AXError = axPress,
+        focusElement: @escaping (AXUIElement) -> AXError = { element in
+            AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        },
+        postKeystroke: @escaping (Keystroke, pid_t) throws -> Void = { keystroke, pid in
+            try Session.defaultPostKeystroke(keystroke, toPid: pid)
+        },
         now: @escaping () -> Date = Date.init,
         sleep: @escaping (useconds_t) -> Void = { usleep($0) },
         terminationTimeout: TimeInterval = 5.0,
@@ -126,6 +142,11 @@ final class Session {
         self.isProcessTrusted = isProcessTrusted
         self.createApplication = createApplication
         self.setMessagingTimeout = setMessagingTimeout
+        self.resolveFirstElement = resolveFirstElement
+        self.supportsAction = supportsAction
+        self.performPressAction = performPressAction
+        self.focusElement = focusElement
+        self.postKeystroke = postKeystroke
         self.now = now
         self.sleep = sleep
         self.terminationTimeout = terminationTimeout
@@ -148,6 +169,26 @@ final class Session {
     /// timeout or a non-zero exit.
     static let defaultRunScreencapture: ([String]) throws -> Void = { arguments in
         try Session.runScreencapture(arguments: arguments, timeout: Session.screencaptureTimeout)
+    }
+
+    /// Live CGEvent delivery for synthesized key presses.
+    static func defaultPostKeystroke(_ keystroke: Keystroke, toPid pid: pid_t) throws {
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            throw AXFailure("could not create a CGEventSource for key synthesis")
+        }
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keystroke.keyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keystroke.keyCode, keyDown: false) else {
+            throw AXFailure("could not synthesize key events")
+        }
+        keyDown.flags = keystroke.flags
+        keyUp.flags = keystroke.flags
+        if let unicode = keystroke.unicodeString {
+            var utf16 = Array(unicode.utf16)
+            keyDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+            keyUp.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+        }
+        keyDown.postToPid(pid)
+        keyUp.postToPid(pid)
     }
 
     static func runScreencapture(
@@ -361,18 +402,48 @@ final class Session {
 
     func press(_ queryDict: [String: Any], key: String) throws -> [String: Any] {
         let element = try firstOrThrow(queryDict)
-        // AX cannot synthesize arbitrary keystrokes at an element; the activating
-        // keys map onto AXPress. Anything else is rejected honestly.
-        switch key.lowercased() {
-        case "enter", "return", "space", " ":
-            let error = axPress(element)
+        let keystroke = try KeySynthesis.parse(key)
+
+        // Fast path: a bare Enter/Return/Space maps cleanly onto AXPress, which is
+        // deterministic and focus-independent — but only when the element actually
+        // advertises the press action. If it doesn't (a text field, say), fall
+        // through to synthesized key events rather than erroring.
+        let supportsPress = keystroke.isActivationKey
+            ? try supportsAction(element, kAXPressAction as String)
+            : false
+        if supportsPress {
+            let error = performPressAction(element)
             guard error == .success || error == .cannotComplete else {
                 throw AXFailure("AXPress failed (\(error.rawValue))")
             }
-            return ["pressed": key]
-        default:
-            throw AXFailure("press key \"\(key)\" is not supported by the macOS target (only Enter/Return/Space)")
+            return ["pressed": key, "via": "axpress"]
         }
+
+        // Synthesis path: post real keyDown/keyUp events to the target app's PID
+        // (never whatever is frontmost), activating it first so it processes them.
+        try synthesizeKeystroke(keystroke, on: element)
+        return ["pressed": key, "via": "cgevent"]
+    }
+
+    /// Post a synthesized keystroke to the attached app. Activates the app (many
+    /// apps only handle key events while active), focuses the resolved element,
+    /// then posts keyDown/keyUp targeted at the app's PID via `CGEvent.postToPid`
+    /// so the keystroke can never land in another application.
+    private func synthesizeKeystroke(_ keystroke: Keystroke, on element: AXUIElement) throws {
+        guard let runningApp else {
+            throw AXFailure("no app attached — send a \"launch\" command first")
+        }
+
+        guard runningApp.activate(options: []) else {
+            throw AXFailure("could not activate target app for key synthesis")
+        }
+
+        let focusStatus = focusElement(element)
+        guard focusStatus == .success else {
+            throw AXFailure("could not focus element for key synthesis (\(focusStatus.rawValue))")
+        }
+
+        try postKeystroke(keystroke, runningApp.processIdentifier)
     }
 
     func hover(_ queryDict: [String: Any]) throws -> [String: Any] {
@@ -571,7 +642,7 @@ final class Session {
     private func firstOrThrow(_ queryDict: [String: Any]) throws -> AXUIElement {
         let app = try requireApp()
         let query = try Query.from(queryDict)
-        guard let element = resolveFirst(root: app, query: query) else {
+        guard let element = resolveFirstElement(app, query) else {
             throw AXFailure("no element matched query")
         }
         return element
