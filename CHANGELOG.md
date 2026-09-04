@@ -4,6 +4,8 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-04
+
 ### Added
 - **`press` on the macOS target now supports the web target's full key
   vocabulary (PROWL-051 / ARCH-005).** The `prowl-macdriver` Swift helper
