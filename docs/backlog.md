@@ -406,6 +406,24 @@ the epic's documented unfreeze condition, so that one item is admitted.
   rejecting them with a clear message (AX scrolling is a separate item if ever asked)
 - Step-compatibility matrix + README updated; unit tests with faked agents per repo pattern
 
+{PROWL-081} **INFRA-001: Harden mobile-e2e emulator boot (flaky CI gate)**
+   The `mobile-e2e.yml` device-verification job on the self-hosted mini fails intermittently:
+   the Android emulator sometimes doesn't (fully) boot, Settings never renders, and the
+   `android-smoke` hunt's 60s `waitForSelector` expires — run history shows a
+   failure-then-green-on-rerun pair on each of the last three branches. Worse, a prior failing
+   run logged `::error::Android emulator did not reach sys.boot_completed` *and* still ran the
+   hunt — the boot check doesn't stop the job, so an infra failure masquerades as a hunt
+   failure. This is CI maintenance of shipped mobile support, not new epic scope.
+
+**Found during**: Release v0.1.7 PR #68 Mobile E2E failure triage (2026-09-04)
+**Acceptance Criteria**:
+- The boot-wait step hard-fails the job (no hunt attempt) when `sys.boot_completed` isn't
+  reached, with a distinct, infra-labelled error
+- Boot reliability improved: retry the boot once and/or add a post-boot settle
+  (e.g. wait for `pm`/launcher readiness or a quick-boot snapshot) before launching Settings
+- After the change, an emulator flake shows as a fast infra failure, never a hunt timeout
+- Verified by the workflow's own history (no hunt-timeout-style failures from boot causes)
+
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels
 make this a separate epic. `go-ios` (MIT) is the most credible enabler (installs/runs WDA and
