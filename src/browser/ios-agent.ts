@@ -11,6 +11,7 @@
  */
 import type { IosAgentClient, IosQuery } from "./ios-driver.js";
 import { iosQueryToLocator } from "./ios-driver.js";
+import { toScreenSize, type PointerActionSequence, type ScreenSize } from "./touch-gestures.js";
 
 /** The subset of `fetch` this module uses; overridable in tests. */
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -258,6 +259,16 @@ export function createWdaAgentClient(transport: WdaTransport, sessionId: string)
       const value = await transport.request("GET", `${base}/element/${elementId}/text`);
       return typeof value === "string" ? value : value == null ? null : String(value);
     },
+    async isDisplayed(elementId: string): Promise<boolean> {
+      try {
+        return (await transport.request("GET", `${base}/element/${elementId}/displayed`)) === true;
+      } catch (error) {
+        if (isNoSuchElement(error)) {
+          return false;
+        }
+        throw error;
+      }
+    },
     async sendKeys(keys: string[]): Promise<void> {
       // Session-scoped key input to the active element (WDA `/wda/keys`).
       await transport.request("POST", `${base}/wda/keys`, { value: keys });
@@ -265,6 +276,15 @@ export function createWdaAgentClient(transport: WdaTransport, sessionId: string)
     async homescreen(): Promise<void> {
       // Session-independent springboard route.
       await transport.request("POST", "/wda/homescreen", {});
+    },
+    async windowSize(): Promise<ScreenSize> {
+      // WDA exposes the classic `/window/size` ({ width, height }) endpoint.
+      const value = await transport.request("GET", `${base}/window/size`);
+      return toScreenSize(value, "WebDriverAgent /window/size");
+    },
+    async performActions(actions: PointerActionSequence): Promise<void> {
+      // W3C actions endpoint; WDA replays the touch pointer sequence.
+      await transport.request("POST", `${base}/actions`, { actions: [actions] });
     },
     async source(): Promise<string> {
       // WDA returns the XML page source of the active app (session-independent).

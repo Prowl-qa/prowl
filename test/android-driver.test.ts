@@ -11,6 +11,11 @@ import {
   type AndroidAgentClient,
   type AndroidQuery
 } from "../src/browser/android-driver.js";
+import {
+  MAX_SCROLL_TO_SWIPES,
+  type PointerActionSequence,
+  type ScreenSize
+} from "../src/browser/touch-gestures.js";
 
 class FakeAgent implements AndroidAgentClient {
   findElementQueries: AndroidQuery[] = [];
@@ -23,6 +28,11 @@ class FakeAgent implements AndroidAgentClient {
   elements: string[] = ["el-1"];
   text: string | null = "hello";
   png: Buffer = Buffer.from("PNGDATA");
+  windowSizeValue: ScreenSize = { width: 1080, height: 1920 };
+  windowSizeCalls = 0;
+  performedActions: PointerActionSequence[] = [];
+  /** When set, `findElements` returns these results in order per call. */
+  findElementsSequence: string[][] | null = null;
 
   async findElement(query: AndroidQuery): Promise<string | null> {
     this.findElementQueries.push(query);
@@ -30,6 +40,9 @@ class FakeAgent implements AndroidAgentClient {
   }
   async findElements(query: AndroidQuery): Promise<string[]> {
     this.findElementsQueries.push(query);
+    if (this.findElementsSequence) {
+      return this.findElementsSequence.shift() ?? [];
+    }
     return this.elements;
   }
   async click(id: string): Promise<void> {
@@ -46,6 +59,13 @@ class FakeAgent implements AndroidAgentClient {
   }
   async screenshotPng(): Promise<Buffer> {
     return this.png;
+  }
+  async windowSize(): Promise<ScreenSize> {
+    this.windowSizeCalls += 1;
+    return this.windowSizeValue;
+  }
+  async performActions(actions: PointerActionSequence): Promise<void> {
+    this.performedActions.push(actions);
   }
   async close(): Promise<void> {
     this.closed = true;
@@ -292,9 +312,6 @@ describe("createAndroidDriver", () => {
       "setInputFiles is not supported by the Android target"
     );
     await expect(driver.hover("id=x")).rejects.toThrow("hover is not supported by the Android target");
-    await expect(driver.scrollIntoView("id=x")).rejects.toThrow(
-      "scrollTo is not supported by the Android target"
-    );
     await expect(driver.waitForDownloadEvent()).rejects.toThrow(
       "waitForDownload is not supported by the Android target"
     );
@@ -311,5 +328,76 @@ describe("createAndroidDriver", () => {
     };
     const driver = createAndroidDriver(agent);
     await expect(driver.click("id=x")).rejects.toThrow("device offline");
+  });
+});
+
+describe("createAndroidDriver touch gestures (PROWL-080)", () => {
+  it("scroll(down) posts a centre swipe with inverted finger math", async () => {
+    const agent = new FakeAgent(); // 1080x1920 screen
+    const driver = createAndroidDriver(agent);
+    await driver.scroll("down");
+    expect(agent.performedActions).toHaveLength(1);
+    const seq = agent.performedActions[0];
+    expect(seq.parameters).toEqual({ pointerType: "touch" });
+    // Default distance = round(1920 * 0.75) = 1440, half 720, centre (540, 960).
+    const moves = seq.actions.filter((a) => a.type === "pointerMove");
+    expect(moves[0]).toMatchObject({ x: 540, y: 1680 });
+    expect(moves[1]).toMatchObject({ x: 540, y: 240 });
+    expect((moves[1] as { y: number }).y).toBeLessThan((moves[0] as { y: number }).y);
+  });
+
+  it("scroll amount maps to the swipe distance", async () => {
+    const agent = new FakeAgent();
+    const driver = createAndroidDriver(agent);
+    await driver.scroll("right", 400);
+    const moves = agent.performedActions[0].actions.filter((a) => a.type === "pointerMove");
+    // right → finger moves left; distance 400, half 200, centre x=540 → 740 → 340
+    expect(moves[0]).toMatchObject({ x: 740, y: 960 });
+    expect(moves[1]).toMatchObject({ x: 340, y: 960 });
+  });
+
+  it("scrollTo short-circuits when the element is already present", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["el-1"];
+    const driver = createAndroidDriver(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(0);
+    expect(agent.windowSizeCalls).toBe(0);
+  });
+
+  it("scrollTo swipes until the element appears", async () => {
+    const agent = new FakeAgent();
+    agent.findElementsSequence = [[], [], [], ["el-1"]]; // 3 swipes
+    const driver = createAndroidDriver(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(3);
+    expect(agent.windowSizeCalls).toBe(1);
+  });
+
+  it("scrollTo fails with a clear bounded error when never visible", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [];
+    const driver = createAndroidDriver(agent);
+    await expect(driver.scrollIntoView("id=ghost")).rejects.toThrow(
+      `scrollTo: element "id=ghost" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the Android target`
+    );
+    expect(agent.performedActions).toHaveLength(MAX_SCROLL_TO_SWIPES);
+  });
+
+  it("scrollTo reverses direction to find a target above the initial viewport", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [];
+    agent.findElements = async (query) => {
+      agent.findElementsQueries.push(query);
+      return agent.performedActions.length === 21 ? ["el-1"] : [];
+    };
+    const driver = createAndroidDriver(agent);
+    await driver.scrollIntoView("id=header");
+    expect(agent.performedActions).toHaveLength(21);
+    const lastMoves = agent.performedActions.at(-1)!.actions.filter((a) => a.type === "pointerMove");
+    // scrollTo probes use a shorter 60% span: 1920 * 0.6 = 1152, half 576.
+    expect(lastMoves[0]).toMatchObject({ x: 540, y: 384 });
+    expect(lastMoves[1]).toMatchObject({ x: 540, y: 1536 });
+    expect((lastMoves[1] as { y: number }).y).toBeGreaterThan((lastMoves[0] as { y: number }).y);
   });
 });

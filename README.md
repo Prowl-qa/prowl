@@ -384,7 +384,20 @@ macOS target (with a clear error), and `prowl login` / URL guardrails do not app
 | `assert: visible` / `notVisible` | `evalScript`, `runScript` |
 | `screenshot`, `assertScreenshot` | `onDialog`, `select` / `selectOption` |
 | `hover`, `scrollTo` | `setInputFiles`, `waitForDownload` |
-| `repeat`, `if`, `runHunt`, `copyText` | `scroll` (directional), `assert: urlIncludes` / `urlEquals` |
+| `repeat`, `if`, `runHunt`, `copyText` | `scroll` (directional; see below) / `assert: urlIncludes` / `urlEquals` |
+
+**Scroll steps** differ per verb across targets:
+
+- **`scrollTo: { selector }`** is portable across **web, macOS, iOS, and Android**. macOS
+  resolves the element and calls **AXScrollToVisible**; iOS/Android run a bounded down/up
+  swipe probe until the element appears; web scrolls the element into view.
+- **`scroll: { direction, amount? }`** (directional) runs on **web, iOS, and Android** but is
+  **rejected on macOS** — the mobile path synthesizes a touch swipe (no macOS accessibility
+  equivalent), so on macOS use `scrollTo` to bring a specific element into view instead. On
+  the mobile targets the swipe starts from the screen centre (direction semantics match the
+  web step; `amount` maps to the swipe distance in device points, defaulting to 75% of the
+  relevant screen axis; negative amounts reverse direction, matching the web target). An
+  explicit `swipe` step is a deferred follow-up.
 
 Notes: `press` accepts the same key vocabulary as the web target — single printable
 characters, `Enter`/`Return`/`Space`, `Tab`, `Escape`, `Backspace`, `Delete`, `Home`,

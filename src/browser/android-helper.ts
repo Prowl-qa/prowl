@@ -252,6 +252,9 @@ export async function launchAndroidSession(options: LaunchAndroidOptions): Promi
       readyDeadlineMs,
       appPackage: pkg
     });
+    // Some emulator images briefly foreground the instrumentation process; put
+    // the target app back on top after the agent session is ready.
+    await launchPackage(runner, serial, pkg);
     const driver = createAndroidDriver(client, { appLabel: pkg });
     return { client, driver, package: pkg, serial, teardown };
   } catch (error) {

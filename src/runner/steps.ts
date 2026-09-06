@@ -452,6 +452,10 @@ export function toVisibilitySelector(value: string): string {
   return textContainsSelector(value);
 }
 
+function countVisible(driver: SessionDriver, selector: string): Promise<number> {
+  return driver.visibleCount?.(selector) ?? driver.count(selector);
+}
+
 async function runInlineAssert(
   driver: SessionDriver,
   policy: RunPolicy,
@@ -465,7 +469,7 @@ async function runInlineAssert(
   if (assertion.visible !== undefined) {
     const selector = toVisibilitySelector(assertion.visible);
     policy.assertAllowedSelector(selector);
-    const count = await driver.count(selector);
+    const count = await countVisible(driver, selector);
     if (count === 0) {
       throw new Error(`Expected visible: ${assertion.visible}`);
     }
@@ -475,7 +479,7 @@ async function runInlineAssert(
   if (assertion.notVisible !== undefined) {
     const selector = toVisibilitySelector(assertion.notVisible);
     policy.assertAllowedSelector(selector);
-    const count = await driver.count(selector);
+    const count = await countVisible(driver, selector);
     if (count > 0) {
       throw new Error(`Expected not visible: ${assertion.notVisible}`);
     }
@@ -947,25 +951,21 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   scroll: {
-    capabilities: ["evaluate"],
+    // Dispatched through the driver's `scroll` verb (interact), so native mobile
+    // targets synthesize a touch swipe while web keeps its `window.scrollBy`
+    // behavior. The per-target step gate rejects `scroll` on macOS before here.
+    capabilities: ["interact"],
     run: async (h) => {
       if (!("scroll" in h.step)) unknownStep();
-      const amount = h.step.scroll.amount ?? 500;
-      const scrollMap: Record<string, [number, number]> = {
-        up: [0, -amount],
-        down: [0, amount],
-        left: [-amount, 0],
-        right: [amount, 0]
-      };
-      const [x, y] = scrollMap[h.step.scroll.direction];
-      await h.driver.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
+      const { direction, amount } = h.step.scroll;
+      await h.driver.scroll(direction, amount);
       return {
         kind: "result",
         result: {
           type: "scroll",
           status: "pass",
           durationMs: Date.now() - h.stepStart,
-          value: `${h.step.scroll.direction} ${amount}px`
+          value: amount === undefined ? direction : `${direction} ${amount}px`
         }
       };
     }
@@ -1014,7 +1014,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       const condition = h.step.if;
       const selector = condition.visible ?? condition.notVisible!;
       h.policy.assertAllowedSelector(selector);
-      const count = await h.driver.count(selector);
+      const count = await countVisible(h.driver, selector);
       const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
 
       if (conditionMet) {
@@ -1106,7 +1106,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
         h.policy.assertAllowedSelector(whileSelector);
         for (let i = 0; i < maxIter; i++) {
-          const whileCount = await h.driver.count(whileSelector);
+          const whileCount = await countVisible(h.driver, whileSelector);
           const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
           if (!shouldContinue) break;
 

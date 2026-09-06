@@ -15,7 +15,9 @@ import path from "node:path";
  * Step types that only make sense on the web target. Everything else
  * (`click`, `fill`, `type`, `press`, `wait`, `assert visible/notVisible`,
  * `screenshot`, `assertScreenshot`, `repeat`, `runHunt`, `if`, `copyText`,
- * `hover`, `scrollTo`, `waitForSelector`) is portable across targets.
+ * `hover`, `scrollTo`, `waitForSelector`) is portable across targets. The
+ * directional `scroll` step is the one per-target exception — see
+ * {@link MACOS_UNSUPPORTED_STEP_TYPES}.
  */
 export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
   "navigate",
@@ -29,9 +31,33 @@ export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
   "select",
   "selectOption",
   "setInputFiles",
-  "waitForDownload",
-  "scroll" // directional scroll runs window.scrollBy (evaluate) — use scrollTo instead
+  "waitForDownload"
 ]);
+
+/**
+ * Steps rejected on the macOS target specifically (beyond the web-only set).
+ *
+ * The scroll verbs are asymmetric across targets, so gate them per verb:
+ *   - `scroll` (directional): a synthesized touch swipe on iOS/Android
+ *     (PROWL-080) with no AX equivalent, so it is UNSUPPORTED on macOS. It is
+ *     not web-only either (web runs `window.scrollBy`), hence this macOS-only
+ *     rejection rather than {@link WEB_ONLY_STEP_TYPES}.
+ *   - `scrollTo` (by selector): supported on every target and therefore NOT
+ *     listed here — macOS resolves it to AXScrollToVisible (a real, shipped AX
+ *     capability), while iOS/Android run a bounded swipe-loop. Web scrolls the
+ *     element into view.
+ */
+export const MACOS_UNSUPPORTED_STEP_TYPES: ReadonlySet<string> = new Set(["scroll"]);
+
+/** The reason a step is unsupported on macOS specifically, or null. */
+export function macosUnsupportedReason(step: Step): string | null {
+  for (const type of MACOS_UNSUPPORTED_STEP_TYPES) {
+    if (type in step) {
+      return type;
+    }
+  }
+  return null;
+}
 
 /** The web-only reason a step is unsupported on a non-web target, or null if portable. */
 export function webOnlyReason(step: Step): string | null {
@@ -87,8 +113,10 @@ export function nativeTargetLabel(target: Target["type"]): string {
 /**
  * Throw if any step in `steps` (recursing into `if`/`repeat` bodies) is not
  * supported by `target`. `runHunt` references are validated when the referenced
- * hunt itself runs. No-op for the web target; every native target (macOS,
- * Android, iOS) rejects the same web-only step vocabulary.
+ * hunt itself runs. No-op for the web target; every native target rejects the
+ * same web-only step vocabulary, and macOS additionally rejects the directional
+ * `scroll` swipe (no AX equivalent) — but NOT `scrollTo`, which macOS maps to
+ * AXScrollToVisible just as iOS/Android map it to a swipe loop.
  */
 export function assertStepsSupportedByTarget(steps: Step[], target: Target["type"]): void {
   if (target === "web") {
@@ -102,6 +130,16 @@ export function assertStepsSupportedByTarget(steps: Step[], target: Target["type
         `Step "${reason}" is not supported by the ${label} target. It is web-only; ` +
           "use a portable step (click, fill, type, press, wait, assert visible, screenshot, etc.)."
       );
+    }
+    if (target === "macos") {
+      const macReason = macosUnsupportedReason(step);
+      if (macReason) {
+        throw new Error(
+          `Step "${macReason}" is not supported by the macOS target. Directional scroll is a ` +
+            "touch swipe available on the iOS and Android targets; there is no macOS accessibility " +
+            "equivalent (use scrollTo to bring a specific element into view instead)."
+        );
+      }
     }
     if ("if" in step) {
       assertStepsSupportedByTarget(step.if.then, target);

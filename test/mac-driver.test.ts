@@ -172,6 +172,23 @@ describe("createMacDriver", () => {
     await expect(driver.waitForDownloadEvent()).rejects.toThrow("waitForDownload is not supported by the macOS target");
   });
 
+  it("scrollTo issues the AXScrollToVisible helper query (PROWL-080 regression guard)", async () => {
+    // macOS scrollTo is a shipped capability: scrollIntoView must route to the
+    // helper's `scrollTo` command so it can never be silently dropped again.
+    const client = new FakeClient(() => ({}));
+    const driver = createMacDriver(client);
+    await driver.scrollIntoView('role=button[name="Save"]');
+    expect(client.last()).toEqual({
+      cmd: "scrollTo",
+      params: { query: { by: "role", role: "button", name: "Save" } }
+    });
+  });
+
+  it("rejects directional scroll (no AX swipe equivalent) with a clear message", async () => {
+    const driver = createMacDriver(new FakeClient());
+    await expect(driver.scroll("down")).rejects.toThrow("scroll is not supported by the macOS target");
+  });
+
   describe("screenshot", () => {
     afterEach(() => {
       vi.restoreAllMocks();

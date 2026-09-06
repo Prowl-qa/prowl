@@ -402,4 +402,22 @@ describe("createPlaywrightDriver", () => {
       warnSpy.mockRestore();
     }
   });
+
+  it("scrolls by the default amount and direction vectors through page.evaluate", async () => {
+    const page = { evaluate: vi.fn(async () => undefined) };
+    const driver = createPlaywrightDriver(page as unknown as Parameters<typeof createPlaywrightDriver>[0]);
+
+    await driver.scroll("down");
+    await driver.scroll("up", 125);
+    await driver.scroll("left", 125);
+    await driver.scroll("right", 125);
+
+    expect(page.evaluate).toHaveBeenCalledTimes(4);
+    expect(page.evaluate.mock.calls.map((call) => call[1])).toEqual([
+      [0, 500],
+      [0, -125],
+      [-125, 0],
+      [125, 0]
+    ]);
+  });
 });

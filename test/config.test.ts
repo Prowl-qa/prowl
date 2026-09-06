@@ -237,6 +237,95 @@ describe("loadConfig macOS target (PROWL-048)", () => {
     }
   });
 
+  it("interpolates native target fields from .env in the config directory", () => {
+    const original = process.env.IOS_SIM_UDID;
+    const originalAppId = process.env.IOS_APP_ID;
+    const project = setupTargetProject(
+      "target:\n  type: ios\n  app: '{{IOS_APP_ID}}'\n  udid: '{{IOS_SIM_UDID}}'\nguardrails:\n  allowedApps: ['{{IOS_APP_ID}}']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      delete process.env.IOS_SIM_UDID;
+      delete process.env.IOS_APP_ID;
+      fs.writeFileSync(
+        path.join(project, ".prowl", ".env"),
+        "IOS_SIM_UDID=SIM-FROM-DOTENV\nIOS_APP_ID=com.example.App\n"
+      );
+      process.chdir(project);
+
+      const { config } = loadConfig();
+      expect(config.target).toEqual({
+        type: "ios",
+        app: "com.example.App",
+        udid: "SIM-FROM-DOTENV"
+      });
+      expect(config.guardrails.allowedApps).toEqual(["com.example.App"]);
+    } finally {
+      process.chdir(cwd);
+      if (original === undefined) {
+        delete process.env.IOS_SIM_UDID;
+      } else {
+        process.env.IOS_SIM_UDID = original;
+      }
+      if (originalAppId === undefined) {
+        delete process.env.IOS_APP_ID;
+      } else {
+        process.env.IOS_APP_ID = originalAppId;
+      }
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers process.env over .env when interpolating config values", () => {
+    const original = process.env.IOS_SIM_UDID;
+    const project = setupTargetProject(
+      "target:\n  type: ios\n  app: 'com.example.App'\n  udid: '{{IOS_SIM_UDID}}'\nguardrails:\n  allowedApps: ['com.example.App']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      process.env.IOS_SIM_UDID = "SIM-FROM-PROCESS";
+      fs.writeFileSync(path.join(project, ".prowl", ".env"), "IOS_SIM_UDID=SIM-FROM-DOTENV\n");
+      process.chdir(project);
+
+      const { config } = loadConfig();
+      expect(config.target).toEqual({
+        type: "ios",
+        app: "com.example.App",
+        udid: "SIM-FROM-PROCESS"
+      });
+    } finally {
+      process.chdir(cwd);
+      if (original === undefined) {
+        delete process.env.IOS_SIM_UDID;
+      } else {
+        process.env.IOS_SIM_UDID = original;
+      }
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("fails clearly when a config variable is missing", () => {
+    const original = process.env.IOS_SIM_UDID;
+    const project = setupTargetProject(
+      "target:\n  type: ios\n  app: 'com.example.App'\n  udid: '{{IOS_SIM_UDID}}'\nguardrails:\n  allowedApps: ['com.example.App']\n"
+    );
+    const cwd = process.cwd();
+    try {
+      delete process.env.IOS_SIM_UDID;
+      process.chdir(project);
+
+      expect(() => loadConfig()).toThrow("Missing variable: IOS_SIM_UDID");
+    } finally {
+      process.chdir(cwd);
+      if (original === undefined) {
+        delete process.env.IOS_SIM_UDID;
+      } else {
+        process.env.IOS_SIM_UDID = original;
+      }
+      fs.rmSync(project, { recursive: true, force: true });
+    }
+  });
+
   it("omits optional android fields when they are not set", () => {
     const project = setupTargetProject("target:\n  type: android\n  app: 'com.example.app'\n");
     const cwd = process.cwd();

@@ -4,6 +4,67 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`scroll` and `scrollTo` now work on the iOS and Android targets
+  (PROWL-080 / ARCH-014).** Mobile hunts could not scroll below the fold: the
+  directional `scroll` step was rejected at validation for every native target,
+  and `scrollTo` was hard-rejected by both mobile drivers. Both now drive a
+  synthesized touch swipe through the plain W3C actions endpoint
+  (`POST /session/:id/actions`) that WebDriverAgent (iOS) and
+  appium-uiautomator2-server (Android) already speak over the existing
+  raw-`fetch` transports — no new dependencies. Direction semantics match the
+  web step (scrolling "down" reveals content further down, so the finger swipes
+  up); Android reads screen dimensions through uiautomator2's direct
+  `/window/current/size` route before posting the swipe. `scroll`'s optional
+  `amount` maps 1:1 to the swipe distance in device points, clamped to a safe
+  fraction of the screen and defaulting to 75% of the relevant axis when omitted;
+  negative amounts reverse direction, matching the web target's `window.scrollBy`
+  behavior.
+  `scrollTo: { selector }` now uses one shared,
+  bounded mobile probe: it preserves the old 10-swipe downward search, then
+  reverses far enough to cross the starting viewport and search upward too before
+  failing with an error naming the selector and attempt count. Probe swipes use a
+  shorter 60%-axis centered span than one-shot `scroll`, keeping upward searches
+  below sticky top chrome on native settings screens. On iOS, matching WDA
+  hierarchy elements must also pass the element `/displayed` endpoint before
+  `scrollTo`, `waitForSelector`, or inline visible/notVisible checks treat them
+  as visible. `scrollTo` is unchanged on macOS (it still resolves to
+  AXScrollToVisible); the directional `scroll` step has no macOS accessibility
+  equivalent and is rejected there with a clear, target-named message. An
+  explicit `swipe` step (carousels, pull-to-refresh) is a deferred follow-up. The
+  mobile targets stay experimental.
+
+### Changed
+- **CI: the `mobile-e2e` Android boot is now a hard infra gate
+  (PROWL-081 / INFRA-001).** A failure to reach `sys.boot_completed` (or a
+  package manager that never answers) stops the job with a distinct `[infra]`
+  error before any hunt runs, so an emulator flake can no longer masquerade as a
+  hunt `waitForSelector` timeout. The boot retries once, bounds device
+  connection polling under the same 300s boot deadline as `sys.boot_completed`,
+  what it waited for, and terminates/reaps the launched emulator process before
+  restarting ADB after a failed attempt so stale AVD locks cannot break the
+  retry. Android sessions also re-launch the target app after the uiautomator2
+  session attaches so instrumentation startup cannot leave the app in the
+  background before the first selector wait. Both smoke hunts gained a `scroll`
+  step as live device proof of the new gestures, with a not-visible precondition
+  before each swipe so the proof cannot pass without moving the viewport; the
+  follow-up assertions now use bounded `scrollTo` for exact below-the-fold
+  targets, avoiding brittle dependence on one fixed swipe landing point.
+- **iOS visibility queries now bound WDA `/displayed` concurrency.** Broad
+  selectors still return exact visible counts, and visible waits / `scrollTo`
+  probes now reuse the same bounded worker pattern instead of checking hierarchy
+  matches one serial WebDriverAgent request at a time.
+
+### Fixed
+- **Config `{{VAR}}` placeholders now interpolate before validation.** Values
+  loaded from the config-directory `.env` file still fill missing environment
+  variables without overriding `process.env`, and native target fields such as
+  iOS `target.udid` no longer reach launch helpers as literal placeholders.
+- **iOS `count()` preserves selector existence semantics again.** Hunt-level
+  native `selectorExists` / `selectorNotExists` assertions now count raw WDA
+  hierarchy matches, while inline visible/notVisible checks and waits use the
+  displayed-only visibility path.
+
 ## [0.1.7] - 2026-09-04
 
 ### Added

@@ -12,6 +12,11 @@ import {
   type IosAgentClient,
   type IosQuery
 } from "../src/browser/ios-driver.js";
+import {
+  MAX_SCROLL_TO_SWIPES,
+  type PointerActionSequence,
+  type ScreenSize
+} from "../src/browser/touch-gestures.js";
 
 class FakeAgent implements IosAgentClient {
   findElementQueries: IosQuery[] = [];
@@ -24,6 +29,13 @@ class FakeAgent implements IosAgentClient {
   elementId: string | null = "el-1";
   elements: string[] = ["el-1"];
   text: string | null = "hello";
+  windowSizeValue: ScreenSize = { width: 400, height: 800 };
+  windowSizeCalls = 0;
+  performedActions: PointerActionSequence[] = [];
+  displayed = new Map<string, boolean>();
+  displayedIds: string[] = [];
+  /** When set, `findElements` returns these results in order per call. */
+  findElementsSequence: string[][] | null = null;
 
   async findElement(query: IosQuery): Promise<string | null> {
     this.findElementQueries.push(query);
@@ -31,6 +43,9 @@ class FakeAgent implements IosAgentClient {
   }
   async findElements(query: IosQuery): Promise<string[]> {
     this.findElementsQueries.push(query);
+    if (this.findElementsSequence) {
+      return this.findElementsSequence.shift() ?? [];
+    }
     return this.elements;
   }
   async click(id: string): Promise<void> {
@@ -42,11 +57,22 @@ class FakeAgent implements IosAgentClient {
   async getText(): Promise<string | null> {
     return this.text;
   }
+  async isDisplayed(id: string): Promise<boolean> {
+    this.displayedIds.push(id);
+    return this.displayed.get(id) ?? true;
+  }
   async sendKeys(keys: string[]): Promise<void> {
     this.keySequences.push(keys);
   }
   async homescreen(): Promise<void> {
     this.homescreens += 1;
+  }
+  async windowSize(): Promise<ScreenSize> {
+    this.windowSizeCalls += 1;
+    return this.windowSizeValue;
+  }
+  async performActions(actions: PointerActionSequence): Promise<void> {
+    this.performedActions.push(actions);
   }
   async close(): Promise<void> {
     this.closed = true;
@@ -227,6 +253,91 @@ describe("createIosDriver", () => {
     expect(await driverFor(missing).driver.textContent("id=x")).toBeNull();
   });
 
+  it("counts only WDA-displayed hierarchy matches for visibility semantics", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["offscreen", "visible"];
+    agent.displayed.set("offscreen", false);
+    agent.displayed.set("visible", true);
+    const { driver } = driverFor(agent);
+
+    expect(await driver.count("text=Model Number")).toBe(2);
+    expect(agent.displayedIds).toEqual([]);
+
+    expect(await driver.visibleCount!("text=Model Number")).toBe(1);
+    expect(agent.displayedIds).toEqual(["offscreen", "visible"]);
+  });
+
+  it("bounds displayed-state concurrency for exact visible counts", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [
+      "hidden-a",
+      "visible-a",
+      "visible-b",
+      "visible-c",
+      "hidden-b",
+      "visible-d",
+      "visible-e",
+      "visible-f",
+      "visible-g",
+      "visible-h"
+    ];
+    let active = 0;
+    let maxActive = 0;
+    agent.isDisplayed = async (id: string): Promise<boolean> => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return !id.startsWith("hidden");
+    };
+    const { driver } = driverFor(agent);
+
+    expect(await driver.visibleCount!("text=Row")).toBe(8);
+    expect(maxActive).toBeGreaterThan(1);
+    expect(maxActive).toBeLessThanOrEqual(4);
+  });
+
+  it("bounds displayed-state concurrency for visible existence checks", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [
+      "hidden-first",
+      "hidden-a",
+      "visible",
+      "hidden-b",
+      "hidden-c",
+      "hidden-after-visible",
+      "also-after-visible"
+    ];
+    let active = 0;
+    let maxActive = 0;
+    agent.isDisplayed = async (id: string): Promise<boolean> => {
+      agent.displayedIds.push(id);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, id === "visible" ? 1 : 10));
+      active -= 1;
+      return id === "visible";
+    };
+    const { driver } = driverFor(agent);
+
+    await driver.waitForSelector("text=Ready", { timeout: 1000 });
+
+    expect(maxActive).toBeGreaterThan(1);
+    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(agent.displayedIds).toContain("visible");
+    expect(agent.displayedIds).not.toContain("hidden-after-visible");
+    expect(agent.displayedIds).not.toContain("also-after-visible");
+  });
+
+  it("short-circuits visible probes after the first displayed match", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["visible", "also-visible"];
+    const { driver } = driverFor(agent);
+
+    await driver.waitForSelector("text=Ready", { timeout: 30 });
+    expect(agent.displayedIds).toEqual(["visible"]);
+  });
+
   it("waits for a selector, polling until it appears, then times out", async () => {
     const agent = new FakeAgent();
     let calls = 0;
@@ -279,9 +390,6 @@ describe("createIosDriver", () => {
       "setInputFiles is not supported by the iOS target"
     );
     await expect(driver.hover("id=x")).rejects.toThrow("hover is not supported by the iOS target");
-    await expect(driver.scrollIntoView("id=x")).rejects.toThrow(
-      "scrollTo is not supported by the iOS target"
-    );
     await expect(driver.waitForDownloadEvent()).rejects.toThrow(
       "waitForDownload is not supported by the iOS target"
     );
@@ -296,5 +404,90 @@ describe("createIosDriver", () => {
     };
     const { driver } = driverFor(agent);
     await expect(driver.click("id=x")).rejects.toThrow("simulator offline");
+  });
+});
+
+describe("createIosDriver touch gestures (PROWL-080)", () => {
+  it("scroll(down) posts a centre swipe with inverted finger math", async () => {
+    const agent = new FakeAgent(); // 400x800 screen
+    const { driver } = driverFor(agent);
+    await driver.scroll("down");
+    expect(agent.performedActions).toHaveLength(1);
+    const seq = agent.performedActions[0];
+    expect(seq.parameters).toEqual({ pointerType: "touch" });
+    // Default distance = round(800 * 0.75) = 600, centred at (200, 400).
+    const moves = seq.actions.filter((a) => a.type === "pointerMove");
+    expect(moves[0]).toMatchObject({ x: 200, y: 700 });
+    expect(moves[1]).toMatchObject({ x: 200, y: 100 });
+    // finger drags UP to scroll content down
+    expect((moves[1] as { y: number }).y).toBeLessThan((moves[0] as { y: number }).y);
+  });
+
+  it("scroll amount maps to the swipe distance", async () => {
+    const agent = new FakeAgent();
+    const { driver } = driverFor(agent);
+    await driver.scroll("down", 200);
+    const moves = agent.performedActions[0].actions.filter((a) => a.type === "pointerMove");
+    // distance 200, half 100, centre y=400 → 500 → 300
+    expect(moves[0]).toMatchObject({ y: 500 });
+    expect(moves[1]).toMatchObject({ y: 300 });
+  });
+
+  it("scrollTo short-circuits when the element is already present", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["el-1"]; // present on first probe
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(0);
+    expect(agent.windowSizeCalls).toBe(0);
+    expect(agent.displayedIds).toEqual(["el-1"]);
+  });
+
+  it("scrollTo swipes until the element appears", async () => {
+    const agent = new FakeAgent();
+    // absent, absent, then found → 2 swipes
+    agent.findElementsSequence = [[], [], ["el-1"]];
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(2);
+    expect(agent.windowSizeCalls).toBe(1);
+  });
+
+  it("scrollTo keeps swiping when WDA matches are still offscreen", async () => {
+    const agent = new FakeAgent();
+    agent.findElementsSequence = [["offscreen"], ["offscreen"], ["visible"]];
+    agent.displayed.set("offscreen", false);
+    agent.displayed.set("visible", true);
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(2);
+    expect(agent.displayedIds).toEqual(["offscreen", "offscreen", "visible"]);
+  });
+
+  it("scrollTo reverses direction to find a target above the initial viewport", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [];
+    agent.findElements = async (query) => {
+      agent.findElementsQueries.push(query);
+      return agent.performedActions.length === 21 ? ["el-1"] : [];
+    };
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=header");
+    expect(agent.performedActions).toHaveLength(21);
+    const lastMoves = agent.performedActions.at(-1)!.actions.filter((a) => a.type === "pointerMove");
+    // scrollTo probes use a shorter 60% span: 800 * 0.6 = 480, half 240.
+    expect(lastMoves[0]).toMatchObject({ x: 200, y: 160 });
+    expect(lastMoves[1]).toMatchObject({ x: 200, y: 640 });
+    expect((lastMoves[1] as { y: number }).y).toBeGreaterThan((lastMoves[0] as { y: number }).y);
+  });
+
+  it("scrollTo fails with a clear bounded error when never visible", async () => {
+    const agent = new FakeAgent();
+    agent.elements = []; // never found
+    const { driver } = driverFor(agent);
+    await expect(driver.scrollIntoView("id=ghost")).rejects.toThrow(
+      `scrollTo: element "id=ghost" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the iOS target`
+    );
+    expect(agent.performedActions).toHaveLength(MAX_SCROLL_TO_SWIPES);
   });
 });

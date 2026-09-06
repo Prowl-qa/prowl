@@ -197,12 +197,49 @@ describe("createWdaAgentClient", () => {
     expect(calls[0].url).toBe("http://127.0.0.1:8100/session/S1/element/E1/text");
   });
 
+  it("checks viewport visibility through the element displayed endpoint", async () => {
+    const { transport, calls } = transportWith(() => ({ body: true }));
+    const client = createWdaAgentClient(transport, "S1");
+    expect(await client.isDisplayed("E1")).toBe(true);
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:8100/session/S1/element/E1/displayed");
+  });
+
+  it("treats a missing element as not displayed", async () => {
+    const { transport } = transportWith(() => ({ status: 404, body: { error: "no such element" } }));
+    const client = createWdaAgentClient(transport, "S1");
+    expect(await client.isDisplayed("missing")).toBe(false);
+  });
+
   it("deletes the WDA session on close", async () => {
     const { transport, calls } = transportWith(() => ({ body: null }));
     const client = createWdaAgentClient(transport, "S1");
     await client.close();
     expect(calls[0].method).toBe("DELETE");
     expect(calls[0].url).toBe("http://127.0.0.1:8100/session/S1");
+  });
+
+  it("reads the screen size from /window/size (PROWL-080)", async () => {
+    const { transport, calls } = transportWith(() => ({ body: { width: 390, height: 844 } }));
+    const client = createWdaAgentClient(transport, "S1");
+    expect(await client.windowSize()).toEqual({ width: 390, height: 844 });
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:8100/session/S1/window/size");
+  });
+
+  it("posts a pointer action sequence to /actions (PROWL-080)", async () => {
+    const { transport, calls } = transportWith(() => ({ body: null }));
+    const client = createWdaAgentClient(transport, "S1");
+    const seq = {
+      type: "pointer" as const,
+      id: "finger1",
+      parameters: { pointerType: "touch" as const },
+      actions: [{ type: "pointerDown" as const, button: 0 }]
+    };
+    await client.performActions(seq);
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].url).toBe("http://127.0.0.1:8100/session/S1/actions");
+    expect(calls[0].body).toEqual({ actions: [seq] });
   });
 });
 

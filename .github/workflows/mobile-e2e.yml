@@ -97,6 +97,35 @@ jobs:
             # and adjust this id — this is the intended post-merge verification step.
             - assert:
                 visible: "id=recycler_view"
+            # --- scroll gesture proof (PROWL-080): the Settings home is a
+            # scrollable list, so a down-swipe must reveal a below-the-fold row.
+            # NOTE: the exact bottom-of-list label varies across Android
+            # versions; if the gate fails here on the runner's AVD, dump the
+            # tree (`adb shell uiautomator dump`) and adjust the text= below.
+            - assert:
+                notVisible: "text=System"
+            - scroll:
+                direction: down
+                amount: 1200
+            # No negative assert after the fixed-distance swipe: where it lands
+            # depends on list length and fling inertia (a short list can even
+            # rubber-band back), so asserting the top row left the screen is
+            # inherently flaky. The deterministic gesture proof is the
+            # scrollTo + visible pair below.
+            - scrollTo:
+                selector: "text=System"
+            - waitForSelector:
+                selector: "text=System"
+                timeout: 20000
+            - assert:
+                visible: "text=System"
+            # Return to the top row with the same bounded bidirectional scroll
+            # helper used by real hunts; one fixed upward swipe is too short on
+            # the live AVD after revealing the below-the-fold row.
+            - scrollTo:
+                selector: "text=Network & internet"
+            - assert:
+                visible: "text=Network & internet"
             # Tap an entry by its visible-text shorthand.
             - click: "Network & internet"
             - screenshot:
@@ -108,6 +137,7 @@ jobs:
           target:
             type: ios
             app: "com.apple.Preferences"
+            udid: "{{IOS_SIM_UDID}}"
           browser:
             headless: true
             timeout: 60000
@@ -127,43 +157,169 @@ jobs:
                 timeout: 60000
             - assert:
                 visible: "text=General"
+            # --- scroll gesture proof (PROWL-080), on the ROOT Settings list.
+            # The Developer row is always present at the bottom of a simulator's
+            # Settings root and reliably below the fold, so it is the stable
+            # scrollTo target here. (General > "Transfer or Reset iPhone" does
+            # NOT exist on the runner's iOS 26 simulator — observed live
+            # 2026-09-06: a 30-attempt scrollTo miss.)
+            - assert:
+                notVisible: "text=Developer"
+            - scroll:
+                direction: down
+                amount: 600
+            # No negative assert after the fixed-distance swipe: where it lands
+            # depends on list length and rubber-banding. The deterministic
+            # gesture proof is the scrollTo + visible pair below.
+            - scrollTo:
+                selector: "text=Developer"
+            - waitForSelector:
+                selector: "text=Developer"
+                timeout: 20000
+            - assert:
+                visible: "text=Developer"
+            # Return to the top before continuing the original General/About smoke.
+            - scrollTo:
+                selector: "text=General"
+            - waitForSelector:
+                selector: "text=General"
+                timeout: 20000
             - click: "General"
             - waitForSelector:
                 selector: "text=About"
                 timeout: 60000
             - assert:
                 visible: "text=About"
+            - click: "About"
+            - waitForSelector:
+                selector: "text=Name"
+                timeout: 60000
             - screenshot:
                 name: ios-general-about
           YAML
 
+      # PROWL-081 / INFRA-001: boot the emulator as a HARD infra gate. A failure
+      # to reach `sys.boot_completed` (or a package manager that never answers)
+      # is a runner/infra fault, not a hunt fault, so it must stop the job before
+      # any hunt runs — never surface as a downstream `waitForSelector` timeout.
+      # We also retry the boot once and settle on package-manager readiness
+      # (Settings cannot launch until `pm` answers), logging what we waited for.
       - name: Boot the Android emulator
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          emulator_pid=""
           adb start-server
-          # Headless boot, no snapshot — matches the runner-verified invocation.
-          nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
-            > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          adb wait-for-device
+
+          cleanup_launched_emulator() {
+            local pid="${emulator_pid:-}"
+            if [ -z "$pid" ]; then
+              return 0
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "Stopping emulator process ${pid}"
+              kill "$pid" 2>/dev/null || true
+              for _ in $(seq 1 10); do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                  wait "$pid" 2>/dev/null || true
+                  emulator_pid=""
+                  return 0
+                fi
+                sleep 1
+              done
+              echo "Force stopping emulator process ${pid}"
+              kill -9 "$pid" 2>/dev/null || true
+            fi
+            wait "$pid" 2>/dev/null || true
+            emulator_pid=""
+          }
+
+          # Bring up the emulator and wait (up to ~300s total) for device
+          # connection and sys.boot_completed.
+          wait_for_boot() {
+            local attempt="$1" start elapsed boot_deadline_s device_connected
+            start=$SECONDS
+            boot_deadline_s=300
+            device_connected=0
+            # Headless boot, no snapshot — matches the runner-verified invocation.
+            nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
+              > "$RUNNER_TEMP/emulator.log" 2>&1 &
+            emulator_pid="$!"
+            echo "Boot attempt ${attempt}: emulator launched (pid ${emulator_pid}); waiting for device…"
+            while [ $((SECONDS - start)) -lt "$boot_deadline_s" ]; do
+              if adb devices | awk 'NR > 1 && $2 == "device" { found=1 } END { exit found ? 0 : 1 }'; then
+                elapsed=$((SECONDS - start))
+                echo "Boot attempt ${attempt}: adb device connected after ${elapsed}s"
+                device_connected=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$device_connected" != "1" ]; then
+              echo "Boot attempt ${attempt}: adb device did not connect after $((SECONDS - start))s"
+              return 1
+            fi
+            while [ $((SECONDS - start)) -lt "$boot_deadline_s" ]; do
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+                elapsed=$((SECONDS - start))
+                echo "Boot attempt ${attempt}: sys.boot_completed reached after ${elapsed}s"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Boot attempt ${attempt}: sys.boot_completed NOT reached after $((SECONDS - start))s"
+            return 1
+          }
+
+          # Post-boot settle: the package manager must answer before Settings can
+          # launch, else the hunt sees an empty screen and times out spuriously.
+          wait_for_package_manager() {
+            local start elapsed
+            start=$SECONDS
+            for _ in $(seq 1 30); do
+              if adb shell pm path android >/dev/null 2>&1; then
+                elapsed=$((SECONDS - start))
+                echo "Package manager ready after ${elapsed}s"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Package manager NOT ready after $((SECONDS - start))s"
+            return 1
+          }
+
           booted=0
-          for _ in $(seq 1 150); do
-            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+          for attempt in 1 2; do
+            if wait_for_boot "$attempt" && wait_for_package_manager; then
               booted=1
               break
             fi
-            sleep 2
+            echo "::warning::Android emulator boot attempt ${attempt} failed; killing and retrying"
+            adb -s emulator-5554 emu kill || true
+            cleanup_launched_emulator
+            adb kill-server || true
+            adb start-server
+            sleep 3
           done
+
           if [ "$booted" != "1" ]; then
-            echo "::error::Android emulator did not reach sys.boot_completed"
+            echo "::error::[infra] Android emulator failed to boot (sys.boot_completed / package manager) after 2 attempts — runner/infra failure, not a hunt failure"
             cat "$RUNNER_TEMP/emulator.log" || true
             exit 1
           fi
+
           adb shell input keyevent 82 || true   # dismiss the keyguard
           adb devices
 
       - name: Run the Android smoke hunt
         working-directory: ${{ runner.temp }}/android
-        run: $PROWL run android-smoke
+        run: |
+          set -euo pipefail
+          # Persistent AVDs can retain a launcher ANR dialog from a prior run.
+          # The Settings screen stays visible behind it, but the dialog owns the
+          # active UI hierarchy, so uiautomator2 cannot resolve Settings rows.
+          adb shell am force-stop com.google.android.apps.nexuslauncher || true
+          adb shell am force-stop com.android.launcher3 || true
+          $PROWL run android-smoke
 
       - name: Select iOS simulator runtime
         id: ios-runtime
@@ -195,8 +351,28 @@ jobs:
             echo "Creating simulator $IOS_SIM ($devtype, $runtime)"
             xcrun simctl create "$IOS_SIM" "$devtype" "$runtime"
           fi
-          xcrun simctl boot "$IOS_SIM" || true
-          xcrun simctl bootstatus "$IOS_SIM"
+          udid="$(
+            xcrun simctl list devices --json | node -e '
+              const fs = require("node:fs");
+              const name = process.argv[1];
+              const data = JSON.parse(fs.readFileSync(0, "utf8"));
+              const devices = Object.values(data.devices ?? {}).flat()
+                .filter((device) => device && device.isAvailable !== false);
+              const matches = devices.filter((device) => device.name === name);
+              if (matches.length !== 1) {
+                const known = devices
+                  .map((device) => device.name + " (" + device.udid + ", " + device.state + ")")
+                  .join("; ") || "none";
+                console.error("Expected exactly one available simulator named \"" + name + "\", found " + matches.length + ". Available simulators: " + known);
+                process.exit(1);
+              }
+              process.stdout.write(matches[0].udid);
+            ' "$IOS_SIM"
+          )"
+          echo "Using iOS simulator $IOS_SIM ($udid)"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid"
+          echo "IOS_SIM_UDID=$udid" >> "$GITHUB_ENV"
 
       # PROWL-069: WDA is launched via `xcodebuild test-without-building` driven by
       # the generated `.xctestrun` (the XCTest host launch), which iOS 26+ accepts —
@@ -225,4 +401,4 @@ jobs:
         run: |
           adb -s emulator-5554 emu kill || true
           adb kill-server || true
-          xcrun simctl shutdown "$IOS_SIM" || true
+          xcrun simctl shutdown "${IOS_SIM_UDID:-$IOS_SIM}" || true

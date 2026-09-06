@@ -1,0 +1,237 @@
+/**
+ * PROWL-080 / ARCH-014 — synthesized touch gestures for the mobile targets.
+ *
+ * Both on-device agents (WebDriverAgent on iOS, appium-uiautomator2-server on
+ * Android) speak the plain W3C WebDriver **actions** endpoint
+ * (`POST /session/:id/actions`), so a single builder here produces the pointer
+ * action sequence for a swipe and both drivers post it verbatim over their
+ * existing raw-`fetch` transports. We deliberately avoid nonstandard `mobile:`
+ * execute shortcuts — portability across the two agents beats convenience.
+ *
+ * Direction semantics match the web `scroll` step: a scroll *direction* names
+ * where the content moves, so the finger swipes the opposite way. Scrolling
+ * "down" (reveal content further down the page) drags the finger *up* the
+ * screen; "right" drags the finger *left*; and so on. Swipes are centred on the
+ * screen and span a distance derived from the step's `amount` (see
+ * {@link swipeDistanceFor}).
+ */
+
+/** A scroll/swipe direction, matching the web `scroll` step's vocabulary. */
+export type SwipeDirection = "up" | "down" | "left" | "right";
+
+/** Screen dimensions in device points, as reported by the agent. */
+export interface ScreenSize {
+  width: number;
+  height: number;
+}
+
+/** An (x, y) point in device points. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** One item in a W3C `pointer` action sequence. */
+export type PointerActionItem =
+  | { type: "pointerMove"; duration: number; x: number; y: number; origin?: "viewport" }
+  | { type: "pointerDown"; button: number }
+  | { type: "pointerUp"; button: number }
+  | { type: "pause"; duration: number };
+
+/** A single `touch` pointer input source and its ordered actions. */
+export interface PointerActionSequence {
+  type: "pointer";
+  id: string;
+  parameters: { pointerType: "touch" };
+  actions: PointerActionItem[];
+}
+
+/**
+ * Default swipe span as a fraction of the relevant screen axis when the step
+ * gives no explicit `amount`. Three-quarters of the axis is a long, reliable
+ * drag that still leaves margin at both ends so the endpoints never land on the
+ * screen edge (where the OS may steal the gesture for system UI).
+ */
+export const DEFAULT_SWIPE_FRACTION = 0.75;
+
+/**
+ * `scrollTo` probe swipes use a shorter span than the default one-shot scroll:
+ * live mobile screens often have sticky search/header chrome near the top, and
+ * an upward probe that starts in that chrome can be ignored by the scrollable
+ * content underneath.
+ */
+export const SCROLL_TO_PROBE_SWIPE_FRACTION = 0.6;
+
+/**
+ * Hard cap on swipe span as a fraction of the axis. A centred swipe reaches
+ * `distance / 2` either side of centre, so 0.9 keeps endpoints within the inner
+ * 5%–95% band even at the maximum.
+ */
+export const MAX_SWIPE_FRACTION = 0.9;
+
+/** Milliseconds the finger holds still after touching down, before dragging. */
+export const SWIPE_HOLD_MS = 100;
+
+/** Milliseconds the drag itself takes (a natural, inertia-free swipe). */
+export const SWIPE_MOVE_DURATION_MS = 300;
+
+/** Number of downward swipes `scrollTo` tries before sweeping back upward. */
+export const SCROLL_TO_SWEEP_DEPTH = 10;
+
+/**
+ * Shared vertical probe order for mobile `scrollTo`: first preserve the old
+ * downward search depth, then reverse far enough to cross the starting viewport
+ * and search above it too.
+ */
+export const SCROLL_TO_PROBE_DIRECTIONS: readonly SwipeDirection[] = [
+  ...Array.from({ length: SCROLL_TO_SWEEP_DEPTH }, () => "down" as const),
+  ...Array.from({ length: SCROLL_TO_SWEEP_DEPTH * 2 }, () => "up" as const)
+];
+
+/** Maximum directional swipes `scrollTo` attempts before giving up. */
+export const MAX_SCROLL_TO_SWIPES = SCROLL_TO_PROBE_DIRECTIONS.length;
+
+export type ScrollIntoViewProbe = {
+  isVisible: () => Promise<boolean>;
+  swipe: (direction: SwipeDirection) => Promise<void>;
+  directions?: readonly SwipeDirection[];
+};
+
+const OPPOSITE_SWIPE_DIRECTIONS: Record<SwipeDirection, SwipeDirection> = {
+  up: "down",
+  down: "up",
+  left: "right",
+  right: "left"
+};
+
+/** Run the shared mobile `scrollTo` probe, returning true once the target is visible. */
+export async function probeScrollIntoView({
+  isVisible,
+  swipe,
+  directions = SCROLL_TO_PROBE_DIRECTIONS
+}: ScrollIntoViewProbe): Promise<boolean> {
+  if (await isVisible()) {
+    return true;
+  }
+  for (const direction of directions) {
+    await swipe(direction);
+    if (await isVisible()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Coerce an agent's window-size payload into a {@link ScreenSize}. Accepts the
+ * `{ width, height }` shape returned by WDA `/window/size` and uiautomator2
+ * `/window/current/size`; extra fields are ignored. Throws if either dimension
+ * is missing or not a positive number, so gesture math never runs on a bad
+ * screen size.
+ */
+export function toScreenSize(value: unknown, source: string): ScreenSize {
+  const record = (value ?? {}) as Record<string, unknown>;
+  const width = Number(record.width);
+  const height = Number(record.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error(`${source} did not return a usable screen size`);
+  }
+  return { width, height };
+}
+
+/** Whether a direction scrolls along the vertical (height) axis. */
+function isVertical(direction: SwipeDirection): boolean {
+  return direction === "up" || direction === "down";
+}
+
+/**
+ * Resolve the swipe distance in device points for `direction` on a screen of
+ * `size`. `amount` (the web step's pixel amount) maps 1:1 to swipe distance;
+ * negative values use their absolute distance (direction reversal happens in
+ * {@link buildDirectionalSwipe}), and omitted values default to
+ * {@link DEFAULT_SWIPE_FRACTION} of the axis. The result is always clamped to
+ * [1, {@link MAX_SWIPE_FRACTION} · axis] so a swipe can never run off-screen or
+ * collapse to nothing.
+ */
+export function swipeDistanceFor(direction: SwipeDirection, size: ScreenSize, amount?: number): number {
+  if (amount !== undefined && !Number.isFinite(amount)) {
+    throw new Error("scroll amount must be a finite number");
+  }
+  const axis = isVertical(direction) ? size.height : size.width;
+  const requested = amount === undefined ? axis * DEFAULT_SWIPE_FRACTION : Math.abs(amount);
+  const max = axis * MAX_SWIPE_FRACTION;
+  return Math.max(1, Math.round(Math.min(requested, max)));
+}
+
+/** Distance used by mobile `scrollTo` probes to avoid sticky top/bottom chrome. */
+export function scrollToProbeDistanceFor(direction: SwipeDirection, size: ScreenSize): number {
+  const axis = isVertical(direction) ? size.height : size.width;
+  return Math.max(1, Math.round(axis * SCROLL_TO_PROBE_SWIPE_FRACTION));
+}
+
+/**
+ * Compute the start/end points of a screen-centred swipe. The finger travels
+ * *opposite* to the scroll direction (see the module note), split evenly either
+ * side of centre so the gesture stays centred regardless of distance.
+ */
+export function swipeEndpoints(
+  direction: SwipeDirection,
+  size: ScreenSize,
+  distance: number
+): { start: Point; end: Point } {
+  const cx = Math.round(size.width / 2);
+  const cy = Math.round(size.height / 2);
+  const half = Math.round(distance / 2);
+  switch (direction) {
+    case "down":
+      // Reveal lower content ⇒ finger moves up.
+      return { start: { x: cx, y: cy + half }, end: { x: cx, y: cy - half } };
+    case "up":
+      // Reveal upper content ⇒ finger moves down.
+      return { start: { x: cx, y: cy - half }, end: { x: cx, y: cy + half } };
+    case "right":
+      // Reveal content to the right ⇒ finger moves left.
+      return { start: { x: cx + half, y: cy }, end: { x: cx - half, y: cy } };
+    case "left":
+      // Reveal content to the left ⇒ finger moves right.
+      return { start: { x: cx - half, y: cy }, end: { x: cx + half, y: cy } };
+  }
+}
+
+/**
+ * Build the W3C `touch` pointer action sequence for a swipe from `start` to
+ * `end`: move to the origin, press, hold briefly, drag over
+ * {@link SWIPE_MOVE_DURATION_MS}, then release. The shape is identical on both
+ * agents; it is posted as `{ actions: [<this>] }` to the actions endpoint.
+ */
+export function buildSwipeActions(start: Point, end: Point): PointerActionSequence {
+  return {
+    type: "pointer",
+    id: "finger1",
+    parameters: { pointerType: "touch" },
+    actions: [
+      { type: "pointerMove", duration: 0, x: start.x, y: start.y, origin: "viewport" },
+      { type: "pointerDown", button: 0 },
+      { type: "pause", duration: SWIPE_HOLD_MS },
+      { type: "pointerMove", duration: SWIPE_MOVE_DURATION_MS, x: end.x, y: end.y, origin: "viewport" },
+      { type: "pointerUp", button: 0 }
+    ]
+  };
+}
+
+/**
+ * One-shot helper: resolve the distance and endpoints for a centred directional
+ * swipe and build its action sequence. Returns the derived geometry too so
+ * callers (and tests) can assert the exact gesture.
+ */
+export function buildDirectionalSwipe(
+  direction: SwipeDirection,
+  size: ScreenSize,
+  amount?: number
+): { actions: PointerActionSequence; distance: number; start: Point; end: Point } {
+  const normalizedDirection =
+    amount !== undefined && amount < 0 ? OPPOSITE_SWIPE_DIRECTIONS[direction] : direction;
+  const distance = swipeDistanceFor(normalizedDirection, size, amount);
+  const { start, end } = swipeEndpoints(normalizedDirection, size, distance);
+  return { actions: buildSwipeActions(start, end), distance, start, end };
+}

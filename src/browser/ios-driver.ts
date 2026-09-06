@@ -31,6 +31,15 @@ import {
   unwrapNativeTextSelector,
   type NativeSelector
 } from "../selector/native.js";
+import {
+  buildDirectionalSwipe,
+  MAX_SCROLL_TO_SWIPES,
+  probeScrollIntoView,
+  scrollToProbeDistanceFor,
+  type PointerActionSequence,
+  type ScreenSize,
+  type SwipeDirection
+} from "./touch-gestures.js";
 import type {
   DialogAction,
   DriverCapability,
@@ -71,10 +80,16 @@ export interface IosAgentClient {
   /** Replace an element's text (W3C `element/value`). */
   setValue(elementId: string, text: string): Promise<void>;
   getText(elementId: string): Promise<string | null>;
+  /** True only when WDA reports the element is displayed in the current viewport. */
+  isDisplayed(elementId: string): Promise<boolean>;
   /** Send raw key sequences to the focused element (WDA `/wda/keys`). */
   sendKeys(keys: string[]): Promise<void>;
   /** Return to the springboard home screen (WDA `/wda/homescreen`). */
   homescreen(): Promise<void>;
+  /** Current screen size in points (WDA `/window/size`), for gesture geometry. */
+  windowSize(): Promise<ScreenSize>;
+  /** Perform a W3C pointer action sequence (WDA `POST /session/:id/actions`). */
+  performActions(actions: PointerActionSequence): Promise<void>;
   /**
    * Return the current UI hierarchy as WebDriverAgent `/source` XML. Present on
    * live clients and consumed by the analyzer (PROWL-061); optional so lighter
@@ -102,6 +117,8 @@ const IOS_CAPABILITIES: ReadonlySet<DriverCapability> = new Set<DriverCapability
 const WAIT_POLL_INTERVAL_MS = 250;
 /** Default wait deadline when a step does not specify one. */
 const DEFAULT_WAIT_TIMEOUT_MS = 5000;
+/** Maximum concurrent WDA `/displayed` probes used for visibility checks. */
+const DISPLAYED_CHECK_CONCURRENCY = 4;
 
 /**
  * Key names the `press` step supports on iOS, sorted for error messages. `enter`/
@@ -219,6 +236,71 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     await client.setValue(await resolveOne(selector), value);
   }
 
+  async function swipe(direction: SwipeDirection, amount?: number, size?: ScreenSize): Promise<void> {
+    const actualSize = size ?? (await client.windowSize());
+    const { actions } = buildDirectionalSwipe(direction, actualSize, amount);
+    await client.performActions(actions);
+  }
+
+  async function visibleElementIds(query: IosQuery): Promise<string[]> {
+    const ids = await client.findElements(query);
+    const visible: Array<string | null> = Array.from({ length: ids.length }, () => null);
+    let nextIndex = 0;
+    const workerCount = Math.min(DISPLAYED_CHECK_CONCURRENCY, ids.length);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        for (;;) {
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= ids.length) {
+            return;
+          }
+          const id = ids[index];
+          if (await client.isDisplayed(id)) {
+            visible[index] = id;
+          }
+        }
+      })
+    );
+
+    return visible.filter((id): id is string => id !== null);
+  }
+
+  async function hasVisibleElement(query: IosQuery): Promise<boolean> {
+    const ids = await client.findElements(query);
+    if (ids.length === 0) {
+      return false;
+    }
+    if (await client.isDisplayed(ids[0])) {
+      return true;
+    }
+    let found = false;
+    let nextIndex = 1;
+    const workerCount = Math.min(DISPLAYED_CHECK_CONCURRENCY, ids.length - 1);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        for (;;) {
+          if (found) {
+            return;
+          }
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= ids.length) {
+            return;
+          }
+          if (await client.isDisplayed(ids[index])) {
+            found = true;
+            return;
+          }
+        }
+      })
+    );
+
+    return found;
+  }
+
   async function pressKey(key: string): Promise<void> {
     const name = key.trim().toLowerCase();
     if (name === "enter" || name === "return") {
@@ -253,6 +335,9 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     async count(selector: string): Promise<number> {
       return (await client.findElements(parseIosSelector(selector))).length;
     },
+    async visibleCount(selector: string): Promise<number> {
+      return (await visibleElementIds(parseIosSelector(selector))).length;
+    },
     async textContent(selector: string): Promise<string | null> {
       const id = await client.findElement(parseIosSelector(selector));
       if (id === null) {
@@ -281,9 +366,31 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       // No hover concept on touch devices.
       return rejectUnsupported("hover");
     },
-    scrollIntoView(): Promise<void> {
-      // Scroll gestures are a follow-up; reject clearly for now.
-      return rejectUnsupported("scrollTo");
+    // Screen-centred swipe via the W3C actions endpoint (PROWL-080). Direction
+    // semantics match the web step: scrolling "down" reveals lower content, so
+    // the finger drags up. See ./touch-gestures.ts.
+    async scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<void> {
+      await swipe(direction, amount);
+    },
+    // Resolve the element, short-circuiting only if WDA reports a matching
+    // element displayed in the viewport; hierarchy-only matches can be offscreen.
+    // Otherwise use the shared bounded down/up mobile probe before failing.
+    async scrollIntoView(selector: string): Promise<void> {
+      const query = parseIosSelector(selector);
+      let probeSize: ScreenSize | undefined;
+      const found = await probeScrollIntoView({
+        isVisible: () => hasVisibleElement(query),
+        swipe: async (direction) => {
+          probeSize ??= await client.windowSize();
+          await swipe(direction, scrollToProbeDistanceFor(direction, probeSize), probeSize);
+        }
+      });
+      if (found) {
+        return;
+      }
+      throw new Error(
+        `scrollTo: element "${selector}" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the iOS target`
+      );
     },
     setInputFiles(): Promise<void> {
       return rejectUnsupported("setInputFiles");
@@ -291,7 +398,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
     // semantic locators ----------------------------------------------------
     async countByRole(role: string, name: string): Promise<number> {
-      return (await client.findElements({ by: "role", role, name })).length;
+      return (await visibleElementIds({ by: "role", role, name })).length;
     },
     async clickFirstByRole(role: string, name: string): Promise<void> {
       const id = await client.findElement({ by: "role", role, name });
@@ -301,7 +408,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       await client.click(id);
     },
     async countByLabel(label: string): Promise<number> {
-      return (await client.findElements({ by: "label", value: label })).length;
+      return (await visibleElementIds({ by: "label", value: label })).length;
     },
     async fillFirstByLabel(label: string, value: string): Promise<void> {
       const id = await client.findElement({ by: "label", value: label });
@@ -320,7 +427,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       const timeoutMs = waitOptions?.timeout ?? DEFAULT_WAIT_TIMEOUT_MS;
       const deadline = Date.now() + timeoutMs;
       for (;;) {
-        if ((await client.findElements(query)).length > 0) {
+        if (await hasVisibleElement(query)) {
           return;
         }
         if (Date.now() >= deadline) {

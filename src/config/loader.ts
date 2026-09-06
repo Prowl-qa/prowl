@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import type { BrowserChannel, BrowserEngine, Config, Hunt, Target, Viewport } from "../types/index.js";
 import { configSchema, huntSchema } from "./schema.js";
 import { assertValidHuntName } from "./hunt-name.js";
+import { interpolateString } from "./interpolate.js";
 
 const DEFAULT_WEB_URL = "http://localhost:3000";
 
@@ -196,6 +197,27 @@ function mergeConfig(partial: Partial<Config>): Config {
   };
 }
 
+function envStringVars(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(([, value]) => value !== undefined) as Array<[string, string]>
+  );
+}
+
+function interpolateConfigStrings(value: unknown, vars: Record<string, string>): unknown {
+  if (typeof value === "string") {
+    return interpolateString(value, vars).value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => interpolateConfigStrings(item, vars));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, interpolateConfigStrings(item, vars)])
+    );
+  }
+  return value;
+}
+
 export function ensureAllowedDomain(allowed: string[], urlValue: string): string[] {
   try {
     const host = new URL(urlValue).hostname;
@@ -233,7 +255,8 @@ export function loadConfig(configPath?: string): {
 
   const raw = fs.readFileSync(resolvedPath, "utf-8");
   const parsed = yaml.parse(raw) ?? {};
-  const validated = configSchema.parse(parsed);
+  const interpolated = interpolateConfigStrings(parsed, envStringVars(process.env));
+  const validated = configSchema.parse(interpolated);
   const config = mergeConfig(validated as Partial<Config>);
 
   // allowedDomains only applies to the web target; the macOS target scopes on

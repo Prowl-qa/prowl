@@ -377,52 +377,12 @@ free via adb — then PROWL-059 (iOS simulator), then PROWL-060/061. **PROWL-062
 devices) is intentionally deferred** — code signing, Developer Mode, and iOS 17+ tunnels are the
 swamp that has kept even Maestro from shipping it; revisit with `go-ios` as the enabler.
 
-**Epic status (2026-09-01, {PROWL-077} review): FROZEN (experimental)** — Android and
-iOS-simulator support shipped and stays maintained, but no new scope until a real user asks;
-{PROWL-062} remains deferred. **Scoped exception (2026-09-04): {PROWL-080}** — the owner,
-dogfooding the iOS Simulator target on a real app, hit the missing scroll/swipe gap; that is
-the epic's documented unfreeze condition, so that one item is admitted.
-
-{PROWL-080} **ARCH-014: `scroll`/`swipe` gestures on mobile targets (iOS/Android)**
-   Mobile hunts currently have no way to scroll: `scroll` is gated web-only at validation (it
-   runs `window.scrollBy` via evaluate), and both mobile drivers hard-reject `scrollTo`
-   (`src/browser/ios-driver.ts:286`, `src/browser/android-driver.ts:314`). Any flow below the
-   fold is untestable on a phone-sized screen — the first real dogfood blocker on the iOS
-   target. Proposed shape: drive touch gestures through the **W3C actions endpoint**
-   (`POST /session/:id/actions`, pointer type `touch`), which both on-device agents
-   (WebDriverAgent, appium-uiautomator2-server) already support over the existing raw-`fetch`
-   transports — no new dependencies, same pattern on both platforms.
-
-**Found during**: Owner dogfooding the iOS Simulator target on a real app (2026-09-04)
-**Acceptance Criteria**:
-- `scroll: { direction, amount? }` works on iOS/Android via a synthesized touch swipe
-  (screen-relative; direction semantics match the web step — content moves as if scrolled)
-- `scrollTo: { selector }` scrolls the target element into view (platform scroll-to-element
-  gesture where the agent offers one, else bounded repeated swipes + visibility probe; clear
-  error if the element never appears)
-- Consider an explicit `swipe` step (direction/from/to coordinates) for gesture-driven UIs
-  (carousels, pull-to-refresh) — decide during design; not required for the core fix
-- The web-only step gate admits these steps for mobile targets; the macOS target keeps
-  rejecting them with a clear message (AX scrolling is a separate item if ever asked)
-- Step-compatibility matrix + README updated; unit tests with faked agents per repo pattern
-
-{PROWL-081} **INFRA-001: Harden mobile-e2e emulator boot (flaky CI gate)**
-   The `mobile-e2e.yml` device-verification job on the self-hosted mini fails intermittently:
-   the Android emulator sometimes doesn't (fully) boot, Settings never renders, and the
-   `android-smoke` hunt's 60s `waitForSelector` expires — run history shows a
-   failure-then-green-on-rerun pair on each of the last three branches. Worse, a prior failing
-   run logged `::error::Android emulator did not reach sys.boot_completed` *and* still ran the
-   hunt — the boot check doesn't stop the job, so an infra failure masquerades as a hunt
-   failure. This is CI maintenance of shipped mobile support, not new epic scope.
-
-**Found during**: Release v0.1.7 PR #68 Mobile E2E failure triage (2026-09-04)
-**Acceptance Criteria**:
-- The boot-wait step hard-fails the job (no hunt attempt) when `sys.boot_completed` isn't
-  reached, with a distinct, infra-labelled error
-- Boot reliability improved: retry the boot once and/or add a post-boot settle
-  (e.g. wait for `pm`/launcher readiness or a quick-boot snapshot) before launching Settings
-- After the change, an emulator flake shows as a fast infra failure, never a hunt timeout
-- Verified by the workflow's own history (no hunt-timeout-style failures from boot causes)
+**Epic status (2026-09-01, {PROWL-077} review; updated 2026-09-05): FROZEN (experimental)** —
+Android and iOS-simulator support shipped and stays maintained, but no new scope until a real
+user asks; {PROWL-062} remains deferred. The one admitted exception, {PROWL-080} (mobile
+scroll/swipe — the owner hit the gap dogfooding the iOS Simulator target, the epic's documented
+unfreeze condition), **shipped 2026-09-05** (see `docs/resolved.md`); the epic is frozen again,
+with an explicit `swipe` step noted there as a deferred follow-up should a user ask.
 
 {PROWL-062} **ARCH-012: Real iOS device support (DEFERRED — do not start)**
    Code signing of the WDA runner, Developer Mode enrollment, and iOS 17+ CoreDevice tunnels

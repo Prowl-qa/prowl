@@ -221,6 +221,17 @@ export function createPlaywrightDriver(page: Page): SessionDriver {
       await page.locator(selector).hover();
     },
 
+    async scroll(direction: "up" | "down" | "left" | "right", amount = 500): Promise<void> {
+      const deltas: Record<string, [number, number]> = {
+        up: [0, -amount],
+        down: [0, amount],
+        left: [-amount, 0],
+        right: [amount, 0]
+      };
+      const [x, y] = deltas[direction];
+      await page.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
+    },
+
     async scrollIntoView(selector: string): Promise<void> {
       await page.locator(selector).scrollIntoViewIfNeeded();
     },

@@ -69,6 +69,8 @@ export interface SessionDriver {
 
   // queries -----------------------------------------------------------------
   count(selector: string): Promise<number>;
+  /** Count only elements the driver considers visibly present, when it can distinguish visibility from existence. */
+  visibleCount?(selector: string): Promise<number>;
   textContent(selector: string): Promise<string | null>;
 
   // element interactions (explicit selector) --------------------------------
@@ -80,6 +82,12 @@ export interface SessionDriver {
   selectOption(selector: string, value: string): Promise<void>;
   selectOptionFirst(selector: string, value: string): Promise<void>;
   hover(selector: string): Promise<void>;
+  /**
+   * Scroll the viewport in `direction` by `amount` (engine-defined units: CSS
+   * pixels on web, a synthesized swipe distance on mobile). Native targets that
+   * have no scroll gesture (macOS) reject this.
+   */
+  scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<void>;
   scrollIntoView(selector: string): Promise<void>;
   setInputFiles(selector: string, files: string | string[]): Promise<void>;
 
