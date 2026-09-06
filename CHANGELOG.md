@@ -47,7 +47,9 @@ All notable changes to Prowl will be documented in this file.
   in the background before the first selector wait. Both smoke hunts gained a
   `scroll` step as live device proof of the new gestures, with a not-visible
   precondition before each swipe so the proof cannot pass without moving the
-  viewport.
+  viewport; they now assert the original top row leaves the viewport before
+  using bounded `scrollTo` for the exact below-the-fold target, avoiding brittle
+  dependence on one fixed swipe landing point.
 - **iOS exact visible-count queries now bound WDA `/displayed` concurrency.**
   Broad selectors still return exact visible counts, but the driver no longer
   fans out one WebDriverAgent request per hierarchy match at once.
