@@ -241,13 +241,8 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
   async function visibleElementIds(query: IosQuery): Promise<string[]> {
     const ids = await client.findElements(query);
-    const visible: string[] = [];
-    for (const id of ids) {
-      if (await client.isDisplayed(id)) {
-        visible.push(id);
-      }
-    }
-    return visible;
+    const visible = await Promise.all(ids.map(async (id) => ((await client.isDisplayed(id)) ? id : null)));
+    return visible.filter((id): id is string => id !== null);
   }
 
   async function hasVisibleElement(query: IosQuery): Promise<boolean> {

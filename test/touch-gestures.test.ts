@@ -31,6 +31,10 @@ describe("swipeDistanceFor (PROWL-080 amount→distance mapping)", () => {
     expect(swipeDistanceFor("down", PHONE, 250)).toBe(250);
   });
 
+  it("uses the absolute value for negative explicit amounts", () => {
+    expect(swipeDistanceFor("down", PHONE, -250)).toBe(250);
+  });
+
   it("clamps an oversized amount to the max fraction of the axis", () => {
     expect(swipeDistanceFor("down", PHONE, 100000)).toBe(Math.round(800 * MAX_SWIPE_FRACTION));
     expect(swipeDistanceFor("right", PHONE, 100000)).toBe(Math.round(400 * MAX_SWIPE_FRACTION));
@@ -100,6 +104,11 @@ describe("buildDirectionalSwipe (end-to-end geometry)", () => {
     const moves = actions.actions.filter((a) => a.type === "pointerMove");
     expect(moves[0]).toMatchObject({ x: 200, y: 600 });
     expect(moves[1]).toMatchObject({ x: 200, y: 200 });
+  });
+
+  it("normalizes a negative amount by reversing the scroll direction", () => {
+    expect(buildDirectionalSwipe("down", PHONE, -400)).toEqual(buildDirectionalSwipe("up", PHONE, 400));
+    expect(buildDirectionalSwipe("left", PHONE, -200)).toEqual(buildDirectionalSwipe("right", PHONE, 200));
   });
 });
 

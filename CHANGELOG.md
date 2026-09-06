@@ -17,7 +17,9 @@ All notable changes to Prowl will be documented in this file.
   up); Android reads screen dimensions through uiautomator2's direct
   `/window/current/size` route before posting the swipe. `scroll`'s optional
   `amount` maps 1:1 to the swipe distance in device points, clamped to a safe
-  fraction of the screen and defaulting to 75% of the relevant axis when omitted.
+  fraction of the screen and defaulting to 75% of the relevant axis when omitted;
+  negative amounts reverse direction, matching the web target's `window.scrollBy`
+  behavior.
   `scrollTo: { selector }` now uses one shared,
   bounded mobile probe: it preserves the old 10-swipe downward search, then
   reverses far enough to cross the starting viewport and search upward too before

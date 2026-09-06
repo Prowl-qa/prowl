@@ -89,6 +89,13 @@ export type ScrollIntoViewProbe = {
   directions?: readonly SwipeDirection[];
 };
 
+const OPPOSITE_SWIPE_DIRECTIONS: Record<SwipeDirection, SwipeDirection> = {
+  up: "down",
+  down: "up",
+  left: "right",
+  right: "left"
+};
+
 /** Run the shared mobile `scrollTo` probe, returning true once the target is visible. */
 export async function probeScrollIntoView({
   isVisible,
@@ -132,13 +139,15 @@ function isVertical(direction: SwipeDirection): boolean {
 /**
  * Resolve the swipe distance in device points for `direction` on a screen of
  * `size`. `amount` (the web step's pixel amount) maps 1:1 to swipe distance;
- * when omitted it defaults to {@link DEFAULT_SWIPE_FRACTION} of the axis. The
- * result is always clamped to [1, {@link MAX_SWIPE_FRACTION} · axis] so a swipe
- * can never run off-screen or collapse to nothing.
+ * negative values use their absolute distance (direction reversal happens in
+ * {@link buildDirectionalSwipe}), and omitted values default to
+ * {@link DEFAULT_SWIPE_FRACTION} of the axis. The result is always clamped to
+ * [1, {@link MAX_SWIPE_FRACTION} · axis] so a swipe can never run off-screen or
+ * collapse to nothing.
  */
 export function swipeDistanceFor(direction: SwipeDirection, size: ScreenSize, amount?: number): number {
   const axis = isVertical(direction) ? size.height : size.width;
-  const requested = amount ?? axis * DEFAULT_SWIPE_FRACTION;
+  const requested = amount === undefined ? axis * DEFAULT_SWIPE_FRACTION : Math.abs(amount);
   const max = axis * MAX_SWIPE_FRACTION;
   return Math.max(1, Math.round(Math.min(requested, max)));
 }
@@ -203,7 +212,9 @@ export function buildDirectionalSwipe(
   size: ScreenSize,
   amount?: number
 ): { actions: PointerActionSequence; distance: number; start: Point; end: Point } {
-  const distance = swipeDistanceFor(direction, size, amount);
-  const { start, end } = swipeEndpoints(direction, size, distance);
+  const normalizedDirection =
+    amount !== undefined && amount < 0 ? OPPOSITE_SWIPE_DIRECTIONS[direction] : direction;
+  const distance = swipeDistanceFor(normalizedDirection, size, amount);
+  const { start, end } = swipeEndpoints(normalizedDirection, size, distance);
   return { actions: buildSwipeActions(start, end), distance, start, end };
 }

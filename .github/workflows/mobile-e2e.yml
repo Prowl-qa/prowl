@@ -130,6 +130,7 @@ jobs:
           target:
             type: ios
             app: "com.apple.Preferences"
+            udid: "{{IOS_SIM_UDID}}"
           browser:
             headless: true
             timeout: 60000
@@ -155,25 +156,29 @@ jobs:
                 timeout: 60000
             - assert:
                 visible: "text=About"
+            # --- scroll gesture proof (PROWL-080): the General page is a long
+            # scrollable list, so a down-swipe must reveal a below-the-fold row.
+            - assert:
+                notVisible: "text=Transfer or Reset iPhone"
+            - scroll:
+                direction: down
+                amount: 600
+            - waitForSelector:
+                selector: "text=Transfer or Reset iPhone"
+                timeout: 20000
+            - assert:
+                visible: "text=Transfer or Reset iPhone"
+            # Return to the top before continuing the original About smoke.
+            - scroll:
+                direction: up
+                amount: 600
+            - waitForSelector:
+                selector: "text=About"
+                timeout: 20000
             - click: "About"
             - waitForSelector:
                 selector: "text=Name"
                 timeout: 60000
-            # --- scroll gesture proof (PROWL-080): the About page is a long
-            # scrollable list, so a down-swipe must reveal a below-the-fold row.
-            # NOTE: the exact field label varies across iOS versions; if the
-            # gate fails here, dump the tree (`prowl` /source) and adjust the
-            # text= below to a row that is genuinely off-screen at launch.
-            - assert:
-                notVisible: "text=Model Number"
-            - scroll:
-                direction: down
-                amount: 400
-            - waitForSelector:
-                selector: "text=Model Number"
-                timeout: 20000
-            - assert:
-                visible: "text=Model Number"
             - screenshot:
                 name: ios-general-about
           YAML
@@ -298,8 +303,28 @@ jobs:
             echo "Creating simulator $IOS_SIM ($devtype, $runtime)"
             xcrun simctl create "$IOS_SIM" "$devtype" "$runtime"
           fi
-          xcrun simctl boot "$IOS_SIM" || true
-          xcrun simctl bootstatus "$IOS_SIM"
+          udid="$(
+            xcrun simctl list devices --json | node -e '
+              const fs = require("node:fs");
+              const name = process.argv[1];
+              const data = JSON.parse(fs.readFileSync(0, "utf8"));
+              const devices = Object.values(data.devices ?? {}).flat()
+                .filter((device) => device && device.isAvailable !== false);
+              const matches = devices.filter((device) => device.name === name);
+              if (matches.length !== 1) {
+                const known = devices
+                  .map((device) => device.name + " (" + device.udid + ", " + device.state + ")")
+                  .join("; ") || "none";
+                console.error("Expected exactly one available simulator named \"" + name + "\", found " + matches.length + ". Available simulators: " + known);
+                process.exit(1);
+              }
+              process.stdout.write(matches[0].udid);
+            ' "$IOS_SIM"
+          )"
+          echo "Using iOS simulator $IOS_SIM ($udid)"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid"
+          echo "IOS_SIM_UDID=$udid" >> "$GITHUB_ENV"
 
       # PROWL-069: WDA is launched via `xcodebuild test-without-building` driven by
       # the generated `.xctestrun` (the XCTest host launch), which iOS 26+ accepts —
@@ -328,4 +353,4 @@ jobs:
         run: |
           adb -s emulator-5554 emu kill || true
           adb kill-server || true
-          xcrun simctl shutdown "$IOS_SIM" || true
+          xcrun simctl shutdown "${IOS_SIM_UDID:-$IOS_SIM}" || true
