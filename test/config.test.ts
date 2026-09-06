@@ -239,13 +239,18 @@ describe("loadConfig macOS target (PROWL-048)", () => {
 
   it("interpolates native target fields from .env in the config directory", () => {
     const original = process.env.IOS_SIM_UDID;
+    const originalAppId = process.env.IOS_APP_ID;
     const project = setupTargetProject(
-      "target:\n  type: ios\n  app: 'com.example.App'\n  udid: '{{IOS_SIM_UDID}}'\nguardrails:\n  allowedApps: ['com.example.App']\n"
+      "target:\n  type: ios\n  app: '{{IOS_APP_ID}}'\n  udid: '{{IOS_SIM_UDID}}'\nguardrails:\n  allowedApps: ['{{IOS_APP_ID}}']\n"
     );
     const cwd = process.cwd();
     try {
       delete process.env.IOS_SIM_UDID;
-      fs.writeFileSync(path.join(project, ".prowl", ".env"), "IOS_SIM_UDID=SIM-FROM-DOTENV\n");
+      delete process.env.IOS_APP_ID;
+      fs.writeFileSync(
+        path.join(project, ".prowl", ".env"),
+        "IOS_SIM_UDID=SIM-FROM-DOTENV\nIOS_APP_ID=com.example.App\n"
+      );
       process.chdir(project);
 
       const { config } = loadConfig();
@@ -254,12 +259,18 @@ describe("loadConfig macOS target (PROWL-048)", () => {
         app: "com.example.App",
         udid: "SIM-FROM-DOTENV"
       });
+      expect(config.guardrails.allowedApps).toEqual(["com.example.App"]);
     } finally {
       process.chdir(cwd);
       if (original === undefined) {
         delete process.env.IOS_SIM_UDID;
       } else {
         process.env.IOS_SIM_UDID = original;
+      }
+      if (originalAppId === undefined) {
+        delete process.env.IOS_APP_ID;
+      } else {
+        process.env.IOS_APP_ID = originalAppId;
       }
       fs.rmSync(project, { recursive: true, force: true });
     }
