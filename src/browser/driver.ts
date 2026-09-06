@@ -69,6 +69,8 @@ export interface SessionDriver {
 
   // queries -----------------------------------------------------------------
   count(selector: string): Promise<number>;
+  /** Count only elements the driver considers visibly present, when it can distinguish visibility from existence. */
+  visibleCount?(selector: string): Promise<number>;
   textContent(selector: string): Promise<string | null>;
 
   // element interactions (explicit selector) --------------------------------

@@ -260,7 +260,10 @@ describe("createIosDriver", () => {
     agent.displayed.set("visible", true);
     const { driver } = driverFor(agent);
 
-    expect(await driver.count("text=Model Number")).toBe(1);
+    expect(await driver.count("text=Model Number")).toBe(2);
+    expect(agent.displayedIds).toEqual([]);
+
+    expect(await driver.visibleCount!("text=Model Number")).toBe(1);
     expect(agent.displayedIds).toEqual(["offscreen", "visible"]);
   });
 
@@ -289,7 +292,7 @@ describe("createIosDriver", () => {
     };
     const { driver } = driverFor(agent);
 
-    expect(await driver.count("text=Row")).toBe(8);
+    expect(await driver.visibleCount!("text=Row")).toBe(8);
     expect(maxActive).toBeGreaterThan(1);
     expect(maxActive).toBeLessThanOrEqual(4);
   });

@@ -60,6 +60,10 @@ All notable changes to Prowl will be documented in this file.
   loaded from the config-directory `.env` file still fill missing environment
   variables without overriding `process.env`, and native target fields such as
   iOS `target.udid` no longer reach launch helpers as literal placeholders.
+- **iOS `count()` preserves selector existence semantics again.** Hunt-level
+  native `selectorExists` / `selectorNotExists` assertions now count raw WDA
+  hierarchy matches, while inline visible/notVisible checks and waits use the
+  displayed-only visibility path.
 
 ## [0.1.7] - 2026-09-04
 

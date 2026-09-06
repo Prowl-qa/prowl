@@ -333,6 +333,9 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
     // queries --------------------------------------------------------------
     async count(selector: string): Promise<number> {
+      return (await client.findElements(parseIosSelector(selector))).length;
+    },
+    async visibleCount(selector: string): Promise<number> {
       return (await visibleElementIds(parseIosSelector(selector))).length;
     },
     async textContent(selector: string): Promise<string | null> {

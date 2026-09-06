@@ -452,6 +452,10 @@ export function toVisibilitySelector(value: string): string {
   return textContainsSelector(value);
 }
 
+function countVisible(driver: SessionDriver, selector: string): Promise<number> {
+  return driver.visibleCount?.(selector) ?? driver.count(selector);
+}
+
 async function runInlineAssert(
   driver: SessionDriver,
   policy: RunPolicy,
@@ -465,7 +469,7 @@ async function runInlineAssert(
   if (assertion.visible !== undefined) {
     const selector = toVisibilitySelector(assertion.visible);
     policy.assertAllowedSelector(selector);
-    const count = await driver.count(selector);
+    const count = await countVisible(driver, selector);
     if (count === 0) {
       throw new Error(`Expected visible: ${assertion.visible}`);
     }
@@ -475,7 +479,7 @@ async function runInlineAssert(
   if (assertion.notVisible !== undefined) {
     const selector = toVisibilitySelector(assertion.notVisible);
     policy.assertAllowedSelector(selector);
-    const count = await driver.count(selector);
+    const count = await countVisible(driver, selector);
     if (count > 0) {
       throw new Error(`Expected not visible: ${assertion.notVisible}`);
     }
@@ -1010,7 +1014,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
       const condition = h.step.if;
       const selector = condition.visible ?? condition.notVisible!;
       h.policy.assertAllowedSelector(selector);
-      const count = await h.driver.count(selector);
+      const count = await countVisible(h.driver, selector);
       const conditionMet = condition.visible !== undefined ? count > 0 : count === 0;
 
       if (conditionMet) {
@@ -1102,7 +1106,7 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
         const whileSelector = repeat.while.visible ?? repeat.while.notVisible!;
         h.policy.assertAllowedSelector(whileSelector);
         for (let i = 0; i < maxIter; i++) {
-          const whileCount = await h.driver.count(whileSelector);
+          const whileCount = await countVisible(h.driver, whileSelector);
           const shouldContinue = repeat.while.visible !== undefined ? whileCount > 0 : whileCount === 0;
           if (!shouldContinue) break;
 

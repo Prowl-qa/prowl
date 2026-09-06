@@ -1465,6 +1465,46 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
+  it("uses driver visibleCount for if visibility conditions when available", async () => {
+    const count = vi.fn(async () => 1);
+    const visibleCount = vi.fn(async () => 0);
+    const driver = {
+      capabilities: new Set(["query"]),
+      parseTextSelector: () => null,
+      count,
+      visibleCount
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps = [
+      {
+        if: {
+          visible: "id=ready",
+          then: [{ wait: "100ms" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results.some((r) => r.type === "if > wait")).toBe(false);
+    expect(visibleCount).toHaveBeenCalledWith("id=ready");
+    expect(count).not.toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
   it("fails if step when condition selector is forbidden", async () => {
     const page = createMockPage({
       locatorCounts: { ".danger-banner": 1 }
@@ -1685,6 +1725,47 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(false);
     const repeatSteps = result.results.filter((r) => r.type.startsWith("repeat["));
     expect(repeatSteps).toHaveLength(0);
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("uses driver visibleCount for repeat while visibility conditions when available", async () => {
+    const count = vi.fn(async () => 1);
+    const visibleCount = vi.fn(async () => 0);
+    const driver = {
+      capabilities: new Set(["query"]),
+      parseTextSelector: () => null,
+      count,
+      visibleCount
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps = [
+      {
+        repeat: {
+          while: { visible: "id=load-more" },
+          maxIterations: 3,
+          steps: [{ wait: "100ms" }]
+        }
+      }
+    ] as Step[];
+
+    const result = await executeSteps({
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(result.results.some((r) => r.type === "repeat[0] > wait")).toBe(false);
+    expect(visibleCount).toHaveBeenCalledWith("id=load-more");
+    expect(count).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
@@ -2094,6 +2175,44 @@ describe("executeSteps", () => {
     expect(result.failed).toBe(false);
     expect(result.results[0].type).toBe("assert");
     expect(page.locator).toHaveBeenCalledWith(".error-banner");
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("uses driver visibleCount for inline visibility assertions when available", async () => {
+    const count = vi.fn(async () => 99);
+    const visibleCount = vi.fn()
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    const driver = {
+      capabilities: new Set(["query"]),
+      parseTextSelector: () => null,
+      count,
+      visibleCount
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [
+      { assert: { visible: "id=ready" } },
+      { assert: { notVisible: "id=hidden" } }
+    ];
+
+    const result = await executeSteps({
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "on-failure",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(false);
+    expect(visibleCount).toHaveBeenNthCalledWith(1, "id=ready");
+    expect(visibleCount).toHaveBeenNthCalledWith(2, "id=hidden");
+    expect(count).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
