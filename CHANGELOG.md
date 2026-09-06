@@ -4,6 +4,36 @@ All notable changes to Prowl will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`scroll` and `scrollTo` now work on the iOS and Android targets
+  (PROWL-080 / ARCH-014).** Mobile hunts could not scroll below the fold: the
+  directional `scroll` step was rejected at validation for every native target,
+  and `scrollTo` was hard-rejected by both mobile drivers. Both now drive a
+  synthesized touch swipe through the plain W3C actions endpoint
+  (`POST /session/:id/actions`) that WebDriverAgent (iOS) and
+  appium-uiautomator2-server (Android) already speak over the existing
+  raw-`fetch` transports — no new dependencies. Direction semantics match the
+  web step (scrolling "down" reveals content further down, so the finger swipes
+  up); `scroll`'s optional `amount` maps 1:1 to the swipe distance in device
+  points, clamped to a safe fraction of the screen and defaulting to 75% of the
+  relevant axis when omitted. `scrollTo: { selector }` short-circuits when the
+  element is already present, otherwise swipes down and re-probes up to 10 times
+  before failing with an error naming the selector and attempt count. The macOS
+  target still rejects both with a clear, target-named message (accessibility
+  scrolling there is a separate, unscheduled item). An explicit `swipe` step
+  (carousels, pull-to-refresh) is a deferred follow-up. The mobile targets stay
+  experimental.
+
+### Changed
+- **CI: the `mobile-e2e` Android boot is now a hard infra gate
+  (PROWL-081 / INFRA-001).** A failure to reach `sys.boot_completed` (or a
+  package manager that never answers) stops the job with a distinct `[infra]`
+  error before any hunt runs, so an emulator flake can no longer masquerade as a
+  hunt `waitForSelector` timeout. The boot retries once and settles on
+  package-manager readiness before launching Settings, logging what it waited
+  for. Both smoke hunts gained a `scroll` step as live device proof of the new
+  gestures.
+
 ## [0.1.7] - 2026-09-04
 
 ### Added
