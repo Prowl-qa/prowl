@@ -383,8 +383,17 @@ macOS target (with a clear error), and `prowl login` / URL guardrails do not app
 | `wait`, `waitForSelector` | `mockRoute` / `unmockRoute` |
 | `assert: visible` / `notVisible` | `evalScript`, `runScript` |
 | `screenshot`, `assertScreenshot` | `onDialog`, `select` / `selectOption` |
-| `hover`, `scrollTo` | `setInputFiles`, `waitForDownload` |
-| `repeat`, `if`, `runHunt`, `copyText` | `scroll` (directional), `assert: urlIncludes` / `urlEquals` |
+| `hover` | `setInputFiles`, `waitForDownload` |
+| `repeat`, `if`, `runHunt`, `copyText` | `assert: urlIncludes` / `urlEquals` |
+
+**Scroll gestures** (`scroll`, `scrollTo`) are a third category: supported on the
+**web, iOS, and Android** targets but **rejected on macOS** (accessibility scrolling
+there is not yet implemented). On the mobile targets they synthesize a touch swipe —
+`scroll: { direction, amount? }` swipes from the screen centre (direction semantics
+match the web step; `amount` maps to the swipe distance in device points, defaulting to
+75% of the relevant screen axis), and `scrollTo: { selector }` swipes down and re-probes
+until the element appears (bounded to 10 attempts). An explicit `swipe` step is a
+deferred follow-up.
 
 Notes: `press` accepts the same key vocabulary as the web target — single printable
 characters, `Enter`/`Return`/`Space`, `Tab`, `Escape`, `Backspace`, `Delete`, `Home`,
