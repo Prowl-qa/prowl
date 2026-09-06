@@ -205,7 +205,31 @@ jobs:
       - name: Boot the Android emulator
         run: |
           set -uo pipefail
+          emulator_pid=""
           adb start-server
+
+          cleanup_launched_emulator() {
+            local pid="${emulator_pid:-}"
+            if [ -z "$pid" ]; then
+              return 0
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "Stopping emulator process ${pid}"
+              kill "$pid" 2>/dev/null || true
+              for _ in $(seq 1 10); do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                  wait "$pid" 2>/dev/null || true
+                  emulator_pid=""
+                  return 0
+                fi
+                sleep 1
+              done
+              echo "Force stopping emulator process ${pid}"
+              kill -9 "$pid" 2>/dev/null || true
+            fi
+            wait "$pid" 2>/dev/null || true
+            emulator_pid=""
+          }
 
           # Bring up the emulator and wait (up to ~300s total) for device
           # connection and sys.boot_completed.
@@ -217,7 +241,8 @@ jobs:
             # Headless boot, no snapshot — matches the runner-verified invocation.
             nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
               > "$RUNNER_TEMP/emulator.log" 2>&1 &
-            echo "Boot attempt ${attempt}: emulator launched (pid $!); waiting for device…"
+            emulator_pid="$!"
+            echo "Boot attempt ${attempt}: emulator launched (pid ${emulator_pid}); waiting for device…"
             while [ $((SECONDS - start)) -lt "$boot_deadline_s" ]; do
               if adb devices | awk 'NR > 1 && $2 == "device" { found=1 } END { exit found ? 0 : 1 }'; then
                 elapsed=$((SECONDS - start))
@@ -268,6 +293,7 @@ jobs:
             fi
             echo "::warning::Android emulator boot attempt ${attempt} failed; killing and retrying"
             adb -s emulator-5554 emu kill || true
+            cleanup_launched_emulator
             adb kill-server || true
             adb start-server
             sleep 3

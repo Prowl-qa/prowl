@@ -41,15 +41,15 @@ All notable changes to Prowl will be documented in this file.
   error before any hunt runs, so an emulator flake can no longer masquerade as a
   hunt `waitForSelector` timeout. The boot retries once, bounds device
   connection polling under the same 300s boot deadline as `sys.boot_completed`,
-  and settles on package-manager readiness before launching Settings, logging
-  what it waited for. Android sessions also re-launch the target app after the
-  uiautomator2 session attaches so instrumentation startup cannot leave the app
-  in the background before the first selector wait. Both smoke hunts gained a
-  `scroll` step as live device proof of the new gestures, with a not-visible
-  precondition before each swipe so the proof cannot pass without moving the
-  viewport; they now assert the original top row leaves the viewport before
-  using bounded `scrollTo` for the exact below-the-fold target, avoiding brittle
-  dependence on one fixed swipe landing point.
+  what it waited for, and terminates/reaps the launched emulator process before
+  restarting ADB after a failed attempt so stale AVD locks cannot break the
+  retry. Android sessions also re-launch the target app after the uiautomator2
+  session attaches so instrumentation startup cannot leave the app in the
+  background before the first selector wait. Both smoke hunts gained a `scroll`
+  step as live device proof of the new gestures, with a not-visible precondition
+  before each swipe so the proof cannot pass without moving the viewport; the
+  follow-up assertions now use bounded `scrollTo` for exact below-the-fold
+  targets, avoiding brittle dependence on one fixed swipe landing point.
 - **iOS exact visible-count queries now bound WDA `/displayed` concurrency.**
   Broad selectors still return exact visible counts, but the driver no longer
   fans out one WebDriverAgent request per hierarchy match at once.
