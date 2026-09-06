@@ -30,6 +30,7 @@ class FakeAgent implements IosAgentClient {
   elements: string[] = ["el-1"];
   text: string | null = "hello";
   windowSizeValue: ScreenSize = { width: 400, height: 800 };
+  windowSizeCalls = 0;
   performedActions: PointerActionSequence[] = [];
   displayed = new Map<string, boolean>();
   displayedIds: string[] = [];
@@ -67,6 +68,7 @@ class FakeAgent implements IosAgentClient {
     this.homescreens += 1;
   }
   async windowSize(): Promise<ScreenSize> {
+    this.windowSizeCalls += 1;
     return this.windowSizeValue;
   }
   async performActions(actions: PointerActionSequence): Promise<void> {
@@ -390,6 +392,7 @@ describe("createIosDriver touch gestures (PROWL-080)", () => {
     const { driver } = driverFor(agent);
     await driver.scrollIntoView("id=footer");
     expect(agent.performedActions).toHaveLength(0);
+    expect(agent.windowSizeCalls).toBe(0);
     expect(agent.displayedIds).toEqual(["el-1"]);
   });
 
@@ -400,6 +403,7 @@ describe("createIosDriver touch gestures (PROWL-080)", () => {
     const { driver } = driverFor(agent);
     await driver.scrollIntoView("id=footer");
     expect(agent.performedActions).toHaveLength(2);
+    expect(agent.windowSizeCalls).toBe(1);
   });
 
   it("scrollTo keeps swiping when WDA matches are still offscreen", async () => {

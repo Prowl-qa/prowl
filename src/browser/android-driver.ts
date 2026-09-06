@@ -278,9 +278,9 @@ export function createAndroidDriver(
     await client.setValue(await resolveOne(selector), value);
   }
 
-  async function swipe(direction: SwipeDirection, amount?: number): Promise<void> {
-    const size = await client.windowSize();
-    const { actions } = buildDirectionalSwipe(direction, size, amount);
+  async function swipe(direction: SwipeDirection, amount?: number, size?: ScreenSize): Promise<void> {
+    const actualSize = size ?? (await client.windowSize());
+    const { actions } = buildDirectionalSwipe(direction, actualSize, amount);
     await client.performActions(actions);
   }
 
@@ -338,9 +338,13 @@ export function createAndroidDriver(
     // failing with a message naming the selector and attempts.
     async scrollIntoView(selector: string): Promise<void> {
       const query = parseAndroidSelector(selector);
+      let probeSize: ScreenSize | undefined;
       const found = await probeScrollIntoView({
         isVisible: async () => (await client.findElements(query)).length > 0,
-        swipe
+        swipe: async (direction) => {
+          probeSize ??= await client.windowSize();
+          await swipe(direction, undefined, probeSize);
+        }
       });
       if (found) {
         return;

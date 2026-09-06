@@ -29,6 +29,7 @@ class FakeAgent implements AndroidAgentClient {
   text: string | null = "hello";
   png: Buffer = Buffer.from("PNGDATA");
   windowSizeValue: ScreenSize = { width: 1080, height: 1920 };
+  windowSizeCalls = 0;
   performedActions: PointerActionSequence[] = [];
   /** When set, `findElements` returns these results in order per call. */
   findElementsSequence: string[][] | null = null;
@@ -60,6 +61,7 @@ class FakeAgent implements AndroidAgentClient {
     return this.png;
   }
   async windowSize(): Promise<ScreenSize> {
+    this.windowSizeCalls += 1;
     return this.windowSizeValue;
   }
   async performActions(actions: PointerActionSequence): Promise<void> {
@@ -360,6 +362,7 @@ describe("createAndroidDriver touch gestures (PROWL-080)", () => {
     const driver = createAndroidDriver(agent);
     await driver.scrollIntoView("id=footer");
     expect(agent.performedActions).toHaveLength(0);
+    expect(agent.windowSizeCalls).toBe(0);
   });
 
   it("scrollTo swipes until the element appears", async () => {
@@ -368,6 +371,7 @@ describe("createAndroidDriver touch gestures (PROWL-080)", () => {
     const driver = createAndroidDriver(agent);
     await driver.scrollIntoView("id=footer");
     expect(agent.performedActions).toHaveLength(3);
+    expect(agent.windowSizeCalls).toBe(1);
   });
 
   it("scrollTo fails with a clear bounded error when never visible", async () => {

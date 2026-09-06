@@ -35,6 +35,13 @@ describe("swipeDistanceFor (PROWL-080 amount→distance mapping)", () => {
     expect(swipeDistanceFor("down", PHONE, -250)).toBe(250);
   });
 
+  it("rejects non-finite explicit amounts before building coordinates", () => {
+    expect(() => swipeDistanceFor("down", PHONE, Number.NaN)).toThrow("scroll amount must be a finite number");
+    expect(() => buildDirectionalSwipe("down", PHONE, Number.POSITIVE_INFINITY)).toThrow(
+      "scroll amount must be a finite number"
+    );
+  });
+
   it("clamps an oversized amount to the max fraction of the axis", () => {
     expect(swipeDistanceFor("down", PHONE, 100000)).toBe(Math.round(800 * MAX_SWIPE_FRACTION));
     expect(swipeDistanceFor("right", PHONE, 100000)).toBe(Math.round(400 * MAX_SWIPE_FRACTION));

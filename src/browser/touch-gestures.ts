@@ -146,6 +146,9 @@ function isVertical(direction: SwipeDirection): boolean {
  * collapse to nothing.
  */
 export function swipeDistanceFor(direction: SwipeDirection, size: ScreenSize, amount?: number): number {
+  if (amount !== undefined && !Number.isFinite(amount)) {
+    throw new Error("scroll amount must be a finite number");
+  }
   const axis = isVertical(direction) ? size.height : size.width;
   const requested = amount === undefined ? axis * DEFAULT_SWIPE_FRACTION : Math.abs(amount);
   const max = axis * MAX_SWIPE_FRACTION;

@@ -233,9 +233,9 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     await client.setValue(await resolveOne(selector), value);
   }
 
-  async function swipe(direction: SwipeDirection, amount?: number): Promise<void> {
-    const size = await client.windowSize();
-    const { actions } = buildDirectionalSwipe(direction, size, amount);
+  async function swipe(direction: SwipeDirection, amount?: number, size?: ScreenSize): Promise<void> {
+    const actualSize = size ?? (await client.windowSize());
+    const { actions } = buildDirectionalSwipe(direction, actualSize, amount);
     await client.performActions(actions);
   }
 
@@ -328,9 +328,13 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     // Otherwise use the shared bounded down/up mobile probe before failing.
     async scrollIntoView(selector: string): Promise<void> {
       const query = parseIosSelector(selector);
+      let probeSize: ScreenSize | undefined;
       const found = await probeScrollIntoView({
         isVisible: () => hasVisibleElement(query),
-        swipe
+        swipe: async (direction) => {
+          probeSize ??= await client.windowSize();
+          await swipe(direction, undefined, probeSize);
+        }
       });
       if (found) {
         return;
