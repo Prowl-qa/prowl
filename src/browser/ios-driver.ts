@@ -34,6 +34,7 @@ import {
 import {
   buildDirectionalSwipe,
   MAX_SCROLL_TO_SWIPES,
+  probeScrollIntoView,
   type PointerActionSequence,
   type ScreenSize,
   type SwipeDirection
@@ -78,6 +79,8 @@ export interface IosAgentClient {
   /** Replace an element's text (W3C `element/value`). */
   setValue(elementId: string, text: string): Promise<void>;
   getText(elementId: string): Promise<string | null>;
+  /** True only when WDA reports the element is displayed in the current viewport. */
+  isDisplayed(elementId: string): Promise<boolean>;
   /** Send raw key sequences to the focused element (WDA `/wda/keys`). */
   sendKeys(keys: string[]): Promise<void>;
   /** Return to the springboard home screen (WDA `/wda/homescreen`). */
@@ -236,6 +239,21 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     await client.performActions(actions);
   }
 
+  async function visibleElementIds(query: IosQuery): Promise<string[]> {
+    const ids = await client.findElements(query);
+    const visible: string[] = [];
+    for (const id of ids) {
+      if (await client.isDisplayed(id)) {
+        visible.push(id);
+      }
+    }
+    return visible;
+  }
+
+  async function hasVisibleElement(query: IosQuery): Promise<boolean> {
+    return (await visibleElementIds(query)).length > 0;
+  }
+
   async function pressKey(key: string): Promise<void> {
     const name = key.trim().toLowerCase();
     if (name === "enter" || name === "return") {
@@ -268,7 +286,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
     // queries --------------------------------------------------------------
     async count(selector: string): Promise<number> {
-      return (await client.findElements(parseIosSelector(selector))).length;
+      return (await visibleElementIds(parseIosSelector(selector))).length;
     },
     async textContent(selector: string): Promise<string | null> {
       const id = await client.findElement(parseIosSelector(selector));
@@ -304,19 +322,17 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     async scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<void> {
       await swipe(direction, amount);
     },
-    // Resolve the element, short-circuiting if it is already present in the
-    // hierarchy; otherwise swipe down and re-probe, up to MAX_SCROLL_TO_SWIPES
-    // times, before failing with a message naming the selector and attempts.
+    // Resolve the element, short-circuiting only if WDA reports a matching
+    // element displayed in the viewport; hierarchy-only matches can be offscreen.
+    // Otherwise use the shared bounded down/up mobile probe before failing.
     async scrollIntoView(selector: string): Promise<void> {
       const query = parseIosSelector(selector);
-      if ((await client.findElements(query)).length > 0) {
+      const found = await probeScrollIntoView({
+        isVisible: () => hasVisibleElement(query),
+        swipe
+      });
+      if (found) {
         return;
-      }
-      for (let attempt = 1; attempt <= MAX_SCROLL_TO_SWIPES; attempt += 1) {
-        await swipe("down");
-        if ((await client.findElements(query)).length > 0) {
-          return;
-        }
       }
       throw new Error(
         `scrollTo: element "${selector}" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the iOS target`
@@ -328,7 +344,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
     // semantic locators ----------------------------------------------------
     async countByRole(role: string, name: string): Promise<number> {
-      return (await client.findElements({ by: "role", role, name })).length;
+      return (await visibleElementIds({ by: "role", role, name })).length;
     },
     async clickFirstByRole(role: string, name: string): Promise<void> {
       const id = await client.findElement({ by: "role", role, name });
@@ -338,7 +354,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       await client.click(id);
     },
     async countByLabel(label: string): Promise<number> {
-      return (await client.findElements({ by: "label", value: label })).length;
+      return (await visibleElementIds({ by: "label", value: label })).length;
     },
     async fillFirstByLabel(label: string, value: string): Promise<void> {
       const id = await client.findElement({ by: "label", value: label });
@@ -357,7 +373,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       const timeoutMs = waitOptions?.timeout ?? DEFAULT_WAIT_TIMEOUT_MS;
       const deadline = Date.now() + timeoutMs;
       for (;;) {
-        if ((await client.findElements(query)).length > 0) {
+        if (await hasVisibleElement(query)) {
           return;
         }
         if (Date.now() >= deadline) {

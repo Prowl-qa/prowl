@@ -4,6 +4,10 @@ import {
   buildSwipeActions,
   DEFAULT_SWIPE_FRACTION,
   MAX_SWIPE_FRACTION,
+  MAX_SCROLL_TO_SWIPES,
+  probeScrollIntoView,
+  SCROLL_TO_PROBE_DIRECTIONS,
+  SCROLL_TO_SWEEP_DEPTH,
   SWIPE_HOLD_MS,
   SWIPE_MOVE_DURATION_MS,
   swipeDistanceFor,
@@ -96,6 +100,51 @@ describe("buildDirectionalSwipe (end-to-end geometry)", () => {
     const moves = actions.actions.filter((a) => a.type === "pointerMove");
     expect(moves[0]).toMatchObject({ x: 200, y: 600 });
     expect(moves[1]).toMatchObject({ x: 200, y: 200 });
+  });
+});
+
+describe("probeScrollIntoView", () => {
+  it("keeps the old downward depth and then reverses past the starting viewport", async () => {
+    expect(SCROLL_TO_PROBE_DIRECTIONS).toHaveLength(MAX_SCROLL_TO_SWIPES);
+    expect(SCROLL_TO_PROBE_DIRECTIONS.slice(0, SCROLL_TO_SWEEP_DEPTH)).toEqual(
+      Array.from({ length: SCROLL_TO_SWEEP_DEPTH }, () => "down")
+    );
+    expect(SCROLL_TO_PROBE_DIRECTIONS.slice(SCROLL_TO_SWEEP_DEPTH)).toEqual(
+      Array.from({ length: SCROLL_TO_SWEEP_DEPTH * 2 }, () => "up")
+    );
+  });
+
+  it("returns true without swiping when the target is already visible", async () => {
+    const swipes: string[] = [];
+
+    await expect(
+      probeScrollIntoView({
+        isVisible: async () => true,
+        swipe: async (direction) => {
+          swipes.push(direction);
+        }
+      })
+    ).resolves.toBe(true);
+    expect(swipes).toEqual([]);
+  });
+
+  it("uses the supplied bounded probe order until the target appears", async () => {
+    const swipes: string[] = [];
+    let probes = 0;
+
+    await expect(
+      probeScrollIntoView({
+        directions: ["down", "up", "up"],
+        isVisible: async () => {
+          probes += 1;
+          return probes === 4;
+        },
+        swipe: async (direction) => {
+          swipes.push(direction);
+        }
+      })
+    ).resolves.toBe(true);
+    expect(swipes).toEqual(["down", "up", "up"]);
   });
 });
 

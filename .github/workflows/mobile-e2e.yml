@@ -102,6 +102,8 @@ jobs:
             # NOTE: the exact bottom-of-list label varies across Android
             # versions; if the gate fails here on the runner's AVD, dump the
             # tree (`adb shell uiautomator dump`) and adjust the text= below.
+            - assert:
+                notVisible: "text=System"
             - scroll:
                 direction: down
                 amount: 1200
@@ -162,6 +164,8 @@ jobs:
             # NOTE: the exact field label varies across iOS versions; if the
             # gate fails here, dump the tree (`prowl` /source) and adjust the
             # text= below to a row that is genuinely off-screen at launch.
+            - assert:
+                notVisible: "text=Model Number"
             - scroll:
                 direction: down
                 amount: 400
@@ -185,16 +189,31 @@ jobs:
           set -uo pipefail
           adb start-server
 
-          # Bring up the emulator and wait (up to ~300s) for sys.boot_completed.
+          # Bring up the emulator and wait (up to ~300s total) for device
+          # connection and sys.boot_completed.
           wait_for_boot() {
-            local attempt="$1" start elapsed
+            local attempt="$1" start elapsed boot_deadline_s device_connected
             start=$SECONDS
+            boot_deadline_s=300
+            device_connected=0
             # Headless boot, no snapshot — matches the runner-verified invocation.
             nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
               > "$RUNNER_TEMP/emulator.log" 2>&1 &
             echo "Boot attempt ${attempt}: emulator launched (pid $!); waiting for device…"
-            adb wait-for-device
-            for _ in $(seq 1 150); do
+            while [ $((SECONDS - start)) -lt "$boot_deadline_s" ]; do
+              if adb devices | awk 'NR > 1 && $2 == "device" { found=1 } END { exit found ? 0 : 1 }'; then
+                elapsed=$((SECONDS - start))
+                echo "Boot attempt ${attempt}: adb device connected after ${elapsed}s"
+                device_connected=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$device_connected" != "1" ]; then
+              echo "Boot attempt ${attempt}: adb device did not connect after $((SECONDS - start))s"
+              return 1
+            fi
+            while [ $((SECONDS - start)) -lt "$boot_deadline_s" ]; do
               if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
                 elapsed=$((SECONDS - start))
                 echo "Boot attempt ${attempt}: sys.boot_completed reached after ${elapsed}s"

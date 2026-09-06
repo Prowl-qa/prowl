@@ -28,6 +28,9 @@ class FakeAgent implements IosAgentClient {
   async getText(): Promise<string | null> {
     return null;
   }
+  async isDisplayed(): Promise<boolean> {
+    return true;
+  }
   async sendKeys(): Promise<void> {}
   async homescreen(): Promise<void> {}
   async windowSize(): Promise<{ width: number; height: number }> {

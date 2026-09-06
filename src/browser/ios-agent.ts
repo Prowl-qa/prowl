@@ -259,6 +259,16 @@ export function createWdaAgentClient(transport: WdaTransport, sessionId: string)
       const value = await transport.request("GET", `${base}/element/${elementId}/text`);
       return typeof value === "string" ? value : value == null ? null : String(value);
     },
+    async isDisplayed(elementId: string): Promise<boolean> {
+      try {
+        return (await transport.request("GET", `${base}/element/${elementId}/displayed`)) === true;
+      } catch (error) {
+        if (isNoSuchElement(error)) {
+          return false;
+        }
+        throw error;
+      }
+    },
     async sendKeys(keys: string[]): Promise<void> {
       // Session-scoped key input to the active element (WDA `/wda/keys`).
       await transport.request("POST", `${base}/wda/keys`, { value: keys });

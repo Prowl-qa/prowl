@@ -67,8 +67,45 @@ export const SWIPE_HOLD_MS = 100;
 /** Milliseconds the drag itself takes (a natural, inertia-free swipe). */
 export const SWIPE_MOVE_DURATION_MS = 300;
 
+/** Number of downward swipes `scrollTo` tries before sweeping back upward. */
+export const SCROLL_TO_SWEEP_DEPTH = 10;
+
+/**
+ * Shared vertical probe order for mobile `scrollTo`: first preserve the old
+ * downward search depth, then reverse far enough to cross the starting viewport
+ * and search above it too.
+ */
+export const SCROLL_TO_PROBE_DIRECTIONS: readonly SwipeDirection[] = [
+  ...Array.from({ length: SCROLL_TO_SWEEP_DEPTH }, () => "down" as const),
+  ...Array.from({ length: SCROLL_TO_SWEEP_DEPTH * 2 }, () => "up" as const)
+];
+
 /** Maximum directional swipes `scrollTo` attempts before giving up. */
-export const MAX_SCROLL_TO_SWIPES = 10;
+export const MAX_SCROLL_TO_SWIPES = SCROLL_TO_PROBE_DIRECTIONS.length;
+
+export type ScrollIntoViewProbe = {
+  isVisible: () => Promise<boolean>;
+  swipe: (direction: SwipeDirection) => Promise<void>;
+  directions?: readonly SwipeDirection[];
+};
+
+/** Run the shared mobile `scrollTo` probe, returning true once the target is visible. */
+export async function probeScrollIntoView({
+  isVisible,
+  swipe,
+  directions = SCROLL_TO_PROBE_DIRECTIONS
+}: ScrollIntoViewProbe): Promise<boolean> {
+  if (await isVisible()) {
+    return true;
+  }
+  for (const direction of directions) {
+    await swipe(direction);
+    if (await isVisible()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Coerce an agent's window-size/rect payload into a {@link ScreenSize}. Accepts

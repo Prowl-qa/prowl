@@ -35,6 +35,7 @@ import {
 import {
   buildDirectionalSwipe,
   MAX_SCROLL_TO_SWIPES,
+  probeScrollIntoView,
   type PointerActionSequence,
   type ScreenSize,
   type SwipeDirection
@@ -333,18 +334,16 @@ export function createAndroidDriver(
       await swipe(direction, amount);
     },
     // Resolve the element, short-circuiting if it is already present in the
-    // hierarchy; otherwise swipe down and re-probe, up to MAX_SCROLL_TO_SWIPES
-    // times, before failing with a message naming the selector and attempts.
+    // hierarchy; otherwise use the shared bounded down/up mobile probe before
+    // failing with a message naming the selector and attempts.
     async scrollIntoView(selector: string): Promise<void> {
       const query = parseAndroidSelector(selector);
-      if ((await client.findElements(query)).length > 0) {
+      const found = await probeScrollIntoView({
+        isVisible: async () => (await client.findElements(query)).length > 0,
+        swipe
+      });
+      if (found) {
         return;
-      }
-      for (let attempt = 1; attempt <= MAX_SCROLL_TO_SWIPES; attempt += 1) {
-        await swipe("down");
-        if ((await client.findElements(query)).length > 0) {
-          return;
-        }
       }
       throw new Error(
         `scrollTo: element "${selector}" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the Android target`

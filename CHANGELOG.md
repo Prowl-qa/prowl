@@ -16,23 +16,29 @@ All notable changes to Prowl will be documented in this file.
   web step (scrolling "down" reveals content further down, so the finger swipes
   up); `scroll`'s optional `amount` maps 1:1 to the swipe distance in device
   points, clamped to a safe fraction of the screen and defaulting to 75% of the
-  relevant axis when omitted. `scrollTo: { selector }` short-circuits when the
-  element is already present, otherwise swipes down and re-probes up to 10 times
-  before failing with an error naming the selector and attempt count. `scrollTo`
-  is unchanged on macOS (it still resolves to AXScrollToVisible); the directional
-  `scroll` step has no macOS accessibility equivalent and is rejected there with
-  a clear, target-named message. An explicit `swipe` step (carousels,
-  pull-to-refresh) is a deferred follow-up. The mobile targets stay experimental.
+  relevant axis when omitted. `scrollTo: { selector }` now uses one shared,
+  bounded mobile probe: it preserves the old 10-swipe downward search, then
+  reverses far enough to cross the starting viewport and search upward too before
+  failing with an error naming the selector and attempt count. On iOS, matching
+  WDA hierarchy elements must also pass the element `/displayed` endpoint before
+  `scrollTo`, `waitForSelector`, or inline visible/notVisible checks treat them
+  as visible. `scrollTo` is unchanged on macOS (it still resolves to
+  AXScrollToVisible); the directional `scroll` step has no macOS accessibility
+  equivalent and is rejected there with a clear, target-named message. An
+  explicit `swipe` step (carousels, pull-to-refresh) is a deferred follow-up. The
+  mobile targets stay experimental.
 
 ### Changed
 - **CI: the `mobile-e2e` Android boot is now a hard infra gate
   (PROWL-081 / INFRA-001).** A failure to reach `sys.boot_completed` (or a
   package manager that never answers) stops the job with a distinct `[infra]`
   error before any hunt runs, so an emulator flake can no longer masquerade as a
-  hunt `waitForSelector` timeout. The boot retries once and settles on
-  package-manager readiness before launching Settings, logging what it waited
-  for. Both smoke hunts gained a `scroll` step as live device proof of the new
-  gestures.
+  hunt `waitForSelector` timeout. The boot retries once, bounds device
+  connection polling under the same 300s boot deadline as `sys.boot_completed`,
+  and settles on package-manager readiness before launching Settings, logging
+  what it waited for. Both smoke hunts gained a `scroll` step as live device
+  proof of the new gestures, with a not-visible precondition before each swipe so
+  the proof cannot pass without moving the viewport.
 
 ## [0.1.7] - 2026-09-04
 

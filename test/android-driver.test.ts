@@ -11,7 +11,11 @@ import {
   type AndroidAgentClient,
   type AndroidQuery
 } from "../src/browser/android-driver.js";
-import type { PointerActionSequence, ScreenSize } from "../src/browser/touch-gestures.js";
+import {
+  MAX_SCROLL_TO_SWIPES,
+  type PointerActionSequence,
+  type ScreenSize
+} from "../src/browser/touch-gestures.js";
 
 class FakeAgent implements AndroidAgentClient {
   findElementQueries: AndroidQuery[] = [];
@@ -371,8 +375,22 @@ describe("createAndroidDriver touch gestures (PROWL-080)", () => {
     agent.elements = [];
     const driver = createAndroidDriver(agent);
     await expect(driver.scrollIntoView("id=ghost")).rejects.toThrow(
-      'scrollTo: element "id=ghost" not visible after 10 scroll attempts on the Android target'
+      `scrollTo: element "id=ghost" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the Android target`
     );
-    expect(agent.performedActions).toHaveLength(10);
+    expect(agent.performedActions).toHaveLength(MAX_SCROLL_TO_SWIPES);
+  });
+
+  it("scrollTo reverses direction to find a target above the initial viewport", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [];
+    agent.findElements = async (query) => {
+      agent.findElementsQueries.push(query);
+      return agent.performedActions.length === 21 ? ["el-1"] : [];
+    };
+    const driver = createAndroidDriver(agent);
+    await driver.scrollIntoView("id=header");
+    expect(agent.performedActions).toHaveLength(21);
+    const lastMoves = agent.performedActions.at(-1)!.actions.filter((a) => a.type === "pointerMove");
+    expect((lastMoves[1] as { y: number }).y).toBeGreaterThan((lastMoves[0] as { y: number }).y);
   });
 });
