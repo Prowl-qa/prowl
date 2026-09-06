@@ -18,11 +18,11 @@ All notable changes to Prowl will be documented in this file.
   points, clamped to a safe fraction of the screen and defaulting to 75% of the
   relevant axis when omitted. `scrollTo: { selector }` short-circuits when the
   element is already present, otherwise swipes down and re-probes up to 10 times
-  before failing with an error naming the selector and attempt count. The macOS
-  target still rejects both with a clear, target-named message (accessibility
-  scrolling there is a separate, unscheduled item). An explicit `swipe` step
-  (carousels, pull-to-refresh) is a deferred follow-up. The mobile targets stay
-  experimental.
+  before failing with an error naming the selector and attempt count. `scrollTo`
+  is unchanged on macOS (it still resolves to AXScrollToVisible); the directional
+  `scroll` step has no macOS accessibility equivalent and is rejected there with
+  a clear, target-named message. An explicit `swipe` step (carousels,
+  pull-to-refresh) is a deferred follow-up. The mobile targets stay experimental.
 
 ### Changed
 - **CI: the `mobile-e2e` Android boot is now a hard infra gate
