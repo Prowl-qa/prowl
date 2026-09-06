@@ -271,7 +271,14 @@ jobs:
 
       - name: Run the Android smoke hunt
         working-directory: ${{ runner.temp }}/android
-        run: $PROWL run android-smoke
+        run: |
+          set -euo pipefail
+          # Persistent AVDs can retain a launcher ANR dialog from a prior run.
+          # The Settings screen stays visible behind it, but the dialog owns the
+          # active UI hierarchy, so uiautomator2 cannot resolve Settings rows.
+          adb shell am force-stop com.google.android.apps.nexuslauncher || true
+          adb shell am force-stop com.android.launcher3 || true
+          $PROWL run android-smoke
 
       - name: Select iOS simulator runtime
         id: ios-runtime
