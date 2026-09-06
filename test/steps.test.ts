@@ -1118,13 +1118,23 @@ describe("executeSteps", () => {
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
-  it("executes scroll step", async () => {
+  it("dispatches scroll steps through the driver", async () => {
     const page = createMockPage();
+    const scrollSpy = vi.fn(async () => undefined);
+    const driver = {
+      capabilities: new Set(["interact"]),
+      parseTextSelector: () => null,
+      scroll: scrollSpy
+    } as unknown as SessionDriver;
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
-    const steps: Step[] = [{ scroll: { direction: "down", amount: 300 } }];
+    const steps: Step[] = [
+      { scroll: { direction: "down" } },
+      { scroll: { direction: "up", amount: 300 } }
+    ];
 
     const result = await executeSteps({
       page: page as unknown as Page,
+      driver,
       steps,
       targetUrl: "http://localhost",
       runDir,
@@ -1138,9 +1148,47 @@ describe("executeSteps", () => {
     });
 
     expect(result.failed).toBe(false);
-    expect(result.results[0].type).toBe("scroll");
-    expect(result.results[0].value).toBe("down 300px");
-    expect(page.evaluate).toHaveBeenCalled();
+    expect(scrollSpy).toHaveBeenNthCalledWith(1, "down", undefined);
+    expect(scrollSpy).toHaveBeenNthCalledWith(2, "up", 300);
+    expect(result.results[0]).toMatchObject({ type: "scroll", value: "down" });
+    expect(result.results[1]).toMatchObject({ type: "scroll", value: "up 300px" });
+    expect(page.evaluate).not.toHaveBeenCalled();
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+
+  it("requires the interact capability for scroll steps", async () => {
+    const page = createMockPage();
+    const scrollSpy = vi.fn(async () => undefined);
+    const driver = {
+      capabilities: new Set([]),
+      parseTextSelector: () => null,
+      scroll: scrollSpy
+    } as unknown as SessionDriver;
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "prowl-steps-"));
+    const steps: Step[] = [{ scroll: { direction: "down" } }];
+
+    const result = await executeSteps({
+      page: page as unknown as Page,
+      driver,
+      steps,
+      targetUrl: "http://localhost",
+      runDir,
+      screenshotsMode: "all",
+      forbiddenSelectors: [],
+      allowedDomains: ["localhost"],
+      maxTotalTimeMs: 30000,
+      maxSteps: 50,
+      redactedFillSteps: new Set(),
+      configDir: runDir
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.results[0]).toMatchObject({
+      type: "scroll",
+      status: "fail",
+      error: 'Driver does not support capability "interact" required by step "scroll"'
+    });
+    expect(scrollSpy).not.toHaveBeenCalled();
     fs.rmSync(runDir, { recursive: true, force: true });
   });
 
