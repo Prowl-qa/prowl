@@ -103,15 +103,15 @@ jobs:
             # versions; if the gate fails here on the runner's AVD, dump the
             # tree (`adb shell uiautomator dump`) and adjust the text= below.
             - assert:
-                notVisible: "text=System"
+                notVisible: "text=Accessibility"
             - scroll:
                 direction: down
                 amount: 1200
             - waitForSelector:
-                selector: "text=System"
+                selector: "text=Accessibility"
                 timeout: 20000
             - assert:
-                visible: "text=System"
+                visible: "text=Accessibility"
             # Return to the top row with the same bounded bidirectional scroll
             # helper used by real hunts; one fixed upward swipe is too short on
             # the live AVD after revealing the below-the-fold row.
