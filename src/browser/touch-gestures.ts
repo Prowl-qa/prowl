@@ -55,6 +55,14 @@ export interface PointerActionSequence {
 export const DEFAULT_SWIPE_FRACTION = 0.75;
 
 /**
+ * `scrollTo` probe swipes use a shorter span than the default one-shot scroll:
+ * live mobile screens often have sticky search/header chrome near the top, and
+ * an upward probe that starts in that chrome can be ignored by the scrollable
+ * content underneath.
+ */
+export const SCROLL_TO_PROBE_SWIPE_FRACTION = 0.6;
+
+/**
  * Hard cap on swipe span as a fraction of the axis. A centred swipe reaches
  * `distance / 2` either side of centre, so 0.9 keeps endpoints within the inner
  * 5%–95% band even at the maximum.
@@ -153,6 +161,12 @@ export function swipeDistanceFor(direction: SwipeDirection, size: ScreenSize, am
   const requested = amount === undefined ? axis * DEFAULT_SWIPE_FRACTION : Math.abs(amount);
   const max = axis * MAX_SWIPE_FRACTION;
   return Math.max(1, Math.round(Math.min(requested, max)));
+}
+
+/** Distance used by mobile `scrollTo` probes to avoid sticky top/bottom chrome. */
+export function scrollToProbeDistanceFor(direction: SwipeDirection, size: ScreenSize): number {
+  const axis = isVertical(direction) ? size.height : size.width;
+  return Math.max(1, Math.round(axis * SCROLL_TO_PROBE_SWIPE_FRACTION));
 }
 
 /**

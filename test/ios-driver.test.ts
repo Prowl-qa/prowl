@@ -440,6 +440,9 @@ describe("createIosDriver touch gestures (PROWL-080)", () => {
     await driver.scrollIntoView("id=header");
     expect(agent.performedActions).toHaveLength(21);
     const lastMoves = agent.performedActions.at(-1)!.actions.filter((a) => a.type === "pointerMove");
+    // scrollTo probes use a shorter 60% span: 800 * 0.6 = 480, half 240.
+    expect(lastMoves[0]).toMatchObject({ x: 200, y: 160 });
+    expect(lastMoves[1]).toMatchObject({ x: 200, y: 640 });
     expect((lastMoves[1] as { y: number }).y).toBeGreaterThan((lastMoves[0] as { y: number }).y);
   });
 

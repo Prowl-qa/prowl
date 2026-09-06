@@ -7,7 +7,9 @@ import {
   MAX_SCROLL_TO_SWIPES,
   probeScrollIntoView,
   SCROLL_TO_PROBE_DIRECTIONS,
+  SCROLL_TO_PROBE_SWIPE_FRACTION,
   SCROLL_TO_SWEEP_DEPTH,
+  scrollToProbeDistanceFor,
   SWIPE_HOLD_MS,
   SWIPE_MOVE_DURATION_MS,
   swipeDistanceFor,
@@ -49,6 +51,15 @@ describe("swipeDistanceFor (PROWL-080 amount→distance mapping)", () => {
 
   it("never collapses to a zero-length swipe", () => {
     expect(swipeDistanceFor("down", PHONE, 0)).toBe(1);
+  });
+});
+
+describe("scrollToProbeDistanceFor", () => {
+  it("uses the shorter scrollTo probe fraction on the relevant axis", () => {
+    expect(scrollToProbeDistanceFor("down", PHONE)).toBe(Math.round(800 * SCROLL_TO_PROBE_SWIPE_FRACTION));
+    expect(scrollToProbeDistanceFor("up", PHONE)).toBe(Math.round(800 * SCROLL_TO_PROBE_SWIPE_FRACTION));
+    expect(scrollToProbeDistanceFor("left", PHONE)).toBe(Math.round(400 * SCROLL_TO_PROBE_SWIPE_FRACTION));
+    expect(scrollToProbeDistanceFor("right", PHONE)).toBe(Math.round(400 * SCROLL_TO_PROBE_SWIPE_FRACTION));
   });
 });
 

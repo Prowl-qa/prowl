@@ -36,6 +36,7 @@ import {
   buildDirectionalSwipe,
   MAX_SCROLL_TO_SWIPES,
   probeScrollIntoView,
+  scrollToProbeDistanceFor,
   type PointerActionSequence,
   type ScreenSize,
   type SwipeDirection
@@ -343,7 +344,7 @@ export function createAndroidDriver(
         isVisible: async () => (await client.findElements(query)).length > 0,
         swipe: async (direction) => {
           probeSize ??= await client.windowSize();
-          await swipe(direction, undefined, probeSize);
+          await swipe(direction, scrollToProbeDistanceFor(direction, probeSize), probeSize);
         }
       });
       if (found) {

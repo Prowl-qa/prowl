@@ -23,8 +23,10 @@ All notable changes to Prowl will be documented in this file.
   `scrollTo: { selector }` now uses one shared,
   bounded mobile probe: it preserves the old 10-swipe downward search, then
   reverses far enough to cross the starting viewport and search upward too before
-  failing with an error naming the selector and attempt count. On iOS, matching
-  WDA hierarchy elements must also pass the element `/displayed` endpoint before
+  failing with an error naming the selector and attempt count. Probe swipes use a
+  shorter 60%-axis centered span than one-shot `scroll`, keeping upward searches
+  below sticky top chrome on native settings screens. On iOS, matching WDA
+  hierarchy elements must also pass the element `/displayed` endpoint before
   `scrollTo`, `waitForSelector`, or inline visible/notVisible checks treat them
   as visible. `scrollTo` is unchanged on macOS (it still resolves to
   AXScrollToVisible); the directional `scroll` step has no macOS accessibility

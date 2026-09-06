@@ -35,6 +35,7 @@ import {
   buildDirectionalSwipe,
   MAX_SCROLL_TO_SWIPES,
   probeScrollIntoView,
+  scrollToProbeDistanceFor,
   type PointerActionSequence,
   type ScreenSize,
   type SwipeDirection
@@ -354,7 +355,7 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
         isVisible: () => hasVisibleElement(query),
         swipe: async (direction) => {
           probeSize ??= await client.windowSize();
-          await swipe(direction, undefined, probeSize);
+          await swipe(direction, scrollToProbeDistanceFor(direction, probeSize), probeSize);
         }
       });
       if (found) {
