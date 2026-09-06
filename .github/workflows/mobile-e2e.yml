@@ -97,6 +97,26 @@ jobs:
             # and adjust this id — this is the intended post-merge verification step.
             - assert:
                 visible: "id=recycler_view"
+            # --- scroll gesture proof (PROWL-080): the Settings home is a
+            # scrollable list, so a down-swipe must reveal a below-the-fold row.
+            # NOTE: the exact bottom-of-list label varies across Android
+            # versions; if the gate fails here on the runner's AVD, dump the
+            # tree (`adb shell uiautomator dump`) and adjust the text= below.
+            - scroll:
+                direction: down
+                amount: 1200
+            - waitForSelector:
+                selector: "text=System"
+                timeout: 20000
+            - assert:
+                visible: "text=System"
+            # Swipe back up so the top-of-list entry is tappable again.
+            - scroll:
+                direction: up
+                amount: 1200
+            - waitForSelector:
+                selector: "text=Network & internet"
+                timeout: 20000
             # Tap an entry by its visible-text shorthand.
             - click: "Network & internet"
             - screenshot:
@@ -133,31 +153,95 @@ jobs:
                 timeout: 60000
             - assert:
                 visible: "text=About"
+            - click: "About"
+            - waitForSelector:
+                selector: "text=Name"
+                timeout: 60000
+            # --- scroll gesture proof (PROWL-080): the About page is a long
+            # scrollable list, so a down-swipe must reveal a below-the-fold row.
+            # NOTE: the exact field label varies across iOS versions; if the
+            # gate fails here, dump the tree (`prowl` /source) and adjust the
+            # text= below to a row that is genuinely off-screen at launch.
+            - scroll:
+                direction: down
+                amount: 400
+            - waitForSelector:
+                selector: "text=Model Number"
+                timeout: 20000
+            - assert:
+                visible: "text=Model Number"
             - screenshot:
                 name: ios-general-about
           YAML
 
+      # PROWL-081 / INFRA-001: boot the emulator as a HARD infra gate. A failure
+      # to reach `sys.boot_completed` (or a package manager that never answers)
+      # is a runner/infra fault, not a hunt fault, so it must stop the job before
+      # any hunt runs — never surface as a downstream `waitForSelector` timeout.
+      # We also retry the boot once and settle on package-manager readiness
+      # (Settings cannot launch until `pm` answers), logging what we waited for.
       - name: Boot the Android emulator
         run: |
-          set -euo pipefail
+          set -uo pipefail
           adb start-server
-          # Headless boot, no snapshot — matches the runner-verified invocation.
-          nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
-            > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          adb wait-for-device
+
+          # Bring up the emulator and wait (up to ~300s) for sys.boot_completed.
+          wait_for_boot() {
+            local attempt="$1" start elapsed
+            start=$SECONDS
+            # Headless boot, no snapshot — matches the runner-verified invocation.
+            nohup emulator -avd "$ANDROID_AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
+              > "$RUNNER_TEMP/emulator.log" 2>&1 &
+            echo "Boot attempt ${attempt}: emulator launched (pid $!); waiting for device…"
+            adb wait-for-device
+            for _ in $(seq 1 150); do
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+                elapsed=$((SECONDS - start))
+                echo "Boot attempt ${attempt}: sys.boot_completed reached after ${elapsed}s"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Boot attempt ${attempt}: sys.boot_completed NOT reached after $((SECONDS - start))s"
+            return 1
+          }
+
+          # Post-boot settle: the package manager must answer before Settings can
+          # launch, else the hunt sees an empty screen and times out spuriously.
+          wait_for_package_manager() {
+            local start elapsed
+            start=$SECONDS
+            for _ in $(seq 1 30); do
+              if adb shell pm path android >/dev/null 2>&1; then
+                elapsed=$((SECONDS - start))
+                echo "Package manager ready after ${elapsed}s"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Package manager NOT ready after $((SECONDS - start))s"
+            return 1
+          }
+
           booted=0
-          for _ in $(seq 1 150); do
-            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+          for attempt in 1 2; do
+            if wait_for_boot "$attempt" && wait_for_package_manager; then
               booted=1
               break
             fi
-            sleep 2
+            echo "::warning::Android emulator boot attempt ${attempt} failed; killing and retrying"
+            adb -s emulator-5554 emu kill || true
+            adb kill-server || true
+            adb start-server
+            sleep 3
           done
+
           if [ "$booted" != "1" ]; then
-            echo "::error::Android emulator did not reach sys.boot_completed"
+            echo "::error::[infra] Android emulator failed to boot (sys.boot_completed / package manager) after 2 attempts — runner/infra failure, not a hunt failure"
             cat "$RUNNER_TEMP/emulator.log" || true
             exit 1
           fi
+
           adb shell input keyevent 82 || true   # dismiss the keyguard
           adb devices
 
