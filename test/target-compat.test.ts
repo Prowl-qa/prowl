@@ -80,22 +80,22 @@ describe("assertStepsSupportedByTarget", () => {
     expect(() => assertStepsSupportedByTarget(nestedIfElse, "macos")).toThrow('Step "setInputFiles"');
   });
 
-  it("rejects scroll/scrollTo on macOS with a clear gesture message (PROWL-080)", () => {
+  it("rejects directional scroll on macOS but admits scrollTo (PROWL-080)", () => {
+    // Directional scroll is a touch swipe with no AX equivalent → rejected.
     expect(() => assertStepsSupportedByTarget([{ scroll: { direction: "down" } }], "macos")).toThrow(
       'Step "scroll" is not supported by the macOS target'
     );
-    expect(() => assertStepsSupportedByTarget([{ scrollTo: { selector: "id=footer" } }], "macos")).toThrow(
-      'Step "scrollTo" is not supported by the macOS target'
-    );
-    // The message points users at the mobile targets.
     expect(() => assertStepsSupportedByTarget([{ scroll: { direction: "down" } }], "macos")).toThrow(
       "iOS and Android targets"
     );
+    // scrollTo maps to AXScrollToVisible on macOS — a shipped capability, so it
+    // must pass validation (the driver resolves it, not this gate).
+    expect(() => assertStepsSupportedByTarget([{ scrollTo: { selector: "id=footer" } }], "macos")).not.toThrow();
   });
 
   it("rejects scroll nested inside if/repeat bodies on macOS", () => {
-    const nested: Step[] = [{ repeat: { times: 2, steps: [{ scrollTo: { selector: "id=x" } }] } }];
-    expect(() => assertStepsSupportedByTarget(nested, "macos")).toThrow('Step "scrollTo"');
+    const nested: Step[] = [{ repeat: { times: 2, steps: [{ scroll: { direction: "down" } }] } }];
+    expect(() => assertStepsSupportedByTarget(nested, "macos")).toThrow('Step "scroll"');
   });
 });
 

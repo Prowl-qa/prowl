@@ -15,9 +15,9 @@ import path from "node:path";
  * Step types that only make sense on the web target. Everything else
  * (`click`, `fill`, `type`, `press`, `wait`, `assert visible/notVisible`,
  * `screenshot`, `assertScreenshot`, `repeat`, `runHunt`, `if`, `copyText`,
- * `hover`, `waitForSelector`) is portable across targets. The touch-gesture
- * steps (`scroll`/`scrollTo`) are a special case — supported on web and the
- * mobile targets but not macOS; see {@link MOBILE_GESTURE_STEP_TYPES}.
+ * `hover`, `scrollTo`, `waitForSelector`) is portable across targets. The
+ * directional `scroll` step is the one per-target exception — see
+ * {@link MACOS_UNSUPPORTED_STEP_TYPES}.
  */
 export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
   "navigate",
@@ -35,17 +35,23 @@ export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Touch-gesture steps supported on web and the mobile targets (iOS/Android, via
- * synthesized W3C swipes — PROWL-080) but NOT macOS, whose accessibility-driven
- * scrolling is a separate, unscheduled item. These are the per-target carve-out
- * on top of {@link WEB_ONLY_STEP_TYPES}: not web-only (so mobile admits them),
- * yet still rejected for macOS by {@link assertStepsSupportedByTarget}.
+ * Steps rejected on the macOS target specifically (beyond the web-only set).
+ *
+ * The scroll verbs are asymmetric across targets, so gate them per verb:
+ *   - `scroll` (directional): a synthesized touch swipe on iOS/Android
+ *     (PROWL-080) with no AX equivalent, so it is UNSUPPORTED on macOS. It is
+ *     not web-only either (web runs `window.scrollBy`), hence this macOS-only
+ *     rejection rather than {@link WEB_ONLY_STEP_TYPES}.
+ *   - `scrollTo` (by selector): supported on every target and therefore NOT
+ *     listed here — macOS resolves it to AXScrollToVisible (a real, shipped AX
+ *     capability), while iOS/Android run a bounded swipe-loop. Web scrolls the
+ *     element into view.
  */
-export const MOBILE_GESTURE_STEP_TYPES: ReadonlySet<string> = new Set(["scroll", "scrollTo"]);
+export const MACOS_UNSUPPORTED_STEP_TYPES: ReadonlySet<string> = new Set(["scroll"]);
 
-/** The gesture-step reason a step is unsupported on macOS, or null. */
-export function macosUnsupportedGestureReason(step: Step): string | null {
-  for (const type of MOBILE_GESTURE_STEP_TYPES) {
+/** The reason a step is unsupported on macOS specifically, or null. */
+export function macosUnsupportedReason(step: Step): string | null {
+  for (const type of MACOS_UNSUPPORTED_STEP_TYPES) {
     if (type in step) {
       return type;
     }
@@ -108,8 +114,9 @@ export function nativeTargetLabel(target: Target["type"]): string {
  * Throw if any step in `steps` (recursing into `if`/`repeat` bodies) is not
  * supported by `target`. `runHunt` references are validated when the referenced
  * hunt itself runs. No-op for the web target; every native target rejects the
- * same web-only step vocabulary, and macOS additionally rejects the mobile-only
- * touch-gesture steps (`scroll`/`scrollTo`) that iOS/Android now support.
+ * same web-only step vocabulary, and macOS additionally rejects the directional
+ * `scroll` swipe (no AX equivalent) — but NOT `scrollTo`, which macOS maps to
+ * AXScrollToVisible just as iOS/Android map it to a swipe loop.
  */
 export function assertStepsSupportedByTarget(steps: Step[], target: Target["type"]): void {
   if (target === "web") {
@@ -125,11 +132,12 @@ export function assertStepsSupportedByTarget(steps: Step[], target: Target["type
       );
     }
     if (target === "macos") {
-      const gesture = macosUnsupportedGestureReason(step);
-      if (gesture) {
+      const macReason = macosUnsupportedReason(step);
+      if (macReason) {
         throw new Error(
-          `Step "${gesture}" is not supported by the macOS target. Scroll/swipe gestures ` +
-            "are available on the iOS and Android targets; macOS accessibility scrolling is not yet implemented."
+          `Step "${macReason}" is not supported by the macOS target. Directional scroll is a ` +
+            "touch swipe available on the iOS and Android targets; there is no macOS accessibility " +
+            "equivalent (use scrollTo to bring a specific element into view instead)."
         );
       }
     }
