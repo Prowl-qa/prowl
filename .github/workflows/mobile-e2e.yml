@@ -157,37 +157,39 @@ jobs:
                 timeout: 60000
             - assert:
                 visible: "text=General"
+            # --- scroll gesture proof (PROWL-080), on the ROOT Settings list.
+            # The Developer row is always present at the bottom of a simulator's
+            # Settings root and reliably below the fold, so it is the stable
+            # scrollTo target here. (General > "Transfer or Reset iPhone" does
+            # NOT exist on the runner's iOS 26 simulator — observed live
+            # 2026-09-06: a 30-attempt scrollTo miss.)
+            - assert:
+                notVisible: "text=Developer"
+            - scroll:
+                direction: down
+                amount: 600
+            # No negative assert after the fixed-distance swipe: where it lands
+            # depends on list length and rubber-banding. The deterministic
+            # gesture proof is the scrollTo + visible pair below.
+            - scrollTo:
+                selector: "text=Developer"
+            - waitForSelector:
+                selector: "text=Developer"
+                timeout: 20000
+            - assert:
+                visible: "text=Developer"
+            # Return to the top before continuing the original General/About smoke.
+            - scrollTo:
+                selector: "text=General"
+            - waitForSelector:
+                selector: "text=General"
+                timeout: 20000
             - click: "General"
             - waitForSelector:
                 selector: "text=About"
                 timeout: 60000
             - assert:
                 visible: "text=About"
-            # --- scroll gesture proof (PROWL-080): the General page is a long
-            # scrollable list, so a down-swipe must reveal a below-the-fold row.
-            - assert:
-                notVisible: "text=Transfer or Reset iPhone"
-            - scroll:
-                direction: down
-                amount: 600
-            # No negative assert after the fixed-distance swipe: on a tall
-            # simulator the General list can have less than 600px of scrollable
-            # range, so iOS rubber-bands back and the top row stays visible
-            # (observed live on the runner, 2026-09-06). The deterministic
-            # gesture proof is the scrollTo + visible pair below.
-            - scrollTo:
-                selector: "text=Transfer or Reset iPhone"
-            - waitForSelector:
-                selector: "text=Transfer or Reset iPhone"
-                timeout: 20000
-            - assert:
-                visible: "text=Transfer or Reset iPhone"
-            # Return to the top before continuing the original About smoke.
-            - scrollTo:
-                selector: "text=About"
-            - waitForSelector:
-                selector: "text=About"
-                timeout: 20000
             - click: "About"
             - waitForSelector:
                 selector: "text=Name"
