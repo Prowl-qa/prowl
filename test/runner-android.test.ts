@@ -20,6 +20,10 @@ class FakeAgent implements AndroidAgentClient {
     return "text";
   }
   async pressKeyCode(): Promise<void> {}
+  async windowSize(): Promise<{ width: number; height: number }> {
+    return { width: 1080, height: 1920 };
+  }
+  async performActions(): Promise<void> {}
   async screenshotPng(): Promise<Buffer> {
     return Buffer.from("PNGDATA");
   }

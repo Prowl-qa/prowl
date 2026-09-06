@@ -32,6 +32,13 @@ import {
   unwrapNativeTextSelector,
   type NativeSelector
 } from "../selector/native.js";
+import {
+  buildDirectionalSwipe,
+  MAX_SCROLL_TO_SWIPES,
+  type PointerActionSequence,
+  type ScreenSize,
+  type SwipeDirection
+} from "./touch-gestures.js";
 import type {
   DialogAction,
   DriverCapability,
@@ -80,6 +87,10 @@ export interface AndroidAgentClient {
   getText(elementId: string): Promise<string | null>;
   /** Dispatch a global key event by Android key code (goes to the focused view). */
   pressKeyCode(keyCode: number): Promise<void>;
+  /** Current screen size in pixels (uiautomator2 `/window/rect`), for gestures. */
+  windowSize(): Promise<ScreenSize>;
+  /** Perform a W3C pointer action sequence (`POST /session/:id/actions`). */
+  performActions(actions: PointerActionSequence): Promise<void>;
   /** Capture the current screen as PNG bytes. */
   screenshotPng(): Promise<Buffer>;
   /**
@@ -266,6 +277,12 @@ export function createAndroidDriver(
     await client.setValue(await resolveOne(selector), value);
   }
 
+  async function swipe(direction: SwipeDirection, amount?: number): Promise<void> {
+    const size = await client.windowSize();
+    const { actions } = buildDirectionalSwipe(direction, size, amount);
+    await client.performActions(actions);
+  }
+
   return {
     capabilities: ANDROID_CAPABILITIES,
 
@@ -309,9 +326,29 @@ export function createAndroidDriver(
       // No hover concept on touch devices.
       return rejectUnsupported("hover");
     },
-    scrollIntoView(): Promise<void> {
-      // Scroll gestures are a follow-up (PROWL-061); reject clearly for now.
-      return rejectUnsupported("scrollTo");
+    // Screen-centred swipe via the W3C actions endpoint (PROWL-080). Direction
+    // semantics match the web step: scrolling "down" reveals lower content, so
+    // the finger drags up. See ./touch-gestures.ts.
+    async scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<void> {
+      await swipe(direction, amount);
+    },
+    // Resolve the element, short-circuiting if it is already present in the
+    // hierarchy; otherwise swipe down and re-probe, up to MAX_SCROLL_TO_SWIPES
+    // times, before failing with a message naming the selector and attempts.
+    async scrollIntoView(selector: string): Promise<void> {
+      const query = parseAndroidSelector(selector);
+      if ((await client.findElements(query)).length > 0) {
+        return;
+      }
+      for (let attempt = 1; attempt <= MAX_SCROLL_TO_SWIPES; attempt += 1) {
+        await swipe("down");
+        if ((await client.findElements(query)).length > 0) {
+          return;
+        }
+      }
+      throw new Error(
+        `scrollTo: element "${selector}" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the Android target`
+      );
     },
     setInputFiles(): Promise<void> {
       return rejectUnsupported("setInputFiles");

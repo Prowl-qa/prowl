@@ -947,25 +947,21 @@ const STEP_HANDLERS: Record<string, StepHandler> = {
   },
 
   scroll: {
-    capabilities: ["evaluate"],
+    // Dispatched through the driver's `scroll` verb (interact), so native mobile
+    // targets synthesize a touch swipe while web keeps its `window.scrollBy`
+    // behavior. The per-target step gate rejects `scroll` on macOS before here.
+    capabilities: ["interact"],
     run: async (h) => {
       if (!("scroll" in h.step)) unknownStep();
-      const amount = h.step.scroll.amount ?? 500;
-      const scrollMap: Record<string, [number, number]> = {
-        up: [0, -amount],
-        down: [0, amount],
-        left: [-amount, 0],
-        right: [amount, 0]
-      };
-      const [x, y] = scrollMap[h.step.scroll.direction];
-      await h.driver.evaluate(([sx, sy]) => window.scrollBy(sx, sy), [x, y] as [number, number]);
+      const { direction, amount } = h.step.scroll;
+      await h.driver.scroll(direction, amount);
       return {
         kind: "result",
         result: {
           type: "scroll",
           status: "pass",
           durationMs: Date.now() - h.stepStart,
-          value: `${h.step.scroll.direction} ${amount}px`
+          value: amount === undefined ? direction : `${direction} ${amount}px`
         }
       };
     }

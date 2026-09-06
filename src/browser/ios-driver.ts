@@ -31,6 +31,13 @@ import {
   unwrapNativeTextSelector,
   type NativeSelector
 } from "../selector/native.js";
+import {
+  buildDirectionalSwipe,
+  MAX_SCROLL_TO_SWIPES,
+  type PointerActionSequence,
+  type ScreenSize,
+  type SwipeDirection
+} from "./touch-gestures.js";
 import type {
   DialogAction,
   DriverCapability,
@@ -75,6 +82,10 @@ export interface IosAgentClient {
   sendKeys(keys: string[]): Promise<void>;
   /** Return to the springboard home screen (WDA `/wda/homescreen`). */
   homescreen(): Promise<void>;
+  /** Current screen size in points (WDA `/window/size`), for gesture geometry. */
+  windowSize(): Promise<ScreenSize>;
+  /** Perform a W3C pointer action sequence (WDA `POST /session/:id/actions`). */
+  performActions(actions: PointerActionSequence): Promise<void>;
   /**
    * Return the current UI hierarchy as WebDriverAgent `/source` XML. Present on
    * live clients and consumed by the analyzer (PROWL-061); optional so lighter
@@ -219,6 +230,12 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
     await client.setValue(await resolveOne(selector), value);
   }
 
+  async function swipe(direction: SwipeDirection, amount?: number): Promise<void> {
+    const size = await client.windowSize();
+    const { actions } = buildDirectionalSwipe(direction, size, amount);
+    await client.performActions(actions);
+  }
+
   async function pressKey(key: string): Promise<void> {
     const name = key.trim().toLowerCase();
     if (name === "enter" || name === "return") {
@@ -281,9 +298,29 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
       // No hover concept on touch devices.
       return rejectUnsupported("hover");
     },
-    scrollIntoView(): Promise<void> {
-      // Scroll gestures are a follow-up; reject clearly for now.
-      return rejectUnsupported("scrollTo");
+    // Screen-centred swipe via the W3C actions endpoint (PROWL-080). Direction
+    // semantics match the web step: scrolling "down" reveals lower content, so
+    // the finger drags up. See ./touch-gestures.ts.
+    async scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<void> {
+      await swipe(direction, amount);
+    },
+    // Resolve the element, short-circuiting if it is already present in the
+    // hierarchy; otherwise swipe down and re-probe, up to MAX_SCROLL_TO_SWIPES
+    // times, before failing with a message naming the selector and attempts.
+    async scrollIntoView(selector: string): Promise<void> {
+      const query = parseIosSelector(selector);
+      if ((await client.findElements(query)).length > 0) {
+        return;
+      }
+      for (let attempt = 1; attempt <= MAX_SCROLL_TO_SWIPES; attempt += 1) {
+        await swipe("down");
+        if ((await client.findElements(query)).length > 0) {
+          return;
+        }
+      }
+      throw new Error(
+        `scrollTo: element "${selector}" not visible after ${MAX_SCROLL_TO_SWIPES} scroll attempts on the iOS target`
+      );
     },
     setInputFiles(): Promise<void> {
       return rejectUnsupported("setInputFiles");

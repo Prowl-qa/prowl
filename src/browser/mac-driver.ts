@@ -179,8 +179,15 @@ export function createMacDriver(client: MacHelperClient, options: MacDriverOptio
     async hover(selector: string): Promise<void> {
       await query("hover", selector);
     },
-    async scrollIntoView(selector: string): Promise<void> {
-      await query("scrollTo", selector);
+    scroll(): Promise<void> {
+      // Touch swipes are a mobile concept; AX-driven scrolling on macOS is a
+      // separate, unscheduled item (PROWL-080). Reject with a clear message.
+      return rejectUnsupported("scroll");
+    },
+    scrollIntoView(): Promise<void> {
+      // See `scroll`: no macOS scroll gesture yet. The per-target step gate
+      // rejects `scrollTo` before here; this keeps the driver honest too.
+      return rejectUnsupported("scrollTo");
     },
     setInputFiles(): Promise<void> {
       return rejectUnsupported("setInputFiles");

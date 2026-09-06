@@ -20,7 +20,6 @@ describe("webOnlyReason", () => {
     expect(webOnlyReason({ navigate: "/" })).toBe("navigate");
     expect(webOnlyReason({ evalScript: "1+1" })).toBe("evalScript");
     expect(webOnlyReason({ onDialog: { action: "accept" } })).toBe("onDialog");
-    expect(webOnlyReason({ scroll: { direction: "down" } })).toBe("scroll");
   });
 
   it("flags url assertions but allows visible assertions", () => {
@@ -31,6 +30,12 @@ describe("webOnlyReason", () => {
   it("treats portable steps as supported", () => {
     expect(webOnlyReason({ click: "Save" })).toBeNull();
     expect(webOnlyReason({ type: "hello" })).toBeNull();
+  });
+
+  it("no longer treats scroll/scrollTo as web-only (mobile gestures)", () => {
+    // PROWL-080: these are per-target gestures, not web-only — mobile admits
+    // them, macOS rejects them via assertStepsSupportedByTarget.
+    expect(webOnlyReason({ scroll: { direction: "down" } })).toBeNull();
     expect(webOnlyReason({ scrollTo: { selector: "id=footer" } })).toBeNull();
   });
 });
@@ -73,6 +78,24 @@ describe("assertStepsSupportedByTarget", () => {
       { if: { visible: "X", then: [{ click: "Save" }], else: [{ setInputFiles: { selector: "input", files: "x.txt" } }] } }
     ];
     expect(() => assertStepsSupportedByTarget(nestedIfElse, "macos")).toThrow('Step "setInputFiles"');
+  });
+
+  it("rejects scroll/scrollTo on macOS with a clear gesture message (PROWL-080)", () => {
+    expect(() => assertStepsSupportedByTarget([{ scroll: { direction: "down" } }], "macos")).toThrow(
+      'Step "scroll" is not supported by the macOS target'
+    );
+    expect(() => assertStepsSupportedByTarget([{ scrollTo: { selector: "id=footer" } }], "macos")).toThrow(
+      'Step "scrollTo" is not supported by the macOS target'
+    );
+    // The message points users at the mobile targets.
+    expect(() => assertStepsSupportedByTarget([{ scroll: { direction: "down" } }], "macos")).toThrow(
+      "iOS and Android targets"
+    );
+  });
+
+  it("rejects scroll nested inside if/repeat bodies on macOS", () => {
+    const nested: Step[] = [{ repeat: { times: 2, steps: [{ scrollTo: { selector: "id=x" } }] } }];
+    expect(() => assertStepsSupportedByTarget(nested, "macos")).toThrow('Step "scrollTo"');
   });
 });
 
@@ -192,6 +215,11 @@ describe("android target gating (PROWL-058)", () => {
     ];
     expect(() => assertStepsSupportedByTarget(steps, "android")).not.toThrow();
   });
+
+  it("admits scroll/scrollTo on Android (PROWL-080)", () => {
+    const steps: Step[] = [{ scroll: { direction: "down", amount: 300 } }, { scrollTo: { selector: "id=footer" } }];
+    expect(() => assertStepsSupportedByTarget(steps, "android")).not.toThrow();
+  });
 });
 
 describe("androidAppAllowedIdentities / assertAndroidAppAllowed", () => {
@@ -260,6 +288,11 @@ describe("iOS target gating (PROWL-059)", () => {
       { assert: { visible: "Saved" } },
       { if: { visible: "X", then: [{ press: { selector: ":focus", key: "Enter" } }] } }
     ];
+    expect(() => assertStepsSupportedByTarget(steps, "ios")).not.toThrow();
+  });
+
+  it("admits scroll/scrollTo on iOS (PROWL-080)", () => {
+    const steps: Step[] = [{ scroll: { direction: "down" } }, { scrollTo: { selector: "id=footer" } }];
     expect(() => assertStepsSupportedByTarget(steps, "ios")).not.toThrow();
   });
 });

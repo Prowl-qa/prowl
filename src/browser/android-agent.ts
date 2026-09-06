@@ -10,6 +10,7 @@
  */
 import type { AndroidAgentClient, AndroidQuery } from "./android-driver.js";
 import { androidQueryToLocator } from "./android-driver.js";
+import { toScreenSize, type PointerActionSequence, type ScreenSize } from "./touch-gestures.js";
 
 /** The subset of `fetch` this module uses; overridable in tests. */
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -243,6 +244,15 @@ export function createUia2AgentClient(
     },
     async pressKeyCode(keyCode: number): Promise<void> {
       await transport.request("POST", `${base}/appium/device/press_keycode`, { keycode: keyCode });
+    },
+    async windowSize(): Promise<ScreenSize> {
+      // uiautomator2 exposes the W3C `/window/rect` ({ x, y, width, height }).
+      const value = await transport.request("GET", `${base}/window/rect`);
+      return toScreenSize(value, "uiautomator2 /window/rect");
+    },
+    async performActions(actions: PointerActionSequence): Promise<void> {
+      // W3C actions endpoint; uiautomator2 replays the touch pointer sequence.
+      await transport.request("POST", `${base}/actions`, { actions: [actions] });
     },
     async screenshotPng(): Promise<Buffer> {
       const value = await transport.request("GET", `${base}/screenshot`);

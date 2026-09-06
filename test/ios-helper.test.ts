@@ -30,6 +30,10 @@ class FakeAgent implements IosAgentClient {
   }
   async sendKeys(): Promise<void> {}
   async homescreen(): Promise<void> {}
+  async windowSize(): Promise<{ width: number; height: number }> {
+    return { width: 400, height: 800 };
+  }
+  async performActions(): Promise<void> {}
   async close(): Promise<void> {
     this.closed = true;
   }

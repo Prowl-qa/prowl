@@ -15,7 +15,9 @@ import path from "node:path";
  * Step types that only make sense on the web target. Everything else
  * (`click`, `fill`, `type`, `press`, `wait`, `assert visible/notVisible`,
  * `screenshot`, `assertScreenshot`, `repeat`, `runHunt`, `if`, `copyText`,
- * `hover`, `scrollTo`, `waitForSelector`) is portable across targets.
+ * `hover`, `waitForSelector`) is portable across targets. The touch-gesture
+ * steps (`scroll`/`scrollTo`) are a special case — supported on web and the
+ * mobile targets but not macOS; see {@link MOBILE_GESTURE_STEP_TYPES}.
  */
 export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
   "navigate",
@@ -29,9 +31,27 @@ export const WEB_ONLY_STEP_TYPES: ReadonlySet<string> = new Set([
   "select",
   "selectOption",
   "setInputFiles",
-  "waitForDownload",
-  "scroll" // directional scroll runs window.scrollBy (evaluate) — use scrollTo instead
+  "waitForDownload"
 ]);
+
+/**
+ * Touch-gesture steps supported on web and the mobile targets (iOS/Android, via
+ * synthesized W3C swipes — PROWL-080) but NOT macOS, whose accessibility-driven
+ * scrolling is a separate, unscheduled item. These are the per-target carve-out
+ * on top of {@link WEB_ONLY_STEP_TYPES}: not web-only (so mobile admits them),
+ * yet still rejected for macOS by {@link assertStepsSupportedByTarget}.
+ */
+export const MOBILE_GESTURE_STEP_TYPES: ReadonlySet<string> = new Set(["scroll", "scrollTo"]);
+
+/** The gesture-step reason a step is unsupported on macOS, or null. */
+export function macosUnsupportedGestureReason(step: Step): string | null {
+  for (const type of MOBILE_GESTURE_STEP_TYPES) {
+    if (type in step) {
+      return type;
+    }
+  }
+  return null;
+}
 
 /** The web-only reason a step is unsupported on a non-web target, or null if portable. */
 export function webOnlyReason(step: Step): string | null {
@@ -87,8 +107,9 @@ export function nativeTargetLabel(target: Target["type"]): string {
 /**
  * Throw if any step in `steps` (recursing into `if`/`repeat` bodies) is not
  * supported by `target`. `runHunt` references are validated when the referenced
- * hunt itself runs. No-op for the web target; every native target (macOS,
- * Android, iOS) rejects the same web-only step vocabulary.
+ * hunt itself runs. No-op for the web target; every native target rejects the
+ * same web-only step vocabulary, and macOS additionally rejects the mobile-only
+ * touch-gesture steps (`scroll`/`scrollTo`) that iOS/Android now support.
  */
 export function assertStepsSupportedByTarget(steps: Step[], target: Target["type"]): void {
   if (target === "web") {
@@ -102,6 +123,15 @@ export function assertStepsSupportedByTarget(steps: Step[], target: Target["type
         `Step "${reason}" is not supported by the ${label} target. It is web-only; ` +
           "use a portable step (click, fill, type, press, wait, assert visible, screenshot, etc.)."
       );
+    }
+    if (target === "macos") {
+      const gesture = macosUnsupportedGestureReason(step);
+      if (gesture) {
+        throw new Error(
+          `Step "${gesture}" is not supported by the macOS target. Scroll/swipe gestures ` +
+            "are available on the iOS and Android targets; macOS accessibility scrolling is not yet implemented."
+        );
+      }
     }
     if ("if" in step) {
       assertStepsSupportedByTarget(step.if.then, target);

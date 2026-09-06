@@ -12,6 +12,7 @@ import {
   type IosAgentClient,
   type IosQuery
 } from "../src/browser/ios-driver.js";
+import type { PointerActionSequence, ScreenSize } from "../src/browser/touch-gestures.js";
 
 class FakeAgent implements IosAgentClient {
   findElementQueries: IosQuery[] = [];
@@ -24,6 +25,10 @@ class FakeAgent implements IosAgentClient {
   elementId: string | null = "el-1";
   elements: string[] = ["el-1"];
   text: string | null = "hello";
+  windowSizeValue: ScreenSize = { width: 400, height: 800 };
+  performedActions: PointerActionSequence[] = [];
+  /** When set, `findElements` returns these results in order per call. */
+  findElementsSequence: string[][] | null = null;
 
   async findElement(query: IosQuery): Promise<string | null> {
     this.findElementQueries.push(query);
@@ -31,6 +36,9 @@ class FakeAgent implements IosAgentClient {
   }
   async findElements(query: IosQuery): Promise<string[]> {
     this.findElementsQueries.push(query);
+    if (this.findElementsSequence) {
+      return this.findElementsSequence.shift() ?? [];
+    }
     return this.elements;
   }
   async click(id: string): Promise<void> {
@@ -47,6 +55,12 @@ class FakeAgent implements IosAgentClient {
   }
   async homescreen(): Promise<void> {
     this.homescreens += 1;
+  }
+  async windowSize(): Promise<ScreenSize> {
+    return this.windowSizeValue;
+  }
+  async performActions(actions: PointerActionSequence): Promise<void> {
+    this.performedActions.push(actions);
   }
   async close(): Promise<void> {
     this.closed = true;
@@ -279,9 +293,6 @@ describe("createIosDriver", () => {
       "setInputFiles is not supported by the iOS target"
     );
     await expect(driver.hover("id=x")).rejects.toThrow("hover is not supported by the iOS target");
-    await expect(driver.scrollIntoView("id=x")).rejects.toThrow(
-      "scrollTo is not supported by the iOS target"
-    );
     await expect(driver.waitForDownloadEvent()).rejects.toThrow(
       "waitForDownload is not supported by the iOS target"
     );
@@ -296,5 +307,59 @@ describe("createIosDriver", () => {
     };
     const { driver } = driverFor(agent);
     await expect(driver.click("id=x")).rejects.toThrow("simulator offline");
+  });
+});
+
+describe("createIosDriver touch gestures (PROWL-080)", () => {
+  it("scroll(down) posts a centre swipe with inverted finger math", async () => {
+    const agent = new FakeAgent(); // 400x800 screen
+    const { driver } = driverFor(agent);
+    await driver.scroll("down");
+    expect(agent.performedActions).toHaveLength(1);
+    const seq = agent.performedActions[0];
+    expect(seq.parameters).toEqual({ pointerType: "touch" });
+    // Default distance = round(800 * 0.75) = 600, centred at (200, 400).
+    const moves = seq.actions.filter((a) => a.type === "pointerMove");
+    expect(moves[0]).toMatchObject({ x: 200, y: 700 });
+    expect(moves[1]).toMatchObject({ x: 200, y: 100 });
+    // finger drags UP to scroll content down
+    expect((moves[1] as { y: number }).y).toBeLessThan((moves[0] as { y: number }).y);
+  });
+
+  it("scroll amount maps to the swipe distance", async () => {
+    const agent = new FakeAgent();
+    const { driver } = driverFor(agent);
+    await driver.scroll("down", 200);
+    const moves = agent.performedActions[0].actions.filter((a) => a.type === "pointerMove");
+    // distance 200, half 100, centre y=400 → 500 → 300
+    expect(moves[0]).toMatchObject({ y: 500 });
+    expect(moves[1]).toMatchObject({ y: 300 });
+  });
+
+  it("scrollTo short-circuits when the element is already present", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["el-1"]; // present on first probe
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(0);
+  });
+
+  it("scrollTo swipes until the element appears", async () => {
+    const agent = new FakeAgent();
+    // absent, absent, then found → 2 swipes
+    agent.findElementsSequence = [[], [], ["el-1"]];
+    const { driver } = driverFor(agent);
+    await driver.scrollIntoView("id=footer");
+    expect(agent.performedActions).toHaveLength(2);
+  });
+
+  it("scrollTo fails with a clear bounded error when never visible", async () => {
+    const agent = new FakeAgent();
+    agent.elements = []; // never found
+    const { driver } = driverFor(agent);
+    await expect(driver.scrollIntoView("id=ghost")).rejects.toThrow(
+      'scrollTo: element "id=ghost" not visible after 10 scroll attempts on the iOS target'
+    );
+    expect(agent.performedActions).toHaveLength(10);
   });
 });

@@ -180,6 +180,29 @@ describe("createUia2AgentClient", () => {
     expect(calls[0].method).toBe("DELETE");
     expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1");
   });
+
+  it("reads the screen size from /window/rect, ignoring x/y (PROWL-080)", async () => {
+    const { transport, calls } = transportWith(() => ({ body: { x: 0, y: 0, width: 1080, height: 2400 } }));
+    const client = createUia2AgentClient(transport, "S1");
+    expect(await client.windowSize()).toEqual({ width: 1080, height: 2400 });
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/window/rect");
+  });
+
+  it("posts a pointer action sequence to /actions (PROWL-080)", async () => {
+    const { transport, calls } = transportWith(() => ({ body: null }));
+    const client = createUia2AgentClient(transport, "S1");
+    const seq = {
+      type: "pointer" as const,
+      id: "finger1",
+      parameters: { pointerType: "touch" as const },
+      actions: [{ type: "pointerUp" as const, button: 0 }]
+    };
+    await client.performActions(seq);
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/actions");
+    expect(calls[0].body).toEqual({ actions: [seq] });
+  });
 });
 
 describe("waitForAgentReady", () => {
