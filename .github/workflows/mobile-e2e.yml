@@ -112,13 +112,13 @@ jobs:
                 timeout: 20000
             - assert:
                 visible: "text=System"
-            # Swipe back up so the top-of-list entry is tappable again.
-            - scroll:
-                direction: up
-                amount: 1200
-            - waitForSelector:
+            # Return to the top row with the same bounded bidirectional scroll
+            # helper used by real hunts; one fixed upward swipe is too short on
+            # the live AVD after revealing the below-the-fold row.
+            - scrollTo:
                 selector: "text=Network & internet"
-                timeout: 20000
+            - assert:
+                visible: "text=Network & internet"
             # Tap an entry by its visible-text shorthand.
             - click: "Network & internet"
             - screenshot:
