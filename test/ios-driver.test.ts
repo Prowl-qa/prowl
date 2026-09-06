@@ -264,9 +264,20 @@ describe("createIosDriver", () => {
     expect(agent.displayedIds).toEqual(["offscreen", "visible"]);
   });
 
-  it("checks displayed state concurrently for exact visible counts", async () => {
+  it("bounds displayed-state concurrency for exact visible counts", async () => {
     const agent = new FakeAgent();
-    agent.elements = ["hidden", "visible-a", "visible-b"];
+    agent.elements = [
+      "hidden-a",
+      "visible-a",
+      "visible-b",
+      "visible-c",
+      "hidden-b",
+      "visible-d",
+      "visible-e",
+      "visible-f",
+      "visible-g",
+      "visible-h"
+    ];
     let active = 0;
     let maxActive = 0;
     agent.isDisplayed = async (id: string): Promise<boolean> => {
@@ -274,12 +285,13 @@ describe("createIosDriver", () => {
       maxActive = Math.max(maxActive, active);
       await new Promise((resolve) => setTimeout(resolve, 5));
       active -= 1;
-      return id !== "hidden";
+      return !id.startsWith("hidden");
     };
     const { driver } = driverFor(agent);
 
-    expect(await driver.count("text=Row")).toBe(2);
+    expect(await driver.count("text=Row")).toBe(8);
     expect(maxActive).toBeGreaterThan(1);
+    expect(maxActive).toBeLessThanOrEqual(4);
   });
 
   it("short-circuits visible probes after the first displayed match", async () => {

@@ -46,6 +46,9 @@ All notable changes to Prowl will be documented in this file.
   `scroll` step as live device proof of the new gestures, with a not-visible
   precondition before each swipe so the proof cannot pass without moving the
   viewport.
+- **iOS exact visible-count queries now bound WDA `/displayed` concurrency.**
+  Broad selectors still return exact visible counts, but the driver no longer
+  fans out one WebDriverAgent request per hierarchy match at once.
 
 ## [0.1.7] - 2026-09-04
 
