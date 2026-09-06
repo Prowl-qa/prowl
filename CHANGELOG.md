@@ -36,9 +36,12 @@ All notable changes to Prowl will be documented in this file.
   hunt `waitForSelector` timeout. The boot retries once, bounds device
   connection polling under the same 300s boot deadline as `sys.boot_completed`,
   and settles on package-manager readiness before launching Settings, logging
-  what it waited for. Both smoke hunts gained a `scroll` step as live device
-  proof of the new gestures, with a not-visible precondition before each swipe so
-  the proof cannot pass without moving the viewport.
+  what it waited for. Android sessions also re-launch the target app after the
+  uiautomator2 session attaches so instrumentation startup cannot leave the app
+  in the background before the first selector wait. Both smoke hunts gained a
+  `scroll` step as live device proof of the new gestures, with a not-visible
+  precondition before each swipe so the proof cannot pass without moving the
+  viewport.
 
 ## [0.1.7] - 2026-09-04
 

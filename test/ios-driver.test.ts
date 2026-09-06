@@ -262,6 +262,15 @@ describe("createIosDriver", () => {
     expect(agent.displayedIds).toEqual(["offscreen", "visible"]);
   });
 
+  it("short-circuits visible probes after the first displayed match", async () => {
+    const agent = new FakeAgent();
+    agent.elements = ["visible", "also-visible"];
+    const { driver } = driverFor(agent);
+
+    await driver.waitForSelector("text=Ready", { timeout: 30 });
+    expect(agent.displayedIds).toEqual(["visible"]);
+  });
+
   it("waits for a selector, polling until it appears, then times out", async () => {
     const agent = new FakeAgent();
     let calls = 0;

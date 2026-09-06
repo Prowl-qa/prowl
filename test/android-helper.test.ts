@@ -131,6 +131,9 @@ describe("launchAndroidSession", () => {
     // Both agent APKs were installed.
     const installs = runner.calls.filter((c) => c.includes("install")).map((c) => c[c.length - 1]);
     expect(installs).toEqual(expect.arrayContaining([APKS.serverApk, APKS.testApk]));
+    // Launch once before instrumentation, then again after the agent session is
+    // ready so instrumentation cannot leave the target app in the background.
+    expect(runner.calls.filter((c) => c.includes("am") && c.includes("start"))).toHaveLength(2);
 
     await closeAndroidSession(session);
     await closeAndroidSession(session);

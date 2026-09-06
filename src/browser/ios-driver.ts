@@ -251,7 +251,13 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
   }
 
   async function hasVisibleElement(query: IosQuery): Promise<boolean> {
-    return (await visibleElementIds(query)).length > 0;
+    const ids = await client.findElements(query);
+    for (const id of ids) {
+      if (await client.isDisplayed(id)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async function pressKey(key: string): Promise<void> {
