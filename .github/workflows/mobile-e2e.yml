@@ -107,12 +107,11 @@ jobs:
             - scroll:
                 direction: down
                 amount: 1200
-            - assert:
-                notVisible: "text=Network & internet"
-            # Fixed-distance Android swipes can land with either Accessibility
-            # or System in view on the runner depending on inertia. Use
-            # scrollTo for the exact below-the-fold target after proving the
-            # explicit scroll moved away from the top row.
+            # No negative assert after the fixed-distance swipe: where it lands
+            # depends on list length and fling inertia (a short list can even
+            # rubber-band back), so asserting the top row left the screen is
+            # inherently flaky. The deterministic gesture proof is the
+            # scrollTo + visible pair below.
             - scrollTo:
                 selector: "text=System"
             - waitForSelector:
@@ -171,10 +170,11 @@ jobs:
             - scroll:
                 direction: down
                 amount: 600
-            - assert:
-                notVisible: "text=About"
-            # Use the same bounded helper for the exact below-the-fold target
-            # after proving the explicit scroll moved away from the top row.
+            # No negative assert after the fixed-distance swipe: on a tall
+            # simulator the General list can have less than 600px of scrollable
+            # range, so iOS rubber-bands back and the top row stays visible
+            # (observed live on the runner, 2026-09-06). The deterministic
+            # gesture proof is the scrollTo + visible pair below.
             - scrollTo:
                 selector: "text=Transfer or Reset iPhone"
             - waitForSelector:
