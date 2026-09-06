@@ -52,6 +52,12 @@ All notable changes to Prowl will be documented in this file.
   Broad selectors still return exact visible counts, but the driver no longer
   fans out one WebDriverAgent request per hierarchy match at once.
 
+### Fixed
+- **Config `{{VAR}}` placeholders now interpolate before validation.** Values
+  loaded from the config-directory `.env` file still fill missing environment
+  variables without overriding `process.env`, and native target fields such as
+  iOS `target.udid` no longer reach launch helpers as literal placeholders.
+
 ## [0.1.7] - 2026-09-04
 
 ### Added
