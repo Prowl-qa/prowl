@@ -153,7 +153,7 @@ describe("toScreenSize", () => {
     expect(toScreenSize({ width: 390, height: 844 }, "src")).toEqual({ width: 390, height: 844 });
   });
 
-  it("accepts a uiautomator2 window/rect payload (ignoring x/y)", () => {
+  it("accepts a uiautomator2 window/current/size payload", () => {
     expect(toScreenSize({ x: 0, y: 0, width: 1080, height: 2400 }, "src")).toEqual({
       width: 1080,
       height: 2400

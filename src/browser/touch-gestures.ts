@@ -108,10 +108,11 @@ export async function probeScrollIntoView({
 }
 
 /**
- * Coerce an agent's window-size/rect payload into a {@link ScreenSize}. Accepts
- * `{ width, height }` (WDA `/window/size`) or `{ x, y, width, height }`
- * (uiautomator2 `/window/rect`); throws if either dimension is missing or not a
- * positive number, so gesture math never runs on a bad screen size.
+ * Coerce an agent's window-size payload into a {@link ScreenSize}. Accepts the
+ * `{ width, height }` shape returned by WDA `/window/size` and uiautomator2
+ * `/window/current/size`; extra fields are ignored. Throws if either dimension
+ * is missing or not a positive number, so gesture math never runs on a bad
+ * screen size.
  */
 export function toScreenSize(value: unknown, source: string): ScreenSize {
   const record = (value ?? {}) as Record<string, unknown>;

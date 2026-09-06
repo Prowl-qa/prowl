@@ -88,7 +88,7 @@ export interface AndroidAgentClient {
   getText(elementId: string): Promise<string | null>;
   /** Dispatch a global key event by Android key code (goes to the focused view). */
   pressKeyCode(keyCode: number): Promise<void>;
-  /** Current screen size in pixels (uiautomator2 `/window/rect`), for gestures. */
+  /** Current screen size in pixels (uiautomator2 `/window/current/size`), for gestures. */
   windowSize(): Promise<ScreenSize>;
   /** Perform a W3C pointer action sequence (`POST /session/:id/actions`). */
   performActions(actions: PointerActionSequence): Promise<void>;

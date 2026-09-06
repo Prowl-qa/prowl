@@ -246,9 +246,9 @@ export function createUia2AgentClient(
       await transport.request("POST", `${base}/appium/device/press_keycode`, { keycode: keyCode });
     },
     async windowSize(): Promise<ScreenSize> {
-      // uiautomator2 exposes the W3C `/window/rect` ({ x, y, width, height }).
-      const value = await transport.request("GET", `${base}/window/rect`);
-      return toScreenSize(value, "uiautomator2 /window/rect");
+      // The direct uiautomator2 server exposes JSONWP window-size routes.
+      const value = await transport.request("GET", `${base}/window/current/size`);
+      return toScreenSize(value, "uiautomator2 /window/current/size");
     },
     async performActions(actions: PointerActionSequence): Promise<void> {
       // W3C actions endpoint; uiautomator2 replays the touch pointer sequence.

@@ -181,12 +181,12 @@ describe("createUia2AgentClient", () => {
     expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1");
   });
 
-  it("reads the screen size from /window/rect, ignoring x/y (PROWL-080)", async () => {
+  it("reads the screen size from /window/current/size (PROWL-080)", async () => {
     const { transport, calls } = transportWith(() => ({ body: { x: 0, y: 0, width: 1080, height: 2400 } }));
     const client = createUia2AgentClient(transport, "S1");
     expect(await client.windowSize()).toEqual({ width: 1080, height: 2400 });
     expect(calls[0].method).toBe("GET");
-    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/window/rect");
+    expect(calls[0].url).toBe("http://127.0.0.1:6790/wd/hub/session/S1/window/current/size");
   });
 
   it("posts a pointer action sequence to /actions (PROWL-080)", async () => {
