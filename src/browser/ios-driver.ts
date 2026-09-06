@@ -117,7 +117,7 @@ const IOS_CAPABILITIES: ReadonlySet<DriverCapability> = new Set<DriverCapability
 const WAIT_POLL_INTERVAL_MS = 250;
 /** Default wait deadline when a step does not specify one. */
 const DEFAULT_WAIT_TIMEOUT_MS = 5000;
-/** Maximum concurrent WDA `/displayed` probes used for exact visible counts. */
+/** Maximum concurrent WDA `/displayed` probes used for visibility checks. */
 const DISPLAYED_CHECK_CONCURRENCY = 4;
 
 /**
@@ -269,12 +269,36 @@ export function createIosDriver(client: IosAgentClient, options: IosDriverOption
 
   async function hasVisibleElement(query: IosQuery): Promise<boolean> {
     const ids = await client.findElements(query);
-    for (const id of ids) {
-      if (await client.isDisplayed(id)) {
-        return true;
-      }
+    if (ids.length === 0) {
+      return false;
     }
-    return false;
+    if (await client.isDisplayed(ids[0])) {
+      return true;
+    }
+    let found = false;
+    let nextIndex = 1;
+    const workerCount = Math.min(DISPLAYED_CHECK_CONCURRENCY, ids.length - 1);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        for (;;) {
+          if (found) {
+            return;
+          }
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= ids.length) {
+            return;
+          }
+          if (await client.isDisplayed(ids[index])) {
+            found = true;
+            return;
+          }
+        }
+      })
+    );
+
+    return found;
   }
 
   async function pressKey(key: string): Promise<void> {

@@ -294,6 +294,38 @@ describe("createIosDriver", () => {
     expect(maxActive).toBeLessThanOrEqual(4);
   });
 
+  it("bounds displayed-state concurrency for visible existence checks", async () => {
+    const agent = new FakeAgent();
+    agent.elements = [
+      "hidden-first",
+      "hidden-a",
+      "visible",
+      "hidden-b",
+      "hidden-c",
+      "hidden-after-visible",
+      "also-after-visible"
+    ];
+    let active = 0;
+    let maxActive = 0;
+    agent.isDisplayed = async (id: string): Promise<boolean> => {
+      agent.displayedIds.push(id);
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, id === "visible" ? 1 : 10));
+      active -= 1;
+      return id === "visible";
+    };
+    const { driver } = driverFor(agent);
+
+    await driver.waitForSelector("text=Ready", { timeout: 1000 });
+
+    expect(maxActive).toBeGreaterThan(1);
+    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(agent.displayedIds).toContain("visible");
+    expect(agent.displayedIds).not.toContain("hidden-after-visible");
+    expect(agent.displayedIds).not.toContain("also-after-visible");
+  });
+
   it("short-circuits visible probes after the first displayed match", async () => {
     const agent = new FakeAgent();
     agent.elements = ["visible", "also-visible"];

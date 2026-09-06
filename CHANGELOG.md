@@ -50,9 +50,10 @@ All notable changes to Prowl will be documented in this file.
   before each swipe so the proof cannot pass without moving the viewport; the
   follow-up assertions now use bounded `scrollTo` for exact below-the-fold
   targets, avoiding brittle dependence on one fixed swipe landing point.
-- **iOS exact visible-count queries now bound WDA `/displayed` concurrency.**
-  Broad selectors still return exact visible counts, but the driver no longer
-  fans out one WebDriverAgent request per hierarchy match at once.
+- **iOS visibility queries now bound WDA `/displayed` concurrency.** Broad
+  selectors still return exact visible counts, and visible waits / `scrollTo`
+  probes now reuse the same bounded worker pattern instead of checking hierarchy
+  matches one serial WebDriverAgent request at a time.
 
 ### Fixed
 - **Config `{{VAR}}` placeholders now interpolate before validation.** Values
